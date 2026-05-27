@@ -4,4 +4,19 @@ Copyright 2026 Bernat Espigulé-Pons
 Companion software for collinear fractals, finite capture, and restricted polynomial roots.
 
 This product includes source code distributed under the Apache License 2.0.
-Documentation and non-code repository materials are distributed under CC BY 4.0 unless otherwise stated.
+Documentation and non-code repository materials are distributed under CC BY
+4.0 unless otherwise stated.
+
+Parts of the mathematical framework, validation materials, examples, and
+companion software in this repository were developed during Bernat
+Espigulé-Pons's doctoral research at the Universitat de Girona, supervised by
+Dr. Joan Saldaña Meca and Dr. David Juher Barrot.
+
+This work was supported by the Spanish Ministerio de Ciencia, Innovación y
+Universidades through project PID2023-146424NB-I00, by the Generalitat de
+Catalunya through grant 2021 SGR 00113, and by the Universitat de Girona and
+Banco Santander Grant Programme for Researchers in Training, IFUdG 2022-2024.
+
+The repository is maintained by Bernat Espigulé-Pons. The funders,
+supervisors, and affiliated institutions do not necessarily endorse the
+software, the public explorer, or any results obtained with it.

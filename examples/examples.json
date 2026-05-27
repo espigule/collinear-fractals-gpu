@@ -1,0 +1,41 @@
+{
+  "version": "0.1.0-alpha",
+  "examples": [
+    {
+      "id": "e_c4_overlap",
+      "title": "Neighboring overlap for E(c,4)",
+      "path": "examples/e_c4_overlap",
+      "status": "illustrative"
+    },
+    {
+      "id": "e_c5_plane_filling",
+      "title": "Plane-filling collinear example for E(c,5)",
+      "path": "examples/e_c5_plane_filling",
+      "status": "illustrative"
+    },
+    {
+      "id": "theta0_base_capture",
+      "title": "Theta_0 base-capture geometry",
+      "path": "examples/theta0_base_capture",
+      "status": "illustrative"
+    },
+    {
+      "id": "trap_enclosure_n3",
+      "title": "Trap/enclosure Interior and Exterior examples",
+      "path": "examples/trap_enclosure_n3",
+      "status": "certified"
+    },
+    {
+      "id": "threshold_n20",
+      "title": "n=20 threshold/lens example",
+      "path": "examples/threshold_n20",
+      "status": "exploratory"
+    },
+    {
+      "id": "hole_zoom_n13",
+      "title": "n=13 finite-capture hole zoom",
+      "path": "examples/hole_zoom_n13",
+      "status": "exploratory"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "software": "Collinear Fractals GPU Explorer",
+  "version": "0.1.0-alpha",
+  "n": 3,
+  "N": 5,
+  "parameter": {
+    "re": 0.5,
+    "im": 1.1
+  },
+  "search": {
+    "k_max": 37,
+    "l_max": 1000,
+    "tolerance": 1e-8
+  },
+  "verdict": "Interior",
+  "depth": 0,
+  "nodes_explored": 1,
+  "status": "finite-search export",
+  "proof_note": "Compact reproducibility artifact; theorem-level proof remains in the mathematical text."
+}

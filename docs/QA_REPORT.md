@@ -24,14 +24,15 @@ python3 tools/validate_bundle.py
 
 Result: all executable checks passed in this environment. Swift was tested successfully; to reduce memory pressure in CI, prefer a modest job count if the host has many logical cores.
 
-## Browser responsiveness
+## Browser renderer
 
-The browser explorer is a Canvas/CPU reference implementation with the requested default certificate depth `k_max = 37`. To keep the GitHub Pages demo responsive at this depth, the high-depth Canvas preview uses adaptive final resolution:
+The browser explorer is a Canvas/CPU reference implementation with default
+certificate depth `k_max = 37`. The Canvas renderer is progressive: it first
+draws coarse blocks and then refines to single-pixel sampling.
 
-- parameter plane: 2 px final preview when `k_max >= 30`;
-- dynamical plane: 2 px final preview when `k_max >= 30`.
-
-The selected-parameter status bar and certificate JSON still use the full selected `k_max` value.
+The selected-parameter status bar and certificate JSON use the full selected
+`k_max` value and node cap independently of the visible progressive drawing
+stage.
 
 ## Formula-level checks
 
@@ -61,4 +62,6 @@ Passed:
 
 - Wolfram Language, MATLAB, and Maple implementations were updated formula-by-formula but were not executed here because those runtimes are not available in this environment.
 - The browser renderer is a research explorer, not a formal proof checker. Certificate JSON exports are reproducibility artifacts; theorem-level proof still belongs to the mathematical text.
-- High-depth full-pixel rendering is intentionally avoided by default for responsiveness. Lower `k_max` if a very fine visual preview is more important than high-depth certification during interactive exploration.
+- High-depth rendering can be computationally expensive in the browser. The
+  current alpha keeps the behavior explicit by refining to single-pixel
+  sampling rather than silently lowering final preview resolution.

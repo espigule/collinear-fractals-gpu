@@ -22,7 +22,9 @@ The automated tests cover:
 - off-lens `Interior-offLens`;
 - default `k_max = 37` consistency;
 - absence of local filesystem links;
-- browser DOM-reference consistency.
+- browser DOM-reference consistency;
+- formatting hygiene for key Markdown, YAML, CFF, and gitignore files;
+- absence of fake archival DOI placeholders and overclaiming release language.
 
 The Wolfram Language, MATLAB, and Maple implementations are included as reference ports with matching formulas and defaults. They were not executed in this environment.
 

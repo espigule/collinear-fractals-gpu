@@ -1,0 +1,13 @@
+{
+  "title": "Plane-filling collinear example for E(c,5)",
+  "n": 5,
+  "N": 9,
+  "parameter": {
+    "re": 1.75,
+    "im": 0.95
+  },
+  "k_max": 37,
+  "l_max": 1000,
+  "mode": "collinear-attractor",
+  "expected_status": "illustrative"
+}

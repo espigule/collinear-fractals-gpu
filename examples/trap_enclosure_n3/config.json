@@ -1,0 +1,26 @@
+{
+  "title": "Trap/enclosure Interior and Exterior examples",
+  "n": 3,
+  "N": 5,
+  "k_max": 37,
+  "l_max": 1000,
+  "mode": "trap-enclosure",
+  "cases": [
+    {
+      "id": "interior",
+      "parameter": {
+        "re": 0.5,
+        "im": 1.1
+      },
+      "expected_verdict": "Interior"
+    },
+    {
+      "id": "exterior",
+      "parameter": {
+        "re": 3.0,
+        "im": 3.0
+      },
+      "expected_verdict": "Exterior"
+    }
+  ]
+}

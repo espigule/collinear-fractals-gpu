@@ -1,0 +1,13 @@
+{
+  "title": "n=13 finite-capture hole zoom",
+  "n": 13,
+  "N": 25,
+  "parameter": {
+    "re": 2.0719,
+    "im": 3.0537
+  },
+  "k_max": 37,
+  "l_max": 1000,
+  "mode": "finite-capture-zoom",
+  "expected_status": "exploratory"
+}

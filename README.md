@@ -1,28 +1,49 @@
 # Collinear Fractals GPU
 
-**Companion software for collinear fractals, finite capture, and restricted polynomial roots.**
+**Research explorer and companion software for collinear fractals, finite
+capture, and restricted polynomial roots.**
 
 Version: **0.1.0-alpha**  
 Author: **Bernat Espigulé-Pons**
 
-This repository contains a browser-based research explorer and multi-language reference implementations for the canonical-coordinate inverse search associated with the collinear connectedness loci \(\mathcal M_n\). The current public release is a clean alpha intended for GitHub publication, reproducible exploration, and independent verification of finite inverse words.
+This repository contains a browser-based research explorer and multi-language
+reference implementations for the canonical-coordinate inverse search
+associated with the collinear connectedness loci \(\mathcal M_n\).
+
+The current public release is an alpha intended for reproducible exploration,
+finite inverse-word export, and independent inspection. It is not a formal
+proof checker; theorem-level proofs remain in the papers and thesis.
+
+## Quick visual summary
+
+The browser explorer renders the parameter plane, the dynamical plane,
+canonical traps, canonical enclosures, and finite inverse-search data. Curated
+example metadata lives in `examples/`, and gallery notes live in `gallery/`.
+Large generated images are intentionally kept out of git until they are
+curated, compressed, and tied to reproducible metadata.
 
 ## What is included
 
 | Path | Contents |
 |---|---|
-| `index.html`, `index.css`, `explorer.js` | Single-page browser explorer. No build step required. |
+| `index.html`, `index.css`, `explorer.js` | Single-page Canvas/CPU browser explorer. |
 | `javascript/` | Node.js reference package and tests. |
 | `python/` | Pure-Python reference package and tests. |
 | `swift/` | Swift Package Manager implementation and tests. |
 | `mathematica/` | Wolfram Language package. |
 | `matlab/` | MATLAB static-class implementation. |
 | `maple/` | Maple module implementation. |
-| `docs/` | Implementation, validation, and QA notes. |
+| `examples/` | Curated example configurations, certificates, and notes. |
+| `gallery/` | Gallery index and placeholder documentation for curated figures. |
+| `paper_figures/` | Metadata and scripts for reproducible figure generation. |
+| `docs/` | Implementation, validation, release, and QA notes. |
 | `qa/` | Browser-engine prefix smoke tests. |
 | `tools/` | Dependency-free static bundle validator. |
 
-The browser explorer is currently a **Canvas/CPU reference implementation**. The project keeps the historical `GPU` name because it is the companion repository for the broader GPU-assisted exploration programme; WebGL/WebGPU acceleration can be added without changing the mathematical API.
+The browser explorer is currently a **Canvas/CPU reference implementation**.
+The project keeps the historical `GPU` name because it is the companion
+repository for the broader GPU-assisted exploration programme; WebGL/WebGPU
+acceleration can be added without changing the mathematical API.
 
 ## Mathematical scope
 
@@ -38,19 +59,24 @@ the explorer studies the marked-point condition
 2c \in E(c,2n-1),
 \]
 
-which encodes connectedness of the original \(n\)-ary collinear attractor \(E(c,n)\). The inverse search works in canonical coordinates, prunes by a canonical enclosure, and detects trap entry.
+which encodes connectedness of the original \(n\)-ary collinear attractor
+\(E(c,n)\). The inverse search works in canonical coordinates, prunes by a
+canonical enclosure, and detects trap entry.
 
-The repo deliberately distinguishes two trap-entry labels:
+The repository deliberately distinguishes two trap-entry labels:
 
-- `Interior`: trap hit inside the parameter lens \(X_n\setminus\mathbb R\), matching the theorem-level canonical trap framework.
-- `Interior-offLens`: off-lens trap hit using the enabled off-lens rule. This is intentionally not merged with the in-lens label.
+- `Interior`: trap hit inside the parameter lens \(X_n\setminus\mathbb R\),
+  matching the theorem-level canonical trap framework.
+- `Interior-offLens`: off-lens trap hit using the enabled off-lens rule. This
+  is intentionally not merged with the in-lens label.
 
 Other verdicts are:
 
-- `Exterior`: enclosure escape or complete enclosure-admissible tree exhaustion.
+- `Exterior`: enclosure escape or complete enclosure-admissible tree
+  exhaustion.
 - `Undetermined`: depth or node cap reached.
 
-The default search depth is now
+The default search depth is
 
 ```text
 k_max = 37
@@ -60,7 +86,8 @@ across the web explorer and the companion packages.
 
 ## Browser quick start
 
-Open `index.html` directly in a modern browser, or serve the repository locally:
+Open `index.html` directly in a modern browser, or serve the repository
+locally:
 
 ```bash
 python3 -m http.server 8000
@@ -68,7 +95,32 @@ python3 -m http.server 8000
 
 Then open the local server in your browser.
 
-The left panel renders the parameter plane. The right panel renders the dynamical plane, the canonical trap, the canonical enclosure, and the inverse-search tree. The selected certificate can be copied or downloaded as JSON from the sidebar. The node cap `L_max` is a queue cap for the level-by-level inverse search. With the requested default `k_max = 37`, the Canvas preview uses an adaptive 2 px final resolution for responsiveness; the selected-parameter verdict and exported certificate still use the full selected search depth.
+The left panel renders the parameter plane. The right panel renders the
+dynamical plane, the canonical trap, the canonical enclosure, and the
+inverse-search tree. The selected certificate can be copied or downloaded as
+JSON from the sidebar.
+
+The Canvas renderer refines progressively to single-pixel sampling. The
+selected-parameter verdict and exported certificate JSON always use the full
+selected search depth and node cap.
+
+## Examples and gallery
+
+The `examples/` directory contains curated starting points for reproducible
+exploration:
+
+| Example | Purpose |
+|---|---|
+| `e_c4_overlap` | Neighboring-overlap geometry for \(E(c,4)\). |
+| `e_c5_plane_filling` | Plane-filling behavior in the collinear family. |
+| `theta0_base_capture` | Base-capture geometry for \(\Theta_0(n)\). |
+| `trap_enclosure_n3` | Interior and Exterior trap/enclosure certificates. |
+| `threshold_n20` | Threshold/lens example linked to the finite-capture theorem. |
+| `hole_zoom_n13` | Finite-capture zoom near an \(n=13\) hole. |
+
+Each example records parameters, expected status, reproducibility notes, and
+whether the case is illustrative, certified by the current finite-search
+export, or exploratory.
 
 ## Package tests
 
@@ -101,38 +153,93 @@ cd swift
 swift test
 ```
 
-The Wolfram Language, MATLAB, and Maple packages are included as reference implementations with matching formulas and defaults. See `docs/QA_REPORT.md` for the exact validation scope and runtime limitations. Run `python3 tools/validate_bundle.py` before tagging a release.
+The Wolfram Language, MATLAB, and Maple packages are included as reference
+implementations with matching formulas and defaults. See `docs/QA_REPORT.md`
+for the exact validation scope and runtime limitations. Run
+`python3 tools/validate_bundle.py` before preparing a release.
 
-## QA status
+## QA status and limitations
 
-The release tree includes `docs/QA_REPORT.md`, `docs/VALIDATION.md`, and `RELEASE_CHECKLIST.md`. In this QA pass, JavaScript, Python, and Swift tests passed; browser automation, Wolfram Language, MATLAB, and Maple runtime tests are documented as manual/native-runtime checks for the next pass.
+The release tree includes `docs/QA_REPORT.md`, `docs/VALIDATION.md`, and
+`RELEASE_CHECKLIST.md`. The automated checks cover JavaScript, Python, Swift,
+browser-engine smoke tests, formatting hygiene, and static bundle validation.
 
-## Implementation upgrades in this alpha
+The Wolfram Language, MATLAB, and Maple ports are reference implementations
+that should be checked in their native runtimes before stronger release claims
+are made.
 
-This alpha applies the following publication-readiness fixes:
+The browser renderer is a research explorer. Certificate JSON exports are
+reproducibility artifacts; theorem-level proof relies on the mathematical text,
+finite certificates, and explicit inequalities rather than visual inspection.
 
-1. `Interior` and `Interior-offLens` are distinct verdicts.
-2. Alphabet truncation now uses the parity of \(A_m\), not a hard-coded even digit assumption.
-3. Enclosure truncation depth now targets
-   \[
-   \rho^{-M}/(\rho-1) \leq \varepsilon
-   \]
-   when the safety cap allows it, and exposes cap/tail metadata.
-4. Local absolute filesystem links were removed.
-5. Source code is marked Apache-2.0; documentation and non-code materials are CC BY 4.0 unless otherwise stated.
-6. `CITATION.cff`, `NOTICE`, `.gitignore`, and validation notes were added.
-7. Swift was added as a first-class companion package.
-8. Certificate JSON copy/download was made available in the browser explorer.
-9. A release checklist and QA report were added.
+## Related mathematical work
+
+This software accompanies and supports the following mathematical work.
+
+1. Bernat Espigulé, David Juher, and Joan Saldaña,
+   "Collinear Fractals and Bandt's Conjecture",
+   *Fractal and Fractional* 8(12), 725, 2024.
+   DOI: `10.3390/fractalfract8120725`.
+
+2. Bernat Espigulé and David Juher,
+   "Finite Capture and the Closure of Roots of Restricted Polynomials",
+   arXiv:2603.07397, 2026.
+   DOI: `10.48550/arXiv.2603.07397`.
+
+3. Bernat Espigulé,
+   "Finite capture and the closure of roots of restricted polynomials",
+   IHP audiovisual resource, 2026.
+   DOI: `10.57987/IHP.2026.T1.WS3.016`.
+
+The software is a research companion for exploration, figure generation,
+finite inverse-word export, and independent inspection. The theorem-level
+proofs remain in the papers and thesis.
 
 ## Citing
 
 Use the metadata in `CITATION.cff`. A compact text citation is:
 
-> Bernat Espigulé-Pons, *Collinear Fractals GPU: companion software for collinear fractals, finite capture, and restricted polynomial roots*, version 0.1.0-alpha, 2026.
+> Bernat Espigulé-Pons, *Collinear Fractals GPU: companion software for
+> collinear fractals, finite capture, and restricted polynomial roots*,
+> version 0.1.0-alpha, 2026.
+
+No Zenodo DOI has been assigned yet. Add an archival DOI only after a future
+release is archived through Zenodo or an equivalent service.
+
+## Funding and acknowledgements
+
+Parts of the mathematical framework, validation materials, examples, and
+companion software in this repository were developed during Bernat
+Espigulé-Pons's doctoral research at the Universitat de Girona, supervised by
+Dr. Joan Saldaña Meca and Dr. David Juher Barrot.
+
+This work was supported by the Spanish Ministerio de Ciencia, Innovación y
+Universidades through project PID2023-146424NB-I00, by the Generalitat de
+Catalunya through grant 2021 SGR 00113, and by the Universitat de Girona and
+Banco Santander Grant Programme for Researchers in Training, IFUdG 2022-2024.
+
+The repository is maintained by Bernat Espigulé-Pons. The funders,
+supervisors, and affiliated institutions do not necessarily endorse the
+software, the public explorer, or any results obtained with it.
+
+## Support
+
+This repository is open-access research software accompanying my work on
+collinear fractals, finite capture, and restricted polynomial roots.
+
+I am maintaining it while preparing my PhD defence and developing the next
+generation of reproducible figures, examples, and validation tools. Small
+sponsorships help support continued maintenance, documentation, public
+visualization, and research-software development.
+
+Support is optional and does not affect access to the code, examples,
+documentation, issues, or citation materials.
 
 ## License
 
 Source code is distributed under the **Apache License 2.0**; see `LICENSE`.
 
-Documentation, README files, examples, and non-code repository materials are distributed under **Creative Commons Attribution 4.0 International** unless otherwise stated; see `LICENSE-docs.md`.
+Documentation, README files, examples, non-code figures generated by this
+repository, and non-code repository materials are distributed under **Creative
+Commons Attribution 4.0 International** unless otherwise stated; see
+`LICENSE-docs.md` and `LICENSES/CC-BY-4.0.txt`.

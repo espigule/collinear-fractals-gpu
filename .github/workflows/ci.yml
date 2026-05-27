@@ -45,6 +45,14 @@ jobs:
       - name: Static bundle validation
         run: python tools/validate_bundle.py
 
+      - name: Artifact ignore policy
+        run: |
+          git check-ignore collinear-fractals-gpu_v0.1.0-alpha_final-QA.zip
+          git check-ignore artifacts/example.txt
+          git check-ignore dist/out.tar.gz
+          git check-ignore coverage/index.html
+          git check-ignore certificates/foo.json
+
       - name: Swift package tests
         working-directory: swift
         run: swift test

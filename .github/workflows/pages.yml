@@ -28,10 +28,19 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
+      - name: Stage static site
+        run: |
+          mkdir -p site
+          cp index.html index.css explorer.js .nojekyll site/
+          if [ -d gallery ]; then
+            mkdir -p site/gallery
+            cp -R gallery/. site/gallery/
+          fi
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: site
 
       - name: Deploy to GitHub Pages
         id: deployment

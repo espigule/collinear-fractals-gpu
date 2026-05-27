@@ -38,3 +38,6 @@ site/
 release-assets/
 certificates/*.json
 certificates/**/*.json
+gallery/generated/
+paper_figures/output/
+examples/**/rendered/

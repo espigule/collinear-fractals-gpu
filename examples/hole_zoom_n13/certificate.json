@@ -1,0 +1,18 @@
+{
+  "software": "Collinear Fractals GPU Explorer",
+  "version": "0.1.0-alpha",
+  "n": 13,
+  "N": 25,
+  "parameter": {
+    "re": 2.0719,
+    "im": 3.0537
+  },
+  "search": {
+    "k_max": 37,
+    "l_max": 1000,
+    "tolerance": 1e-8
+  },
+  "status": "exploratory-placeholder",
+  "verdict": "not-recorded",
+  "proof_note": "Visualization placeholder; add a verified finite-search export before using this as a certified example."
+}

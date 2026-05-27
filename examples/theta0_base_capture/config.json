@@ -1,0 +1,13 @@
+{
+  "title": "Theta_0 base-capture geometry",
+  "n": 3,
+  "N": 5,
+  "parameter": {
+    "re": 0.5,
+    "im": 1.1
+  },
+  "k_max": 37,
+  "l_max": 1000,
+  "mode": "base-capture",
+  "expected_status": "illustrative"
+}

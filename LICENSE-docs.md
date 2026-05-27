@@ -4,6 +4,8 @@ Documentation, README files, mathematical exposition, example text, non-code fig
 
 You are free to share and adapt these materials provided that appropriate attribution is given.
 
+The full Creative Commons Attribution 4.0 International legal text is included in `LICENSES/CC-BY-4.0.txt`.
+
 SPDX-License-Identifier: CC-BY-4.0
 
 Copyright 2026 Bernat Espigulé-Pons.

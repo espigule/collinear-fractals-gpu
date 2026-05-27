@@ -1,0 +1,13 @@
+{
+  "title": "Neighboring overlap for E(c,4)",
+  "n": 4,
+  "N": 7,
+  "parameter": {
+    "re": 1.6,
+    "im": 0.8
+  },
+  "k_max": 37,
+  "l_max": 1000,
+  "mode": "collinear-attractor",
+  "expected_status": "illustrative"
+}

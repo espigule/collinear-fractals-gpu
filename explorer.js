@@ -332,15 +332,11 @@ const PARAM_RENDER_STEPS = [8, 4, 2, 1];
 const DYN_RENDER_STEPS = [4, 2, 1];
 
 function getMaxParamRenderStage() {
-  // k_max = 37 is the default certificate depth.  For responsiveness, the
-  // Canvas parameter-plane preview stops at 2 px when running high-depth
-  // searches; users can lower k_max for full 1 px refinement.
-  return state.kMax >= 30 ? 2 : 3;
+  return PARAM_RENDER_STEPS.length - 1;
 }
 
 function getMaxDynRenderStage() {
-  // The dynamical plane keeps a 2 px final preview at high certificate depth.
-  return state.kMax >= 30 ? 1 : 2;
+  return DYN_RENDER_STEPS.length - 1;
 }
 
 // Colors HSL helper
@@ -1182,7 +1178,7 @@ async function copyCertificateJSON() {
       return true;
     }
   } catch (err) {
-    // The async Clipboard API may be unavailable for local file:// usage or
+    // The async Clipboard API may be unavailable for local file usage or
     // blocked by browser permissions. Fall back to the textarea method below.
     console.warn('Clipboard API unavailable; using textarea fallback.', err);
   }

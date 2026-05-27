@@ -1,0 +1,13 @@
+{
+  "title": "n=20 threshold/lens example",
+  "n": 20,
+  "N": 39,
+  "parameter": {
+    "re": 2.0,
+    "im": 4.0
+  },
+  "k_max": 37,
+  "l_max": 1000,
+  "mode": "finite-capture-threshold",
+  "expected_status": "exploratory"
+}

@@ -10,7 +10,7 @@ date-released: "2026-05-27"
 license: "Apache-2.0"
 repository-code: "https://github.com/espigule/collinear-fractals-gpu"
 url: "https://github.com/espigule/collinear-fractals-gpu"
-abstract: "Browser explorer and multi-language companion implementations for canonical-coordinate inverse search, finite capture, and restricted polynomial-root loci in collinear fractal families."
+abstract: "Browser research explorer and multi-language companion implementations for canonical-coordinate inverse search, finite capture, and restricted polynomial-root loci in collinear fractal families."
 keywords:
   - fractal geometry
   - iterated function systems
@@ -18,6 +18,9 @@ keywords:
   - finite capture
   - restricted polynomial roots
   - self-similar sets
+  - research software
+# No archival software DOI has been assigned yet. Add a Zenodo or equivalent DOI
+# only after a future release has actually been archived.
 references:
   - type: article
     title: "Collinear Fractals and Bandt's Conjecture"
@@ -41,6 +44,15 @@ references:
       - family-names: "Juher"
         given-names: "David"
     year: 2026
+    doi: "10.48550/arXiv.2603.07397"
     identifiers:
       - type: other
         value: "arXiv:2603.07397"
+  - type: generic
+    title: "Finite capture and the closure of roots of restricted polynomials"
+    authors:
+      - family-names: "Espigulé"
+        given-names: "Bernat"
+    year: 2026
+    doi: "10.57987/IHP.2026.T1.WS3.016"
+    url: "https://www.carmin.tv/en/video/finite-capture-and-the-closure-of-roots-of-restricted-polynomials"
