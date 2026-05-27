@@ -6,6 +6,9 @@ Date: 2026-05-27
 
 - Repository structure and release metadata.
 - Browser JavaScript syntax and prefix smoke tests for the pure algorithmic functions in `explorer.js`.
+- Prefix-cylinder and seeded-histogram renderer smoke tests.
+- Reference-kernel equivalence checks for representative in-lens, off-lens,
+  exterior, and larger-arity cases.
 - DOM identifier consistency between `index.html` and `explorer.js`.
 - Share URL, preset, modal, palette, panel-focus, and certificate-export
   controls through static DOM validation and browser-engine syntax checks.
@@ -18,6 +21,8 @@ Date: 2026-05-27
 ```bash
 node --check explorer.js
 node qa/explorer-prefix-smoke-test.js
+node qa/render_smoke_tests.js
+node qa/kernel_equivalence_tests.js
 cd javascript && npm test
 cd python && python3 -m unittest -v test_collinear.py
 cd swift && swift test
@@ -31,6 +36,11 @@ Result: all executable checks passed in this environment. Swift was tested succe
 The browser explorer is a Canvas/CPU reference implementation with default
 certificate depth `k_max = 37`. The Canvas renderer is progressive: it first
 draws coarse blocks and then refines to single-pixel sampling.
+
+The original attractor \(E(c,n)\) is now visually rendered by an explicit
+prefix-cylinder renderer by default, with a seeded histogram renderer available
+as an opt-in preview. The inverse-survival/status renderer is separate and
+explicit; it is not used as the default visual overlay.
 
 The selected-parameter status bar and certificate JSON use the full selected
 `k_max` value and node cap independently of the visible progressive drawing
@@ -67,7 +77,9 @@ Passed:
 ## Known limitations
 
 - Wolfram Language, MATLAB, and Maple implementations were updated formula-by-formula but were not executed here because those runtimes are not available in this environment.
-- The browser renderer is a research explorer, not a formal proof checker. Certificate JSON exports are reproducibility artifacts; theorem-level proof still belongs to the mathematical text.
+- The browser renderer is a research explorer, not a formal proof checker.
+  Certificate JSON exports are reproducibility artifacts; theorem-level proof
+  still belongs to the mathematical text.
 - High-depth rendering can be computationally expensive in the browser. The
   current alpha keeps the behavior explicit by refining to single-pixel
   sampling rather than silently lowering final preview resolution.

@@ -22,9 +22,14 @@ thesis.
 
 The browser explorer renders the parameter plane, dynamical plane, canonical
 traps, canonical enclosures, finite inverse-search data, and selected
-certificate JSON. It now includes curated example presets, share URLs, embed
-code, save-image export, undo/redo, comparison modes, palette controls, panel
-focus, and About/Cite and Support dialogs.
+certificate JSON. The default original-attractor view now uses a
+prefix-cylinder visual renderer for \(E(c,n)\), with a seeded histogram preview
+available as an explicit alternative. Finite inverse-search status remains a
+separate certificate/status renderer, not the default visual overlay.
+
+The explorer also includes curated example presets, share URLs, embed code,
+save-image export, undo/redo, comparison modes, palette controls, panel focus,
+and About/Cite and Support dialogs.
 
 Curated example metadata lives in `examples/`, gallery metadata lives in
 `gallery/`, and reproducible figure job metadata lives in `paper_figures/`.
@@ -48,15 +53,18 @@ dynamical plane, the canonical trap, the canonical enclosure, and the
 inverse-search tree. The selected certificate can be copied or downloaded as
 JSON from the sidebar.
 
-The Canvas renderer refines progressively to single-pixel sampling. The
-selected-parameter verdict and exported certificate JSON always use the full
-selected search depth and node cap.
+The Canvas renderer refines progressively to single-pixel sampling. Visual
+controls such as prefix depth, histogram seed, histogram sample count, and layer
+opacity affect the drawing only. The selected-parameter verdict and exported
+certificate JSON always use the full selected search depth and node cap.
 
 ## What is included
 
 | Path | Contents |
 |---|---|
 | `index.html`, `index.css`, `explorer.js` | Single-page Canvas/CPU browser explorer. |
+| `src/` | Build-free browser ES modules for visual renderers and finite-search kernels. |
+| `workers/` | Worker entry points for future certificate and histogram jobs. |
 | `javascript/` | Node.js reference package and tests. |
 | `python/` | Pure-Python reference package and tests. |
 | `swift/` | Swift Package Manager implementation and tests. |
@@ -68,8 +76,8 @@ selected search depth and node cap.
 | `paper_figures/` | Metadata and scripts for reproducible figure generation. |
 | `schemas/` | JSON Schemas for certificates, examples, and figure metadata. |
 | `docs/` | Implementation, validation, release, and QA notes. |
-| `qa/` | Browser-engine prefix smoke tests. |
-| `tools/` | Dependency-free static bundle validator. |
+| `qa/` | Browser-engine, renderer, and kernel smoke tests. |
+| `tools/` | Dependency-free static bundle validator and metadata-only benchmark scripts. |
 
 The browser explorer is currently a **Canvas/CPU reference implementation**.
 The project keeps the historical `GPU` name because it is the companion
@@ -144,6 +152,7 @@ exploration:
 | `hole_zoom_n13` | Finite-capture zoom near an \(n=13\) hole. | Exploratory |
 | `off_lens_witnesses_n2_to_n19` | Off-lens witness scaffold preserving `Interior-offLens`. | Exploratory |
 | `finite_capture_layers_n3` | Early finite-capture layer visualization for \(n=3\). | Illustrative |
+| `level2_boundary_atlas` | Level-2 boundary-atlas metadata and share-state scaffold. | Exploratory |
 
 Each example records parameters, expected status, reproducibility notes,
 metadata, and whether the case is illustrative, finite-search certified,
@@ -154,7 +163,9 @@ curated cases where a compact finite-search export is already known.
 
 The browser explorer can create share URLs and iframe embed code from the
 current state. The hash records the selected parameter, search limits,
-viewports, palette, comparison mode, and visible layers.
+viewports, palette, comparison mode, visible layers, original-attractor renderer
+mode, prefix depth, histogram seed, histogram sample count, first-level piece
+coloring, and layer opacity.
 
 Curated presets are loaded from `examples/examples.json` when the explorer is
 served over HTTP. If metadata loading is blocked, the explorer falls back to a
@@ -168,6 +179,8 @@ Browser engine smoke test:
 
 ```bash
 node qa/explorer-prefix-smoke-test.js
+node qa/render_smoke_tests.js
+node qa/kernel_equivalence_tests.js
 ```
 
 JavaScript:
@@ -205,17 +218,18 @@ for the exact validation scope and runtime limitations.
 
 The release tree includes `docs/QA_REPORT.md`, `docs/VALIDATION.md`, and
 `RELEASE_CHECKLIST.md`. The automated checks cover JavaScript, Python, Swift,
-browser-engine smoke tests, formatting hygiene, staged Pages deployment, and
-static bundle validation.
+browser-engine smoke tests, renderer smoke tests, kernel equivalence tests,
+formatting hygiene, staged Pages deployment, and static bundle validation.
 
 The Wolfram Language, MATLAB, and Maple ports are reference implementations
 that should be checked in their native runtimes before stronger release claims
 are made.
 
-The browser renderer is a research explorer. Certificate JSON exports are
-reproducibility artifacts; theorem-level proof relies on the mathematical
-text, finite certificates, and explicit inequalities rather than visual
-inspection.
+The browser renderer is a research explorer. Original-attractor visual metadata
+is recorded separately from finite-search certificate fields. Certificate JSON
+exports are reproducibility artifacts; theorem-level proof relies on the
+mathematical text, finite certificates, and explicit inequalities rather than
+visual inspection.
 
 ## Related mathematical work
 

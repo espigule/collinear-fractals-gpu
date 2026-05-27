@@ -57,6 +57,13 @@
       "example": "examples/finite_capture_layers_n3",
       "asset": null,
       "status": "metadata-only"
+    },
+    {
+      "id": "level2_boundary_atlas",
+      "title": "Level-2 boundary atlas scaffold",
+      "example": "examples/level2_boundary_atlas",
+      "asset": null,
+      "status": "metadata-only"
     }
   ]
 }

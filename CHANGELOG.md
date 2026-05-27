@@ -12,6 +12,13 @@ Highlights:
 - Added runnable example metadata for eight curated examples, gallery index
   metadata, figure-job metadata, and JSON Schemas for certificates, examples,
   and figure metadata.
+- Split original-attractor visual rendering from finite-search certificate
+  rendering. Prefix-cylinder rendering is now the default \(E(c,n)\) view,
+  seeded histogram rendering is deterministic by seed, and inverse-survival
+  status is an explicit non-default mode.
+- Added build-free browser modules under `src/`, worker entry points under
+  `workers/`, renderer smoke tests, reference-kernel equivalence tests, and a
+  metadata-only benchmark script.
 - Tightened staged Pages deployment so GitHub Pages publishes only the static
   explorer and safe gallery/example assets.
 - Strengthened static validation for line-collapsed files, README heading

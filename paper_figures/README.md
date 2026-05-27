@@ -9,5 +9,9 @@ render dumps. The alpha workflow is metadata-first:
 4. Write generated assets to `paper_figures/output/`, which is ignored.
 5. Promote only small curated assets to `gallery/` with matching metadata.
 
+Figure metadata should record the visual renderer (`prefix-cylinder`,
+`seeded-histogram`, or explicit status renderer), visual depth or sample count,
+seed when applicable, pixel radius, software version, and proof status.
+
 Figures are illustrative and reproducibility artifacts. The theorem-level
 proofs remain in the papers and thesis.

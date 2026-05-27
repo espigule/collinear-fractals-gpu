@@ -17,6 +17,7 @@ Planned gallery entries:
 | `threshold_n20_lens.webp` | `examples/threshold_n20` | planned |
 | `off_lens_witnesses_n2_to_n19.webp` | `examples/off_lens_witnesses_n2_to_n19` | planned |
 | `finite_capture_layers_n3.webp` | `examples/finite_capture_layers_n3` | planned |
+| `level2_boundary_atlas.webp` | `examples/level2_boundary_atlas` | planned |
 
 Recommended caption:
 
