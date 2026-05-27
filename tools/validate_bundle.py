@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import pathlib
 import re
+import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -81,7 +82,28 @@ REQUIRED_FILES = [
     "schemas/certificate.schema.json",
     "schemas/example-config.schema.json",
     "schemas/figure-metadata.schema.json",
+    "schemas/pixel-certificate.schema.json",
+    "schemas/active-piece.schema.json",
     "qa/explorer-prefix-smoke-test.js",
+    "qa/render_smoke_tests.js",
+    "qa/kernel_equivalence_tests.js",
+    "src/math/alphabets.mjs",
+    "src/math/complex.mjs",
+    "src/math/prefix_cylinders.mjs",
+    "src/renderers/attractor_prefix.mjs",
+    "src/renderers/attractor_histogram.mjs",
+    "src/renderers/certificate_canvas.mjs",
+    "src/renderers/overlay_compositor.mjs",
+    "src/renderers/palettes.mjs",
+    "src/compute/inverse_search_reference.mjs",
+    "src/compute/inverse_search_kernel.mjs",
+    "src/compute/certificate_builder.mjs",
+    "workers/certificate-worker.js",
+    "workers/histogram-worker.js",
+    "tools/bench/render_metadata_bench.js",
+    "examples/level2_boundary_atlas/config.json",
+    "examples/level2_boundary_atlas/metadata.json",
+    "examples/level2_boundary_atlas/notes.md",
     "tools/validate_bundle.py",
 ]
 
@@ -183,6 +205,37 @@ CURATED_IMAGE_PREFIXES = (
     "examples/",
 )
 
+LOCAL_ONLY_DIRS = {
+    ".git",
+    ".build",
+    "_reference",
+    "codex_upgrade_handoff",
+    "node_modules",
+}
+
+FORBIDDEN_TRACKED_PREFIXES = (
+    "_reference/",
+    "codex_upgrade_handoff/",
+)
+
+FORBIDDEN_TRACKED_NAMES = {
+    "codex_upgrade_handoff/reference/extras.zip",
+    "extras.zip",
+}
+
+FORBIDDEN_PROTOTYPE_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"level_?2.*explorer.*\.html$",
+        r"explorador_de_fractals_colineals.*\.html$",
+        r"strata2step.*\.html$",
+        r"capture2.*\.html$",
+        r"Mn_algebraic.*\.html$",
+        r"hogben_sequence.*\.html$",
+        r"index_v9\.html$",
+    ]
+]
+
 
 def fail(message: str) -> None:
     print(f"FAIL: {message}")
@@ -239,7 +292,7 @@ def validate_markdown_heading_lines(path: str) -> None:
 def validate_large_image_policy() -> None:
     offenders = []
     for path in ROOT.rglob("*"):
-        if not path.is_file() or ".git" in path.parts:
+        if not path.is_file() or should_skip_path(path):
             continue
         suffix = path.suffix.lower()
         if suffix not in IMAGE_EXTENSIONS:
@@ -276,15 +329,61 @@ def validate_example_index() -> None:
         "hole_zoom_n13",
         "off_lens_witnesses_n2_to_n19",
         "finite_capture_layers_n3",
+        "level2_boundary_atlas",
     }
     if not required.issubset(ids):
         fail("examples/examples.json missing required examples: " + ", ".join(sorted(required - ids)))
+
+
+def should_skip_path(path: pathlib.Path) -> bool:
+    return any(part in LOCAL_ONLY_DIRS for part in path.parts)
+
+
+def tracked_files() -> list[str]:
+    try:
+        result = subprocess.run(
+            ["git", "ls-files"],
+            cwd=ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        fail(f"could not inspect tracked files: {exc}")
+    return [line for line in result.stdout.splitlines() if line]
+
+
+def validate_no_reference_committed() -> None:
+    offenders = []
+    for rel in tracked_files():
+        if rel in FORBIDDEN_TRACKED_NAMES:
+            offenders.append(rel)
+        if rel.startswith(FORBIDDEN_TRACKED_PREFIXES):
+            offenders.append(rel)
+        if any(pattern.search(rel) for pattern in FORBIDDEN_PROTOTYPE_PATTERNS):
+            offenders.append(rel)
+    if offenders:
+        fail("local reference/prototype material is tracked: " + ", ".join(sorted(set(offenders))))
+
+
+def validate_renderer_separation() -> None:
+    js = read("explorer.js")
+    if "rendererMode: 'prefix'" not in js:
+        fail("explorer.js does not default original-attractor rendering to prefix mode")
+    if "state.rendererMode === 'survival'" not in js:
+        fail("explorer.js does not expose inverse-survival rendering as an explicit mode")
+    for marker in ["r = 255 - r", "dilatedGrid", "3x3"]:
+        if marker in js:
+            fail(f"explorer.js still contains legacy original-attractor overlay marker: {marker}")
+    if "resn.verdict === 'Undetermined'" in js:
+        fail("explorer.js treats Undetermined as original-attractor membership")
 
 
 def main() -> int:
     missing = [p for p in REQUIRED_FILES if not (ROOT / p).is_file()]
     if missing:
         fail("missing required files: " + ", ".join(missing))
+    validate_no_reference_committed()
 
     if read("VERSION").strip() != VERSION:
         fail("VERSION file does not match expected release version")
@@ -300,7 +399,7 @@ def main() -> int:
         validate_yaml_like_multiline(path)
 
     for path in ROOT.rglob("*.md"):
-        if ".git" not in path.parts:
+        if not should_skip_path(path):
             validate_markdown_heading_lines(path.relative_to(ROOT).as_posix())
 
     pages = read(".github/workflows/pages.yml")
@@ -345,11 +444,12 @@ def main() -> int:
             fail(f"CITATION.cff missing required metadata: {required}")
 
     for path in ROOT.rglob("*.json"):
-        if ".git" not in path.parts and "node_modules" not in path.parts:
+        if not should_skip_path(path):
             validate_json(path.relative_to(ROOT).as_posix())
 
     validate_example_index()
     validate_large_image_policy()
+    validate_renderer_separation()
 
     # No local absolute links or previous development paths.
     offenders = []
@@ -358,14 +458,18 @@ def main() -> int:
     for path in ROOT.rglob("*"):
         if (
             not path.is_file()
-            or ".build" in path.parts
-            or ".git" in path.parts
-            or "node_modules" in path.parts
+            or should_skip_path(path)
         ):
             continue
         if path.suffix.lower() in TEXT_EXTENSIONS:
             text = path.read_text(encoding="utf-8", errors="ignore")
-            if ("file:" + "/" + "/" + "/") in text or ("/" + "Users/" + "bernat/") in text:
+            local_path_pattern = (
+                r"(file:" + r"//|/"
+                r"Users/[^\s)\"']+/|/"
+                r"home/[^\s)\"']+/|/"
+                r"private/tmp/)"
+            )
+            if re.search(local_path_pattern, text):
                 offenders.append(str(path.relative_to(ROOT)))
             fake_zenodo_pattern = r"10\.5281/zenodo\." + r"(x+|X+|0+|_+)"
             fake_zenodo_marker = "zenodo." + ("X" * 4)

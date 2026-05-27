@@ -35,6 +35,15 @@ jobs:
       - name: Browser-engine smoke test
         run: node qa/explorer-prefix-smoke-test.js
 
+      - name: Renderer smoke tests
+        run: node qa/render_smoke_tests.js
+
+      - name: Kernel equivalence tests
+        run: node qa/kernel_equivalence_tests.js
+
+      - name: Metadata benchmark smoke test
+        run: node tools/bench/render_metadata_bench.js
+
       - name: JavaScript package tests
         working-directory: javascript
         run: npm test
