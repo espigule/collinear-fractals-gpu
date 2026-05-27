@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate release bundle
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: JavaScript syntax check
+        run: node --check explorer.js
+
+      - name: Browser-engine smoke test
+        run: node qa/explorer-prefix-smoke-test.js
+
+      - name: JavaScript package tests
+        working-directory: javascript
+        run: npm test
+
+      - name: Python package tests
+        working-directory: python
+        run: python -m unittest -v test_collinear.py
+
+      - name: Static bundle validation
+        run: python tools/validate_bundle.py
+
+      - name: Swift package tests
+        working-directory: swift
+        run: swift test

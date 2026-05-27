@@ -1,0 +1,46 @@
+cff-version: 1.2.0
+title: "Collinear Fractals GPU: companion software for collinear fractals, finite capture, and restricted polynomial roots"
+message: "Please cite this software and the accompanying mathematical work if you use it."
+type: software
+authors:
+  - family-names: "Espigulé-Pons"
+    given-names: "Bernat"
+version: "0.1.0-alpha"
+date-released: "2026-05-27"
+license: "Apache-2.0"
+repository-code: "https://github.com/espigule/collinear-fractals-gpu"
+url: "https://github.com/espigule/collinear-fractals-gpu"
+abstract: "Browser explorer and multi-language companion implementations for canonical-coordinate inverse search, finite capture, and restricted polynomial-root loci in collinear fractal families."
+keywords:
+  - fractal geometry
+  - iterated function systems
+  - connectedness loci
+  - finite capture
+  - restricted polynomial roots
+  - self-similar sets
+references:
+  - type: article
+    title: "Collinear Fractals and Bandt's Conjecture"
+    authors:
+      - family-names: "Espigulé"
+        given-names: "Bernat"
+      - family-names: "Juher"
+        given-names: "David"
+      - family-names: "Saldaña"
+        given-names: "Joan"
+    journal: "Fractal and Fractional"
+    volume: "8"
+    issue: "12"
+    year: 2024
+    doi: "10.3390/fractalfract8120725"
+  - type: generic
+    title: "Finite Capture and the Closure of Roots of Restricted Polynomials"
+    authors:
+      - family-names: "Espigulé"
+        given-names: "Bernat"
+      - family-names: "Juher"
+        given-names: "David"
+    year: 2026
+    identifiers:
+      - type: other
+        value: "arXiv:2603.07397"

@@ -1,0 +1,40 @@
+# OS metadata
+.DS_Store
+__MACOSX/
+._*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# JavaScript
+node_modules/
+npm-debug.log*
+*.tgz
+
+# Swift
+.swiftpm/
+.build/
+
+# MATLAB / Maple / Wolfram temporary files
+*.asv
+*.m~
+*.mx
+*.mla
+*.nb~
+
+# Local artifacts
+*.zip
+*.tar.gz
+artifacts/
+dist/
+coverage/
+htmlcov/
+site/
+release-assets/
+certificates/*.json
+certificates/**/*.json

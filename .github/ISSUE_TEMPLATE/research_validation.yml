@@ -1,0 +1,33 @@
+name: Research validation
+description: Report a mathematical, numerical, or reproducibility validation case.
+title: "[Validation]: "
+labels: ["validation"]
+body:
+  - type: textarea
+    id: claim
+    attributes:
+      label: Claim or case
+      description: State the parameter, theorem-level claim, or computational case being validated.
+    validations:
+      required: true
+  - type: textarea
+    id: method
+    attributes:
+      label: Method
+      description: Describe the runtime, version, parameters, and commands used.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Result
+      description: Include verdicts, words, node counts, screenshots, or exported certificate JSON.
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: Related references
+      description: Link papers, preprints, issues, commits, or release artifacts.
+    validations:
+      required: false

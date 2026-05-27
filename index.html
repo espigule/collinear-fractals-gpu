@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Collinear Fractals GPU Explorer</title>
+  <meta name="description" content="Companion software for Collinear Fractals, Finite Capture, and Restricted Polynomial Roots. Inverse-search algorithms, certificate export, and real-time visualization dashboard.">
+  
+  <!-- Typography & Styling -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Controls Sidebar -->
+    <aside class="controls" id="sidebar-panel">
+      <!-- Title & Header Info -->
+      <div class="sidebar-header" style="margin-bottom: 0.8rem; border-bottom: 1px solid var(--panel-border); padding-bottom: 0.8rem;">
+        <h1 style="font-size: 1.25rem; font-weight: 700; color: #1e1b4b; line-height: 1.2; letter-spacing: -0.01em;">Collinear Fractals GPU Explorer</h1>
+        <p style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.25rem; font-weight: 500; line-height: 1.35;">Companion Software for Collinear Fractals, Finite Capture, and Restricted Polynomial Roots</p>
+        <div style="font-size: 0.68rem; color: var(--text-secondary); margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.25rem; font-weight: 500;">
+          <div style="display: flex; justify-content: space-between;">
+            <span>B. Espigulé (2026)</span>
+            <span>Version 0.1.0-alpha</span>
+          </div>
+          <div style="text-align: left; margin-top: 0.05rem;">
+            <a href="https://github.com/espigule/collinear-fractals-gpu" target="_blank" rel="noopener noreferrer" class="repo-link">
+              <svg style="width: 12px; height: 12px; fill: currentColor;" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+              github.com/espigule/collinear-fractals-gpu
+            </a>
+          </div>
+        </div>
+      </div>
+      <!-- Arity Selection -->
+      <div class="control-group">
+        <label for="arity-slider">Arity (n)</label>
+        <div class="slider-container">
+          <input type="range" id="arity-slider" min="2" max="50" value="3" step="1">
+          <span class="slider-val" id="arity-val">3</span>
+        </div>
+      </div>
+
+      <!-- Certified Search Params -->
+      <div class="control-group">
+        <label>Inverse Iteration Search Limits</label>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.25rem;">
+          <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+            <span style="font-size: 0.75rem; color: var(--text-secondary);">Max Depth (k<sub>max</sub>)</span>
+            <input type="number" id="param-kmax" value="37" min="1" max="80">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+            <span style="font-size: 0.75rem; color: var(--text-secondary);">Max Nodes (L<sub>max</sub>)</span>
+            <input type="number" id="param-lmax" value="1000" min="10" max="50000">
+          </div>
+        </div>
+      </div>
+
+      <!-- Modulo Divisor (mod q) Slider -->
+      <div class="control-group">
+        <label for="param-modulo">Modulo Divisor (mod q)</label>
+        <div class="slider-container">
+          <input type="range" id="param-modulo" min="1" max="10" value="3" step="1">
+          <span class="slider-val" id="modulo-val">3</span>
+        </div>
+      </div>
+
+      <!-- Layer Visibilities -->
+      <div class="control-group" style="gap: 0.5rem; margin-top: 0.25rem;">
+        <label>Layers & Display</label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-difference-attractor" checked>
+          Difference Attractor ½ E(c,N)
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-collinear-attractor">
+          Collinear Attractor E(c,n) [Negated]
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-canonical-trap" checked>
+          Canonical Trap ½ P<sub>c</sub>(S,V)
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-canonical-enclosure" checked>
+          Enclosure ½ P<sub>c</sub>(SE,VE)
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-orbit-tree" checked>
+          Inverse Search Tree Nodes
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-winning-path" checked>
+          Capture / Escape Orbits
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-escape-strata">
+          Escape Strata
+        </label>
+      </div>
+
+      <!-- Quick Actions -->
+      <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: auto; padding-top: 1rem;">
+        <button class="btn btn-secondary" id="btn-reset-param">Reset Parameter Zoom</button>
+        <button class="btn btn-secondary" id="btn-reset-dyn">Reset Dynamical Zoom</button>
+        <button class="btn" id="btn-copy-certificate" title="Copy the current finite-search certificate payload as JSON">Copy Certificate JSON</button>
+        <button class="btn btn-secondary" id="btn-download-certificate" title="Download the current finite-search certificate payload as JSON">Download Certificate JSON</button>
+      </div>
+    </aside>
+
+    <!-- Main Workspace (Dual Canvases) -->
+    <main class="workspace">
+      <!-- Parameter Plane -->
+      <section class="canvas-panel" id="parameter-panel">
+        <div class="panel-header">
+          <span class="panel-title">PARAMETER PLANE (c-space)</span>
+        </div>
+        <div class="canvas-container">
+          <canvas id="parameter-canvas"></canvas>
+          <!-- Floating Legend -->
+          <div class="legend-panel" id="legend-parameter">
+            <div class="legend-item">
+              <span class="legend-color" style="border: 1px dashed rgba(0,0,0,0.3); background: none;"></span>
+              <span>Parameter Lens &#120003;<sub>n</sub></span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" id="legend-locus-color" style="background: #10b981;"></span>
+              <span>Interior / capture in lens (mod q)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" id="legend-offlens-color" style="background: #64748b;"></span>
+              <span>Interior-offLens trap hit</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #fbbf24;"></span>
+              <span>Undetermined boundary</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Dynamical Plane -->
+      <section class="canvas-panel" id="dynamical-panel">
+        <div class="panel-header">
+          <span class="panel-title">DYNAMICAL PLANE (z-space)</span>
+        </div>
+        <div class="canvas-container">
+          <canvas id="dynamical-canvas"></canvas>
+          <!-- Floating Legend -->
+          <div class="legend-panel" id="legend-dynamical">
+            <div class="legend-item">
+              <span class="legend-color" id="legend-diff-color" style="background: #d1fae5;"></span>
+              <span>Difference Attractor ½ E(c,N)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" id="legend-coll-color" style="background: #2e051a;"></span>
+              <span>Collinear Attractor E(c,n)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="border: 1px dashed #059669; background: rgba(5,150,105,0.03);"></span>
+              <span>Trap ½ P<sub>c</sub>(S,V)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="border: 1px solid #4f46e5; background: rgba(79,70,229,0.02);"></span>
+              <span>Enclosure ½ P<sub>c</sub>(SE,VE)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="border-radius: 50%; background: #dc2626; width: 8px; height: 8px; border: none; margin-left: 3px; margin-right: 3px;"></span>
+              <span>Parameter c Locator</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="border-radius: 50%; background: #475569; width: 6px; height: 6px; border: none; margin-left: 4px; margin-right: 4px;"></span>
+              <span>Origin 0</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Footer Information Readout -->
+  <footer class="status-bar" id="footer-status">
+    <div class="status-group">
+      <div>c = <span id="stat-c" style="color: var(--text-primary); font-weight: 600;">0.50000 + 1.10000i</span></div>
+      <div>|c| = <span id="stat-rho">1.20830</span></div>
+      <div>In Lens: <span id="stat-lens" style="font-weight: 600;">Yes</span></div>
+    </div>
+    
+    <div class="status-group">
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        Verdict: 
+        <span class="verdict-tag verdict-Interior" id="stat-verdict">Interior</span>
+      </div>
+      <div>Nodes: <span id="stat-nodes">1</span></div>
+      <div>Depth: <span id="stat-depth">0</span></div>
+    </div>
+    
+    <div style="max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+      Word: <span id="stat-word" style="font-family: var(--font-mono); color: var(--color-interior); font-weight: 600;">None</span>
+    </div>
+  </footer>
+
+  <!-- Explorer Engine Script -->
+  <script src="explorer.js"></script>
+</body>
+</html>
