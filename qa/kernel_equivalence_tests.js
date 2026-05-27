@@ -14,8 +14,8 @@ function assert(condition, message) {
     { label: 'n3-exterior', x: 3.0, y: 3.0, n: 3, limits: [[5, 1000], [10, 1000], [37, 1000]] },
     { label: 'n3-off-lens', x: 1.419643377607, y: 0.606290729207, n: 3, limits: [[5, 1000], [10, 1000], [37, 1000]] },
     { label: 'n2-small-depth', x: 0.75, y: 1.25, n: 2, limits: [[5, 128], [10, 256]] },
-    { label: 'n4-prefix', x: 1.6, y: 0.8, n: 4, limits: [[5, 256], [10, 1000]] },
-    { label: 'n5-prefix', x: 1.75, y: 0.95, n: 5, limits: [[5, 256], [10, 1000]] },
+    { label: 'n4-prefix', x: 1.5, y: 1.6583123951777, n: 4, limits: [[5, 256], [10, 1000]] },
+    { label: 'n5-prefix', x: 1.0, y: 2.0, n: 5, limits: [[5, 256], [10, 1000]] },
     { label: 'n13-hole', x: 2.0719, y: 3.0537, n: 13, limits: [[5, 256], [10, 1000], [20, 1000]] },
     { label: 'n20-threshold', x: 2.0, y: 4.0, n: 20, limits: [[5, 256], [10, 1000], [20, 1000]] }
   ];

@@ -92,6 +92,9 @@
         },
         "im": {
           "type": "number"
+        },
+        "exact": {
+          "type": "string"
         }
       },
       "additionalProperties": false

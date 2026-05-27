@@ -42,6 +42,7 @@ REQUIRED_FILES = [
     "matlab/collinear_fractals.m",
     "maple/CollinearFractals.mpl",
     "docs/IMPLEMENTATION_NOTES.md",
+    "docs/BROWSER_QA_CHECKLIST.md",
     "docs/VALIDATION.md",
     "docs/QA_REPORT.md",
     "docs/RELEASE_PROCESS.md",
@@ -335,6 +336,80 @@ def validate_example_index() -> None:
         fail("examples/examples.json missing required examples: " + ", ".join(sorted(required - ids)))
 
 
+def validate_canonical_thesis_examples() -> None:
+    examples = {
+        "e_c4_overlap": {
+            "n": 4,
+            "N": 7,
+            "re": 1.5,
+            "im": 1.6583123951777,
+            "exact": "(3 + i sqrt(11))/2",
+            "figure": "Figure 3.1",
+        },
+        "e_c5_plane_filling": {
+            "n": 5,
+            "N": 9,
+            "re": 1.0,
+            "im": 2.0,
+            "exact": "1 + 2i",
+            "figure": "Figure 3.2",
+        },
+    }
+    index = json.loads(read("examples/examples.json"))
+    by_id = {item.get("id"): item for item in index.get("examples", [])}
+    for example_id, expected in examples.items():
+        config_path = f"examples/{example_id}/config.json"
+        metadata_path = f"examples/{example_id}/metadata.json"
+        config = json.loads(read(config_path))
+        metadata = json.loads(read(metadata_path))
+        for label, data in [(config_path, config), (metadata_path, metadata)]:
+            if data.get("n") != expected["n"] or data.get("N") != expected["N"]:
+                fail(f"{label} does not use the canonical thesis arity")
+            parameter = data.get("parameter", {})
+            if parameter.get("re") != expected["re"] or parameter.get("im") != expected["im"]:
+                fail(f"{label} does not use the canonical thesis parameter")
+            if parameter.get("exact") != expected["exact"]:
+                fail(f"{label} missing exact canonical parameter string")
+            if data.get("related_thesis_figure") != expected["figure"]:
+                fail(f"{label} missing related thesis figure")
+        item = by_id.get(example_id, {})
+        share_hash = item.get("share_hash", "")
+        if f"cx={expected['re']}" not in share_hash or f"cy={expected['im']}" not in share_hash:
+            fail(f"examples/examples.json share hash for {example_id} is not canonical")
+
+    old_canonical_markers = [
+        "cx=1.6&cy=0.8",
+        "cx=1.75&cy=0.95",
+        '"re": 1.6',
+        '"im": 0.8',
+        '"re": 1.75',
+        '"im": 0.95',
+        "parameter: { re: 1.6, im: 0.8",
+        "parameter: { re: 1.75, im: 0.95",
+    ]
+    checked_paths = [
+        "explorer.js",
+        "examples/examples.json",
+        "examples/e_c4_overlap/config.json",
+        "examples/e_c4_overlap/metadata.json",
+        "examples/e_c4_overlap/notes.md",
+        "examples/e_c5_plane_filling/config.json",
+        "examples/e_c5_plane_filling/metadata.json",
+        "examples/e_c5_plane_filling/notes.md",
+        "qa/render_smoke_tests.js",
+        "qa/kernel_equivalence_tests.js",
+        "tools/bench/render_metadata_bench.js",
+    ]
+    offenders = []
+    for path in checked_paths:
+        text = read(path)
+        for marker in old_canonical_markers:
+            if marker in text:
+                offenders.append(f"{path}: {marker}")
+    if offenders:
+        fail("old non-canonical E4/E5 parameters remain: " + ", ".join(offenders))
+
+
 def should_skip_path(path: pathlib.Path) -> bool:
     return any(part in LOCAL_ONLY_DIRS for part in path.parts)
 
@@ -448,6 +523,7 @@ def main() -> int:
             validate_json(path.relative_to(ROOT).as_posix())
 
     validate_example_index()
+    validate_canonical_thesis_examples()
     validate_large_image_policy()
     validate_renderer_separation()
 

@@ -84,6 +84,19 @@ The project keeps the historical `GPU` name because it is the companion
 repository for the broader GPU-assisted exploration programme; WebGL/WebGPU
 acceleration can be added later without changing the mathematical API.
 
+Feature status for this internal-review branch:
+
+| Feature | v0.2 status |
+|---|---|
+| Prefix renderer for \(E(c,n)\) | Implemented |
+| Seeded histogram renderer | Implemented / smoke-tested |
+| Certificate/status renderer | Implemented |
+| Worker scaffold | Present |
+| Typed-array optimized kernel | Experimental scaffold/wrapper only; reference kernel remains default |
+| Active certificate inspector UI | Planned / not implemented |
+| Level 0/1/2 atlas | Metadata scaffold |
+| Curated thumbnails | Planned |
+
 ## Mathematical scope
 
 For the collinear alphabet
@@ -144,8 +157,8 @@ exploration:
 
 | Example | Purpose | Status |
 |---|---|---|
-| `e_c4_overlap` | Neighboring-overlap geometry for \(E(c,4)\). | Illustrative |
-| `e_c5_plane_filling` | Plane-filling behavior in the collinear family. | Illustrative |
+| `e_c4_overlap` | Thesis Figure 3.1 example \(c=(3+i\sqrt{11})/2\). | Illustrative thesis example |
+| `e_c5_plane_filling` | Thesis Figure 3.2 example \(c=1+2i\). | Illustrative thesis example |
 | `theta0_base_capture` | Base-capture geometry for `Theta_0(n)`. | Illustrative |
 | `trap_enclosure_n3` | Interior and Exterior trap/enclosure certificates. | Finite-search certified |
 | `threshold_n20` | Threshold/lens example linked to the finite-capture theorem. | Exploratory |

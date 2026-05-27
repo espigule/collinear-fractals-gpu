@@ -39,7 +39,7 @@ function fakeCanvasContext() {
   const { renderPrefixAttractor } = await import('../src/renderers/attractor_prefix.mjs');
   const { makeLcg, renderHistogramAttractor } = await import('../src/renderers/attractor_histogram.mjs');
 
-  const c = { re: 1.6, im: 0.8 };
+  const c = { re: 1.5, im: 1.6583123951777 };
   const choice = choosePrefixDepth(c, 5, 8, 60000);
   assert(choice.depth <= 8, 'Prefix depth exceeds requested depth.');
   assert(choice.estimatedPrefixes <= 60000, 'Prefix work cap was not enforced.');

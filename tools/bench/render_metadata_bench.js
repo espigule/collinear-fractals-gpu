@@ -6,7 +6,7 @@
   const { makeLcg } = await import('../../src/renderers/attractor_histogram.mjs');
   const { inverseSearchKernel } = await import('../../src/compute/inverse_search_kernel.mjs');
 
-  const c = { re: 1.6, im: 0.8 };
+  const c = { re: 1.5, im: 1.6583123951777 };
   const prefix = prefixMetadata(c, 4, 7, 0.01, 60000);
 
   const random = makeLcg(20260227);

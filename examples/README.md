@@ -21,8 +21,8 @@ The current example set is:
 
 | Example | Status |
 |---|---|
-| `e_c4_overlap` | Illustrative |
-| `e_c5_plane_filling` | Illustrative |
+| `e_c4_overlap` | Illustrative thesis example |
+| `e_c5_plane_filling` | Illustrative thesis example |
 | `theta0_base_capture` | Illustrative |
 | `trap_enclosure_n3` | Finite-search certified |
 | `threshold_n20` | Exploratory |
