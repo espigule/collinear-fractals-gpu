@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/espigule/collinear-fractals-gpu/schemas/pixel-certificate.schema.json",
+  "title": "Collinear Fractals GPU pixel certificate",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "software_version",
+    "pixel",
+    "world",
+    "n",
+    "N",
+    "k_max",
+    "L_max",
+    "verdict",
+    "proof_status",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "software_version": {
+      "type": "string"
+    },
+    "pixel": {
+      "type": "object",
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "world": {
+      "$ref": "#/$defs/complex"
+    },
+    "c": {
+      "$ref": "#/$defs/complex"
+    },
+    "n": {
+      "type": "integer",
+      "minimum": 2
+    },
+    "N": {
+      "type": "integer",
+      "minimum": 3
+    },
+    "k_max": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "L_max": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "verdict": {
+      "enum": [
+        "Interior",
+        "Interior-offLens",
+        "Exterior",
+        "Undetermined"
+      ]
+    },
+    "word": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "proof_status": {
+      "type": "string"
+    },
+    "limitations": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "complex": {
+      "type": "object",
+      "required": [
+        "re",
+        "im"
+      ],
+      "properties": {
+        "re": {
+          "type": "number"
+        },
+        "im": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

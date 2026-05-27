@@ -1,0 +1,31 @@
+{
+  "title": "Level-2 boundary atlas scaffold",
+  "n": 3,
+  "N": 5,
+  "parameter": {
+    "re": 0.5,
+    "im": 1.1
+  },
+  "k_max": 37,
+  "l_max": 1000,
+  "mode": "level2-boundary-atlas",
+  "expected_status": "exploratory",
+  "renderer_mode": "prefix",
+  "visual_renderer": {
+    "mode": "prefix",
+    "depth": 7,
+    "first_level_pieces": true
+  },
+  "view": {
+    "parameter_center": {
+      "re": 1.207,
+      "im": 1.207
+    },
+    "parameter_zoom": 2.414,
+    "dynamical_center": {
+      "re": 0.0,
+      "im": 0.0
+    },
+    "dynamical_zoom": 8.0
+  }
+}

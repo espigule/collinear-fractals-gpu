@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/espigule/collinear-fractals-gpu/schemas/active-piece.schema.json",
+  "title": "Collinear Fractals GPU active piece metadata",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "renderer",
+    "n",
+    "c",
+    "piece",
+    "depth",
+    "proof_status"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "renderer": {
+      "enum": [
+        "prefix-cylinder",
+        "seeded-histogram",
+        "inverse-survival-status"
+      ]
+    },
+    "n": {
+      "type": "integer",
+      "minimum": 2
+    },
+    "c": {
+      "$ref": "#/$defs/complex"
+    },
+    "piece": {
+      "type": "object",
+      "required": [
+        "digit"
+      ],
+      "properties": {
+        "digit": {
+          "type": "integer"
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "word": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "depth": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tail_radius": {
+      "type": "number",
+      "minimum": 0
+    },
+    "pixel_radius": {
+      "type": "number",
+      "minimum": 0
+    },
+    "proof_status": {
+      "enum": [
+        "visual-approximation",
+        "finite-search-certificate",
+        "bounded-search-undetermined"
+      ]
+    }
+  },
+  "$defs": {
+    "complex": {
+      "type": "object",
+      "required": [
+        "re",
+        "im"
+      ],
+      "properties": {
+        "re": {
+          "type": "number"
+        },
+        "im": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}
