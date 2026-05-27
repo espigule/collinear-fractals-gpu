@@ -1,4 +1,5 @@
 cff-version: 1.2.0
+# Multiline CFF metadata; formatting is checked by tools/validate_bundle.py.
 title: "Collinear Fractals GPU: companion software for collinear fractals, finite capture, and restricted polynomial roots"
 message: "Please cite this software and the accompanying mathematical work if you use it."
 type: software

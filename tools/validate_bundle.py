@@ -101,6 +101,34 @@ MULTILINE_MIN_LINES = {
     "NOTICE": 8,
 }
 
+YAML_LIKE_FILES = [
+    "CITATION.cff",
+    ".github/FUNDING.yml",
+    ".github/workflows/ci.yml",
+    ".github/workflows/pages.yml",
+]
+
+TOP_LEVEL_KEYS = [
+    "abstract",
+    "authors",
+    "cff-version",
+    "concurrency",
+    "date-released",
+    "jobs",
+    "keywords",
+    "license",
+    "message",
+    "name",
+    "on",
+    "permissions",
+    "references",
+    "repository-code",
+    "title",
+    "type",
+    "url",
+    "version",
+]
+
 BANNED_PHRASES = [
     "verification " + "package",
     "full " + "verification",
@@ -134,6 +162,28 @@ def validate_json(path: str) -> None:
         fail(f"{path} is not valid JSON: {exc}")
 
 
+def strip_double_quoted_text(line: str) -> str:
+    return re.sub(r'"(?:\\.|[^"\\])*"', '""', line)
+
+
+def validate_yaml_like_multiline(path: str) -> None:
+    for index, line in enumerate(read(path).splitlines(), start=1):
+        if not line or line.lstrip().startswith("#"):
+            continue
+        if line[0].isspace():
+            continue
+        probe = strip_double_quoted_text(line)
+        hits = []
+        for key in TOP_LEVEL_KEYS:
+            if re.search(rf"(^|\s){re.escape(key)}:\s", probe):
+                hits.append(key)
+        if len(hits) > 1:
+            fail(
+                f"{path}:{index} appears to contain multiple top-level keys "
+                f"on one physical line: {', '.join(hits)}"
+            )
+
+
 def main() -> int:
     missing = [p for p in REQUIRED_FILES if not (ROOT / p).is_file()]
     if missing:
@@ -148,6 +198,15 @@ def main() -> int:
             fail(f"{path} appears line-collapsed or too short")
         if "\r" in text:
             fail(f"{path} contains carriage-return line endings")
+
+    for path in YAML_LIKE_FILES:
+        validate_yaml_like_multiline(path)
+
+    pages = read(".github/workflows/pages.yml")
+    if re.search(r"(?m)^\s+path:\s*\.\s*$", pages):
+        fail("pages.yml deploys the repository root instead of a staged site directory")
+    if not re.search(r"(?m)^\s+path:\s*site\s*$", pages):
+        fail("pages.yml does not upload the staged static site directory")
 
     readme_lines = read("README.md").splitlines()
     required_headings = [

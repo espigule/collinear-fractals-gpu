@@ -1,3 +1,4 @@
+# Multiline workflow YAML; formatting is checked by tools/validate_bundle.py.
 name: Deploy Pages
 
 on:

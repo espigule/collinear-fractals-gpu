@@ -2,10 +2,13 @@
 
 Use this checklist before tagging the next GitHub release.
 
-Because the post-alpha maintenance pass adds examples, gallery metadata, and
-release hygiene, the recommended next public release line is `v0.2.0`. If only
-small formatting or metadata corrections are made in a future pass, use a patch
-alpha such as `v0.1.1-alpha` instead.
+Because the post-alpha maintenance pass adds metadata, funding, support text,
+formatting guards, and scaffold-level examples/gallery/paper-figure structure,
+the recommended next public release line is `v0.1.1-alpha`.
+
+Reserve `v0.2.0` for a release where `examples/`, `gallery/`, and
+`paper_figures/` contain meaningful runnable reproducibility material rather
+than directory scaffolding and metadata placeholders.
 
 ## Required automated checks
 
