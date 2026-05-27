@@ -7,9 +7,11 @@ Date: 2026-05-27
 - Repository structure and release metadata.
 - Browser JavaScript syntax and prefix smoke tests for the pure algorithmic functions in `explorer.js`.
 - DOM identifier consistency between `index.html` and `explorer.js`.
+- Share URL, preset, modal, palette, panel-focus, and certificate-export
+  controls through static DOM validation and browser-engine syntax checks.
 - Executable companion package tests in JavaScript, Python, and Swift.
 - Documentation claims against the implemented files.
-- Local-link and stale-version scan.
+- Local-link, fake DOI, stale-version, generated-image, and overclaiming scans.
 
 ## Automated checks run
 
@@ -57,6 +59,10 @@ Passed:
 - README and docs distinguish `Interior` from `Interior-offLens`;
 - default `k_max = 37` is documented across the browser and packages;
 - licensing files and `CITATION.cff` are present.
+- Pages workflow stages only the static explorer, gallery metadata, and safe
+  example metadata instead of deploying the whole repository root.
+- `examples/`, `gallery/`, `paper_figures/`, and `schemas/` contain
+  reproducibility metadata for the alpha-candidate example layer.
 
 ## Known limitations
 
@@ -65,3 +71,5 @@ Passed:
 - High-depth rendering can be computationally expensive in the browser. The
   current alpha keeps the behavior explicit by refining to single-pixel
   sampling rather than silently lowering final preview resolution.
+- The gallery is metadata-first in this alpha candidate. Large rendered figure
+  dumps remain ignored until small curated assets are reviewed and hash-checked.

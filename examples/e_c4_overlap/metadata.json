@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.2.0",
+  "id": "e_c4_overlap",
+  "title": "Neighboring overlap for E(c,4)",
+  "n": 4,
+  "N": 7,
+  "parameter": {
+    "re": 1.6,
+    "im": 0.8
+  },
+  "k_max": 37,
+  "L_max": 1000,
+  "renderer": "canvas-cpu",
+  "mode": "collinear-attractor",
+  "expected_verdict": "illustrative",
+  "proof_status": "illustrative",
+  "related_work": "2024 collinear-fractals/Bandt framework",
+  "limitations": "Theorem-level proof does not rely on visual inspection."
+}

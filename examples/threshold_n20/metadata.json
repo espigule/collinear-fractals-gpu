@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.2.0",
+  "id": "threshold_n20",
+  "title": "n=20 threshold/lens example",
+  "n": 20,
+  "N": 39,
+  "parameter": {
+    "re": 2.0,
+    "im": 4.0
+  },
+  "k_max": 37,
+  "L_max": 1000,
+  "renderer": "canvas-cpu",
+  "mode": "finite-capture-threshold",
+  "expected_verdict": "exploratory",
+  "proof_status": "exploratory",
+  "related_work": "2026 n >= 20 lens-containment threshold",
+  "limitations": "Theorem-level proof does not rely on visual inspection."
+}

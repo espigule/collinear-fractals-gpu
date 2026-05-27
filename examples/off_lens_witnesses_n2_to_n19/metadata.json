@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.2.0",
+  "id": "off_lens_witnesses_n2_to_n19",
+  "title": "Off-lens witnesses for 2 <= n <= 19",
+  "n": 13,
+  "N": 25,
+  "parameter": {
+    "re": 0.72,
+    "im": 1.38
+  },
+  "k_max": 37,
+  "L_max": 1000,
+  "renderer": "canvas-cpu",
+  "mode": "off-lens-witness",
+  "expected_verdict": "Interior-offLens or exploratory witness",
+  "proof_status": "exploratory",
+  "related_work": "2026 off-lens witnesses for 2 <= n <= 19",
+  "limitations": "Theorem-level proof does not rely on visual inspection."
+}

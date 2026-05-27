@@ -18,7 +18,7 @@
     <aside class="controls" id="sidebar-panel">
       <!-- Title & Header Info -->
       <div class="sidebar-header" style="margin-bottom: 0.8rem; border-bottom: 1px solid var(--panel-border); padding-bottom: 0.8rem;">
-        <h1 style="font-size: 1.25rem; font-weight: 700; color: #1e1b4b; line-height: 1.2; letter-spacing: -0.01em;">Collinear Fractals GPU Explorer</h1>
+        <h1 style="font-size: 1.25rem; font-weight: 700; color: #1e1b4b; line-height: 1.2; letter-spacing: 0;">Collinear Fractals GPU Explorer</h1>
         <p style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.25rem; font-weight: 500; line-height: 1.35;">Companion Software for Collinear Fractals, Finite Capture, and Restricted Polynomial Roots</p>
         <div style="font-size: 0.68rem; color: var(--text-secondary); margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.25rem; font-weight: 500;">
           <div style="display: flex; justify-content: space-between;">
@@ -66,6 +66,25 @@
         </div>
       </div>
 
+      <!-- Curated Examples -->
+      <div class="control-group">
+        <label for="example-preset">Curated Example</label>
+        <select id="example-preset">
+          <option value="">Select an example</option>
+        </select>
+      </div>
+
+      <!-- Comparison Mode -->
+      <div class="control-group">
+        <label for="comparison-mode">Comparison Mode</label>
+        <select id="comparison-mode">
+          <option value="overlay">Difference + optional collinear overlay</option>
+          <option value="difference">Difference attractor only</option>
+          <option value="collinear">Collinear attractor only</option>
+          <option value="escape">Escape strata</option>
+        </select>
+      </div>
+
       <!-- Layer Visibilities -->
       <div class="control-group" style="gap: 0.5rem; margin-top: 0.25rem;">
         <label>Layers & Display</label>
@@ -99,12 +118,57 @@
         </label>
       </div>
 
+      <!-- Palette -->
+      <div class="control-group">
+        <label for="palette-mode">Palette</label>
+        <select id="palette-mode">
+          <option value="research">Research grayscale</option>
+          <option value="print">Print contrast</option>
+          <option value="contrast">High contrast</option>
+          <option value="custom">Custom</option>
+        </select>
+        <div class="palette-grid" id="custom-palette-controls" aria-label="Custom palette controls">
+          <label>
+            Interior
+            <input type="color" id="palette-interior" value="#059669">
+          </label>
+          <label>
+            Off-lens
+            <input type="color" id="palette-offlens" value="#2563eb">
+          </label>
+          <label>
+            Undetermined
+            <input type="color" id="palette-undetermined" value="#fbbf24">
+          </label>
+          <label>
+            Exterior
+            <input type="color" id="palette-exterior" value="#ffffff">
+          </label>
+        </div>
+      </div>
+
       <!-- Quick Actions -->
       <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: auto; padding-top: 1rem;">
+        <div class="button-grid">
+          <button class="btn btn-secondary" id="btn-undo" title="Undo the last view or setting change">Undo</button>
+          <button class="btn btn-secondary" id="btn-redo" title="Redo the last undone change">Redo</button>
+        </div>
+        <div class="button-grid">
+          <button class="btn btn-secondary" id="btn-share" title="Create a share URL for the current state">Share View</button>
+          <button class="btn btn-secondary" id="btn-embed" title="Copy an iframe embed for the current state">Copy Embed</button>
+        </div>
+        <div class="button-grid">
+          <button class="btn btn-secondary" id="btn-save-image" title="Download a PNG image of the current panels">Save Image</button>
+          <button class="btn btn-secondary" id="btn-tour" title="Open a short guided tour">Tour</button>
+        </div>
         <button class="btn btn-secondary" id="btn-reset-param">Reset Parameter Zoom</button>
         <button class="btn btn-secondary" id="btn-reset-dyn">Reset Dynamical Zoom</button>
         <button class="btn" id="btn-copy-certificate" title="Copy the current finite-search certificate payload as JSON">Copy Certificate JSON</button>
         <button class="btn btn-secondary" id="btn-download-certificate" title="Download the current finite-search certificate payload as JSON">Download Certificate JSON</button>
+        <div class="button-grid">
+          <button class="btn btn-secondary" id="btn-about" title="Open mathematical context and citations">About + Cite</button>
+          <button class="btn btn-secondary" id="btn-support" title="Open support and funding information">Support</button>
+        </div>
       </div>
     </aside>
 
@@ -114,7 +178,11 @@
       <section class="canvas-panel" id="parameter-panel">
         <div class="panel-header">
           <span class="panel-title">PARAMETER PLANE (c-space)</span>
+          <div class="panel-actions">
+            <button class="panel-btn" id="btn-focus-param" title="Focus parameter panel">Focus</button>
+          </div>
         </div>
+        <div class="interaction-hint">Drag to pan. Wheel to zoom. Double-click the panel title area to isolate.</div>
         <div class="canvas-container">
           <canvas id="parameter-canvas"></canvas>
           <!-- Floating Legend -->
@@ -143,7 +211,11 @@
       <section class="canvas-panel" id="dynamical-panel">
         <div class="panel-header">
           <span class="panel-title">DYNAMICAL PLANE (z-space)</span>
+          <div class="panel-actions">
+            <button class="panel-btn" id="btn-focus-dyn" title="Focus dynamical panel">Focus</button>
+          </div>
         </div>
+        <div class="interaction-hint">Drag to pan. Wheel to zoom. Double-click the marker to move the selected parameter.</div>
         <div class="canvas-container">
           <canvas id="dynamical-canvas"></canvas>
           <!-- Floating Legend -->
@@ -199,6 +271,23 @@
       Word: <span id="stat-word" style="font-family: var(--font-mono); color: var(--color-interior); font-weight: 600;">None</span>
     </div>
   </footer>
+
+  <!-- Lightweight Modal Layer -->
+  <div class="modal-backdrop" id="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-header">
+        <h2 id="modal-title">Explorer</h2>
+        <button class="modal-close" id="modal-close" aria-label="Close dialog">&times;</button>
+      </div>
+      <div class="modal-tabs" id="modal-tabs" hidden>
+        <button class="modal-tab active" data-tab="intuition">Quick intuition</button>
+        <button class="modal-tab" data-tab="framework">Mathematical framework</button>
+        <button class="modal-tab" data-tab="references">References and citation</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-actions" id="modal-actions"></div>
+    </div>
+  </div>
 
   <!-- Explorer Engine Script -->
   <script src="explorer.js"></script>

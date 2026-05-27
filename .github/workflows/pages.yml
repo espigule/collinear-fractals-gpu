@@ -35,7 +35,12 @@ jobs:
           cp index.html index.css explorer.js .nojekyll site/
           if [ -d gallery ]; then
             mkdir -p site/gallery
-            cp -R gallery/. site/gallery/
+            find gallery -maxdepth 2 -type f \( -name 'README.md' -o -name 'index.json' -o -name '*.webp' -o -name '*.png' -o -name '*.svg' \) -exec sh -c 'mkdir -p "site/$(dirname "$1")"; cp "$1" "site/$1"' sh {} \;
+          fi
+          if [ -d examples ]; then
+            mkdir -p site/examples
+            cp examples/examples.json site/examples/
+            find examples -maxdepth 2 -type f \( -name 'config.json' -o -name 'metadata.json' -o -name 'notes.md' \) -exec sh -c 'mkdir -p "site/$(dirname "$1")"; cp "$1" "site/$1"' sh {} \;
           fi
 
       - name: Upload artifact

@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/espigule/collinear-fractals-gpu/schemas/certificate.schema.json",
+  "title": "Collinear Fractals GPU certificate",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "software_version",
+    "n",
+    "N",
+    "c",
+    "k_max",
+    "L_max",
+    "verdict",
+    "renderer",
+    "proof_status",
+    "limitations"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "software_version": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string"
+    },
+    "n": {
+      "type": "integer",
+      "minimum": 2
+    },
+    "N": {
+      "type": "integer",
+      "minimum": 3
+    },
+    "c": {
+      "type": "object",
+      "required": [
+        "re",
+        "im"
+      ],
+      "properties": {
+        "re": {
+          "type": "number"
+        },
+        "im": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": true
+    },
+    "k_max": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "L_max": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "verdict": {
+      "enum": [
+        "Interior",
+        "Interior-offLens",
+        "Exterior",
+        "Undetermined"
+      ]
+    },
+    "word": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "digits": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "trap": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "enclosure": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "renderer": {
+      "type": "string"
+    },
+    "proof_status": {
+      "enum": [
+        "finite-search-certificate",
+        "theorem-certified",
+        "illustrative",
+        "exploratory",
+        "bounded-search-undetermined"
+      ]
+    },
+    "limitations": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

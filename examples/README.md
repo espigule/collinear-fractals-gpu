@@ -7,9 +7,23 @@ starting points, not standalone theorem proofs.
 Each example includes:
 
 - `config.json`: parameter, rendering, and search settings.
+- `metadata.json`: citable/reproducibility metadata for the example.
 - `notes.md`: mathematical meaning, expected status, and reproduction notes.
-- optional `certificate*.json`: compact finite-search output or a clearly
-  marked placeholder when the case is still exploratory.
+- optional `certificate*.json`: compact finite-search output only when the
+  certificate is actually known for the curated example.
+
+The current example set is:
+
+| Example | Status |
+|---|---|
+| `e_c4_overlap` | Illustrative |
+| `e_c5_plane_filling` | Illustrative |
+| `theta0_base_capture` | Illustrative |
+| `trap_enclosure_n3` | Finite-search certified |
+| `threshold_n20` | Exploratory |
+| `hole_zoom_n13` | Exploratory |
+| `off_lens_witnesses_n2_to_n19` | Exploratory |
+| `finite_capture_layers_n3` | Illustrative |
 
 Figure captions should use this pattern:
 

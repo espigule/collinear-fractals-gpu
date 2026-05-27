@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+Alpha-candidate polish for a future `v0.2.0-alpha` release.
+
+Highlights:
+
+- Added share URLs, embed-code copy, save-image export, undo/redo, panel focus,
+  palette controls, guided tour, curated presets, and About/Cite and Support
+  dialogs to the browser explorer.
+- Added runnable example metadata for eight curated examples, gallery index
+  metadata, figure-job metadata, and JSON Schemas for certificates, examples,
+  and figure metadata.
+- Tightened staged Pages deployment so GitHub Pages publishes only the static
+  explorer and safe gallery/example assets.
+- Strengthened static validation for line-collapsed files, README heading
+  structure, fake DOI placeholders, Pages root deployment, local paths,
+  generated-image policy, and v0.1/v0.2 overclaiming language.
+- Updated `.gitignore` so generated certificates remain local while curated
+  examples and verified certificate JSON can be versioned.
+
 ## 0.1.0-alpha — 2026-05-27
 
 Initial public alpha prepared for GitHub publication.

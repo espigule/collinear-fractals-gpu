@@ -3,9 +3,11 @@
 This example illustrates the base-capture layer \(\Theta_0(n)\) for a small
 parameter-lens case. Here \(n = 3\) and \(N = 2n-1 = 5\).
 
-- Parameter: \(c = 0.5 + 1.1i\).
+- Parameter: \(c = 0.5 + 1.1i\), with \(n = 3\) and \(N = 2n-1 = 5\).
 - Expected verdict: `Interior` for the marked-point finite-search test.
 - Status: illustrative; see `trap_enclosure_n3` for compact certificate JSON.
+- Related work: 2026 finite-capture filtration and the thesis
+  \(\Theta_0(n)\) base-capture geometry.
 
 To reproduce, open the browser explorer, set `n = 3`, set `k_max = 37`, and
 select the parameter above.

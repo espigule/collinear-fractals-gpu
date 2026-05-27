@@ -2,13 +2,13 @@
 
 Use this checklist before tagging the next GitHub release.
 
-Because the post-alpha maintenance pass adds metadata, funding, support text,
-formatting guards, and scaffold-level examples/gallery/paper-figure structure,
-the recommended next public release line is `v0.1.1-alpha`.
+Because the follow-up pass adds staged Pages deployment, share URLs, presets,
+example metadata, gallery index metadata, JSON schemas, and runnable
+reproducibility starting points, the recommended next public release line is
+`v0.2.0-alpha` after CI and Pages pass.
 
-Reserve `v0.2.0` for a release where `examples/`, `gallery/`, and
-`paper_figures/` contain meaningful runnable reproducibility material rather
-than directory scaffolding and metadata placeholders.
+Use `v0.1.1-alpha` only if this scope is reduced to formatting, citation,
+funding, support, and directory scaffolding without usable example presets.
 
 ## Required automated checks
 
@@ -21,7 +21,12 @@ git check-ignore collinear-fractals-gpu_v0.1.0-alpha_final-QA.zip
 git check-ignore artifacts/example.txt
 git check-ignore dist/out.tar.gz
 git check-ignore coverage/index.html
-git check-ignore certificates/foo.json
+git check-ignore certificates/generated/foo.json
+git check-ignore certificates/scratch/foo.json
+git check-ignore paper_figures/output/example.png
+! git check-ignore examples/e_c4_overlap/config.json
+! git check-ignore examples/trap_enclosure_n3/certificate_interior.json
+! git check-ignore certificates/verified/example.json
 ```
 
 ## Static checks
@@ -48,6 +53,8 @@ Open `index.html` in a modern browser and verify:
 - Changing `n`, `k_max`, and `mod q` triggers re-rendering.
 - Dragging the red locator updates the dynamical panel and status bar.
 - `Copy Certificate JSON` and `Download Certificate JSON` work.
+- `Share View`, `Copy Embed`, `Save Image`, curated presets, undo/redo,
+  panel focus, palette controls, and About/Cite and Support dialogs work.
 
 ## Optional runtime checks
 

@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.2.0",
+  "id": "finite_capture_layers_n3",
+  "title": "Finite-capture layers for n=3",
+  "n": 3,
+  "N": 5,
+  "parameter": {
+    "re": 0.5,
+    "im": 1.1
+  },
+  "k_max": 37,
+  "L_max": 1000,
+  "renderer": "canvas-cpu",
+  "mode": "finite-capture-layers",
+  "expected_verdict": "Interior",
+  "proof_status": "illustrative",
+  "related_work": "2026 finite-capture filtration",
+  "limitations": "Theorem-level proof does not rely on visual inspection."
+}

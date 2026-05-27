@@ -58,7 +58,7 @@ header {
 h1 {
   font-size: 1.4rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: #1e1b4b; /* Deep Indigo-950 */
 }
 
@@ -142,6 +142,15 @@ input[type="number"]:focus, select:focus {
   box-shadow: 0 0 0 2px var(--color-primary-glow);
 }
 
+input[type="color"] {
+  width: 100%;
+  height: 2rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  padding: 0.15rem;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;
@@ -193,6 +202,27 @@ input[type="number"]:focus, select:focus {
   border-color: #94a3b8;
 }
 
+.button-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.palette-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.palette-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.68rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 /* Visualization Canvas Panels */
 .workspace {
   flex: 1;
@@ -218,7 +248,6 @@ input[type="number"]:focus, select:focus {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  pointer-events: none;
   z-index: 4;
 }
 
@@ -233,6 +262,49 @@ input[type="number"]:focus, select:focus {
   letter-spacing: 0.05em;
   color: var(--text-primary);
   box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.panel-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.panel-btn {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #cbd5e1;
+  color: var(--text-primary);
+  border-radius: 4px;
+  padding: 0.3rem 0.55rem;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.panel-btn:hover {
+  background: #f8fafc;
+}
+
+.interaction-hint {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  max-width: min(32rem, calc(100% - 2rem));
+  z-index: 4;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 0.35rem 0.55rem;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.workspace.focus-parameter #dynamical-panel,
+.workspace.focus-dynamical #parameter-panel {
+  display: none;
 }
 
 .canvas-container {
@@ -368,3 +440,144 @@ canvas {
   opacity: 0.95;
 }
 
+/* Modal layer */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.32);
+}
+
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.modal {
+  width: min(720px, 100%);
+  max-height: min(760px, calc(100vh - 2rem));
+  overflow: auto;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-header h2 {
+  font-size: 1.05rem;
+  letter-spacing: 0;
+}
+
+.modal-close {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: var(--text-primary);
+  width: 2rem;
+  height: 2rem;
+  border-radius: 4px;
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.modal-tabs {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.75rem 1.25rem 0;
+  flex-wrap: wrap;
+}
+
+.modal-tab {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modal-tab.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.modal-body {
+  padding: 1rem 1.25rem;
+  color: var(--text-primary);
+  line-height: 1.55;
+  font-size: 0.92rem;
+}
+
+.modal-body p,
+.modal-body ul,
+.modal-body ol,
+.modal-body pre {
+  margin-bottom: 0.85rem;
+}
+
+.modal-body ul,
+.modal-body ol {
+  padding-left: 1.25rem;
+}
+
+.modal-body code,
+.modal-body pre {
+  font-family: var(--font-mono);
+}
+
+.modal-body pre {
+  overflow: auto;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.75rem;
+  white-space: pre-wrap;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0 1.25rem 1.25rem;
+}
+
+@media (max-width: 900px) {
+  body {
+    height: auto;
+    min-height: 100vh;
+    overflow: auto;
+  }
+
+  .container {
+    flex-direction: column;
+  }
+
+  .controls {
+    width: 100%;
+    max-height: none;
+  }
+
+  .workspace {
+    min-height: 72vh;
+  }
+
+  .status-bar {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+}

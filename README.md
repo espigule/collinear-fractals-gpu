@@ -3,24 +3,54 @@
 **Research explorer and companion software for collinear fractals, finite
 capture, and restricted polynomial roots.**
 
-Version: **0.1.0-alpha**  
+Version: **0.1.0-alpha**
+
+Candidate maintenance line: **v0.2.0-alpha candidate** when the examples,
+gallery, staged Pages site, schemas, and CI remain green.
 Author: **Bernat Espigulé-Pons**
 
 This repository contains a browser-based research explorer and multi-language
-reference implementations for the canonical-coordinate inverse search
-associated with the collinear connectedness loci \(\mathcal M_n\).
+reference implementations for canonical-coordinate inverse search associated
+with the collinear connectedness loci \(\mathcal M_n\).
 
 The current public release is an alpha intended for reproducible exploration,
-finite inverse-word export, and independent inspection. It is not a formal
-proof checker; theorem-level proofs remain in the papers and thesis.
+finite inverse-word export, figure preparation, and independent inspection. It
+is not a formal proof checker; theorem-level proofs remain in the papers and
+thesis.
 
 ## Quick visual summary
 
-The browser explorer renders the parameter plane, the dynamical plane,
-canonical traps, canonical enclosures, and finite inverse-search data. Curated
-example metadata lives in `examples/`, and gallery notes live in `gallery/`.
+The browser explorer renders the parameter plane, dynamical plane, canonical
+traps, canonical enclosures, finite inverse-search data, and selected
+certificate JSON. It now includes curated example presets, share URLs, embed
+code, save-image export, undo/redo, comparison modes, palette controls, panel
+focus, and About/Cite and Support dialogs.
+
+Curated example metadata lives in `examples/`, gallery metadata lives in
+`gallery/`, and reproducible figure job metadata lives in `paper_figures/`.
 Large generated images are intentionally kept out of git until they are
 curated, compressed, and tied to reproducible metadata.
+
+## Browser quick start
+
+For the best experience, serve the repository locally:
+
+```bash
+python3 -m http.server 8000
+```
+
+Then open `http://localhost:8000/` in a modern browser. Opening `index.html`
+directly also works for core rendering, but browser security rules may block
+loading example metadata from local JSON files.
+
+The left panel renders the parameter plane. The right panel renders the
+dynamical plane, the canonical trap, the canonical enclosure, and the
+inverse-search tree. The selected certificate can be copied or downloaded as
+JSON from the sidebar.
+
+The Canvas renderer refines progressively to single-pixel sampling. The
+selected-parameter verdict and exported certificate JSON always use the full
+selected search depth and node cap.
 
 ## What is included
 
@@ -33,9 +63,10 @@ curated, compressed, and tied to reproducible metadata.
 | `mathematica/` | Wolfram Language package. |
 | `matlab/` | MATLAB static-class implementation. |
 | `maple/` | Maple module implementation. |
-| `examples/` | Curated example configurations, certificates, and notes. |
+| `examples/` | Curated example configurations, metadata, certificates, and notes. |
 | `gallery/` | Gallery index and placeholder documentation for curated figures. |
 | `paper_figures/` | Metadata and scripts for reproducible figure generation. |
+| `schemas/` | JSON Schemas for certificates, examples, and figure metadata. |
 | `docs/` | Implementation, validation, release, and QA notes. |
 | `qa/` | Browser-engine prefix smoke tests. |
 | `tools/` | Dependency-free static bundle validator. |
@@ -43,84 +74,91 @@ curated, compressed, and tied to reproducible metadata.
 The browser explorer is currently a **Canvas/CPU reference implementation**.
 The project keeps the historical `GPU` name because it is the companion
 repository for the broader GPU-assisted exploration programme; WebGL/WebGPU
-acceleration can be added without changing the mathematical API.
+acceleration can be added later without changing the mathematical API.
 
 ## Mathematical scope
 
 For the collinear alphabet
 
-\[
-A_m = \{-m+1,-m+3,\ldots,m-1\},
-\]
+```text
+A_m = {-m+1, -m+3, ..., m-1},
+```
 
 the explorer studies the marked-point condition
 
-\[
-2c \in E(c,2n-1),
-\]
+```text
+2c in E(c, 2n - 1),
+```
 
 which encodes connectedness of the original \(n\)-ary collinear attractor
 \(E(c,n)\). The inverse search works in canonical coordinates, prunes by a
-canonical enclosure, and detects trap entry.
+canonical enclosure, and detects canonical trap entry.
 
-The repository deliberately distinguishes two trap-entry labels:
+The repository uses the following theorem spine:
+
+- marked point `2c`;
+- difference attractor `E(c, 2n - 1)`;
+- canonical coordinates, trap, and enclosure;
+- finite inverse search and finite inverse-word export;
+- finite-capture filtration `Theta_k(n)`;
+- bounded `+2` boundary repair;
+- lens-containment threshold `n >= 20`;
+- off-lens witnesses for `2 <= n <= 19`.
+
+The software supports exploration, figure generation, finite inverse-word
+export, and independent inspection. The theorem-level proofs remain in the
+papers and thesis, using explicit inequalities and finite certificates.
+
+## Verdicts: Interior, Interior-offLens, Exterior, Undetermined
+
+The repository deliberately keeps these labels separate:
 
 - `Interior`: trap hit inside the parameter lens \(X_n\setminus\mathbb R\),
-  matching the theorem-level canonical trap framework.
+  matching the canonical trap framework.
 - `Interior-offLens`: off-lens trap hit using the enabled off-lens rule. This
   is intentionally not merged with the in-lens label.
-
-Other verdicts are:
-
 - `Exterior`: enclosure escape or complete enclosure-admissible tree
   exhaustion.
-- `Undetermined`: depth or node cap reached.
+- `Undetermined`: selected depth or node cap reached.
 
-The default search depth is
+The default search depth is:
 
 ```text
 k_max = 37
 ```
 
-across the web explorer and the companion packages.
-
-## Browser quick start
-
-Open `index.html` directly in a modern browser, or serve the repository
-locally:
-
-```bash
-python3 -m http.server 8000
-```
-
-Then open the local server in your browser.
-
-The left panel renders the parameter plane. The right panel renders the
-dynamical plane, the canonical trap, the canonical enclosure, and the
-inverse-search tree. The selected certificate can be copied or downloaded as
-JSON from the sidebar.
-
-The Canvas renderer refines progressively to single-pixel sampling. The
-selected-parameter verdict and exported certificate JSON always use the full
-selected search depth and node cap.
+That default is shared by the web explorer and the companion packages.
 
 ## Examples and gallery
 
 The `examples/` directory contains curated starting points for reproducible
 exploration:
 
-| Example | Purpose |
-|---|---|
-| `e_c4_overlap` | Neighboring-overlap geometry for \(E(c,4)\). |
-| `e_c5_plane_filling` | Plane-filling behavior in the collinear family. |
-| `theta0_base_capture` | Base-capture geometry for \(\Theta_0(n)\). |
-| `trap_enclosure_n3` | Interior and Exterior trap/enclosure certificates. |
-| `threshold_n20` | Threshold/lens example linked to the finite-capture theorem. |
-| `hole_zoom_n13` | Finite-capture zoom near an \(n=13\) hole. |
+| Example | Purpose | Status |
+|---|---|---|
+| `e_c4_overlap` | Neighboring-overlap geometry for \(E(c,4)\). | Illustrative |
+| `e_c5_plane_filling` | Plane-filling behavior in the collinear family. | Illustrative |
+| `theta0_base_capture` | Base-capture geometry for `Theta_0(n)`. | Illustrative |
+| `trap_enclosure_n3` | Interior and Exterior trap/enclosure certificates. | Finite-search certified |
+| `threshold_n20` | Threshold/lens example linked to the finite-capture theorem. | Exploratory |
+| `hole_zoom_n13` | Finite-capture zoom near an \(n=13\) hole. | Exploratory |
+| `off_lens_witnesses_n2_to_n19` | Off-lens witness scaffold preserving `Interior-offLens`. | Exploratory |
+| `finite_capture_layers_n3` | Early finite-capture layer visualization for \(n=3\). | Illustrative |
 
-Each example records parameters, expected status, reproducibility notes, and
-whether the case is illustrative, certified by the current finite-search
-export, or exploratory.
+Each example records parameters, expected status, reproducibility notes,
+metadata, and whether the case is illustrative, finite-search certified,
+theorem-certified, or exploratory. Certificate JSON is included only for
+curated cases where a compact finite-search export is already known.
+
+## Share URLs and reproducible states
+
+The browser explorer can create share URLs and iframe embed code from the
+current state. The hash records the selected parameter, search limits,
+viewports, palette, comparison mode, and visible layers.
+
+Curated presets are loaded from `examples/examples.json` when the explorer is
+served over HTTP. If metadata loading is blocked, the explorer falls back to a
+built-in copy of the same public preset list.
 
 ## Package tests
 
@@ -143,7 +181,7 @@ Python:
 
 ```bash
 cd python
-python3 -m unittest test_collinear.py
+python3 -m unittest -v test_collinear.py
 ```
 
 Swift:
@@ -153,24 +191,31 @@ cd swift
 swift test
 ```
 
+Static bundle validation:
+
+```bash
+python3 tools/validate_bundle.py
+```
+
 The Wolfram Language, MATLAB, and Maple packages are included as reference
 implementations with matching formulas and defaults. See `docs/QA_REPORT.md`
-for the exact validation scope and runtime limitations. Run
-`python3 tools/validate_bundle.py` before preparing a release.
+for the exact validation scope and runtime limitations.
 
 ## QA status and limitations
 
 The release tree includes `docs/QA_REPORT.md`, `docs/VALIDATION.md`, and
 `RELEASE_CHECKLIST.md`. The automated checks cover JavaScript, Python, Swift,
-browser-engine smoke tests, formatting hygiene, and static bundle validation.
+browser-engine smoke tests, formatting hygiene, staged Pages deployment, and
+static bundle validation.
 
 The Wolfram Language, MATLAB, and Maple ports are reference implementations
 that should be checked in their native runtimes before stronger release claims
 are made.
 
 The browser renderer is a research explorer. Certificate JSON exports are
-reproducibility artifacts; theorem-level proof relies on the mathematical text,
-finite certificates, and explicit inequalities rather than visual inspection.
+reproducibility artifacts; theorem-level proof relies on the mathematical
+text, finite certificates, and explicit inequalities rather than visual
+inspection.
 
 ## Related mathematical work
 
@@ -191,9 +236,10 @@ This software accompanies and supports the following mathematical work.
    IHP audiovisual resource, 2026.
    DOI: `10.57987/IHP.2026.T1.WS3.016`.
 
-The software is a research companion for exploration, figure generation,
-finite inverse-word export, and independent inspection. The theorem-level
-proofs remain in the papers and thesis.
+The 2024 paper gives the rectangle-covering/lens-local route and a global
+large-\(n\) result. The 2026 finite-capture work uses canonical traps,
+canonical enclosures, finite inverse search, and bounded-lag repair to obtain
+the sharp `n >= 20` lens-containment threshold.
 
 ## Citing
 

@@ -25,6 +25,11 @@ The automated tests cover:
 - browser DOM-reference consistency;
 - formatting hygiene for key Markdown, YAML, CFF, and gitignore files;
 - absence of fake archival DOI placeholders and overclaiming release language.
+- Pages staging policy, including rejection of root deployment;
+- representative generated artifact ignore rules;
+- curated example index and metadata presence;
+- JSON validity for schemas, examples, gallery, and figure metadata;
+- large generated image policy outside curated example/gallery paths.
 
 The Wolfram Language, MATLAB, and Maple implementations are included as reference ports with matching formulas and defaults. They were not executed in this environment.
 
@@ -42,4 +47,6 @@ Manual checks still recommended before tagging:
 - open `index.html` in Chrome, Safari, or Firefox;
 - verify that the default state renders and reports `Interior`;
 - drag the parameter locator and exercise copy/download of certificate JSON;
+- exercise Share View, Copy Embed, Save Image, presets, undo/redo, panel focus,
+  palette controls, and About/Cite and Support dialogs;
 - run the Wolfram Language, MATLAB, and Maple reference files in their native runtimes if those runtimes are available.

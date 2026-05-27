@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.2.0",
+  "id": "trap_enclosure_n3",
+  "title": "Trap/enclosure Interior and Exterior examples",
+  "n": 3,
+  "N": 5,
+  "k_max": 37,
+  "L_max": 1000,
+  "renderer": "canvas-cpu",
+  "mode": "trap-enclosure",
+  "expected_verdict": "Interior and Exterior",
+  "proof_status": "finite-search-certificate",
+  "certificates": [
+    "certificate_interior.json",
+    "certificate_exterior.json"
+  ],
+  "related_work": "2026 canonical trap and enclosure construction",
+  "limitations": "Theorem-level proof does not rely on visual inspection."
+}

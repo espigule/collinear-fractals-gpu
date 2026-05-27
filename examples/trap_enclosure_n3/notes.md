@@ -7,6 +7,7 @@ This example records two small finite-search cases for \(n = 3\), where
 - Exterior parameter: \(c = 3.0 + 3.0i\).
 - Expected verdicts: `Interior` and `Exterior`.
 - Status: certified by the current finite-search export.
+- Related work: 2026 canonical trap and canonical enclosure construction.
 
 To reproduce, run the browser explorer or the JavaScript/Python package tests
 with `k_max = 37` and `L_max = 1000`.

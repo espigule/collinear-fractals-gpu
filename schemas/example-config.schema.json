@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/espigule/collinear-fractals-gpu/schemas/example-config.schema.json",
+  "title": "Collinear Fractals GPU example config",
+  "type": "object",
+  "required": [
+    "title",
+    "n",
+    "N",
+    "k_max",
+    "l_max",
+    "mode",
+    "expected_status"
+  ],
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "n": {
+      "type": "integer",
+      "minimum": 2
+    },
+    "N": {
+      "type": "integer",
+      "minimum": 3
+    },
+    "parameter": {
+      "$ref": "#/$defs/complex"
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "parameter"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "parameter": {
+            "$ref": "#/$defs/complex"
+          },
+          "expected_verdict": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "k_max": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "l_max": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "mode": {
+      "type": "string"
+    },
+    "expected_status": {
+      "type": "string"
+    },
+    "view": {
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "required": [
+        "parameter"
+      ]
+    },
+    {
+      "required": [
+        "cases"
+      ]
+    }
+  ],
+  "$defs": {
+    "complex": {
+      "type": "object",
+      "required": [
+        "re",
+        "im"
+      ],
+      "properties": {
+        "re": {
+          "type": "number"
+        },
+        "im": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

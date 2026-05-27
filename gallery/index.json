@@ -1,52 +1,61 @@
 {
   "version": "0.1.0-alpha",
-  "figures": [
+  "schema_version": "0.2.0",
+  "items": [
     {
       "id": "e_c4_overlap",
       "title": "Neighboring overlap for E(c,4)",
       "example": "examples/e_c4_overlap",
+      "asset": null,
       "status": "metadata-only"
     },
     {
       "id": "e_c5_plane_filling",
       "title": "Plane-filling collinear example for E(c,5)",
       "example": "examples/e_c5_plane_filling",
+      "asset": null,
       "status": "metadata-only"
     },
     {
       "id": "theta0_base_capture",
       "title": "Theta_0 base-capture geometry",
       "example": "examples/theta0_base_capture",
+      "asset": null,
       "status": "metadata-only"
     },
     {
       "id": "trap_enclosure_n3",
-      "title": "Trap/enclosure Interior and Exterior certificates",
+      "title": "Trap/enclosure certificate example",
       "example": "examples/trap_enclosure_n3",
+      "asset": null,
       "status": "metadata-only"
     },
     {
       "id": "threshold_n20",
       "title": "n=20 threshold/lens example",
       "example": "examples/threshold_n20",
+      "asset": null,
       "status": "metadata-only"
     },
     {
       "id": "hole_zoom_n13",
       "title": "n=13 finite-capture hole zoom",
       "example": "examples/hole_zoom_n13",
+      "asset": null,
       "status": "metadata-only"
     },
     {
       "id": "off_lens_witnesses_n2_to_n19",
       "title": "Off-lens witnesses for 2 <= n <= 19",
       "example": "examples/off_lens_witnesses_n2_to_n19",
+      "asset": null,
       "status": "metadata-only"
     },
     {
       "id": "finite_capture_layers_n3",
       "title": "Finite-capture layers for n=3",
       "example": "examples/finite_capture_layers_n3",
+      "asset": null,
       "status": "metadata-only"
     }
   ]

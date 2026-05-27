@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.2.0",
+  "id": "theta0_base_capture",
+  "title": "Theta_0 base-capture geometry",
+  "n": 3,
+  "N": 5,
+  "parameter": {
+    "re": 0.5,
+    "im": 1.1
+  },
+  "k_max": 37,
+  "L_max": 1000,
+  "renderer": "canvas-cpu",
+  "mode": "base-capture",
+  "expected_verdict": "Interior",
+  "proof_status": "illustrative",
+  "related_work": "2026 finite-capture filtration",
+  "limitations": "Theorem-level proof does not rely on visual inspection."
+}

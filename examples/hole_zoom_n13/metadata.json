@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.2.0",
+  "id": "hole_zoom_n13",
+  "title": "n=13 finite-capture hole zoom",
+  "n": 13,
+  "N": 25,
+  "parameter": {
+    "re": 2.0719,
+    "im": 3.0537
+  },
+  "k_max": 37,
+  "L_max": 1000,
+  "renderer": "canvas-cpu",
+  "mode": "finite-capture-zoom",
+  "expected_verdict": "exploratory",
+  "proof_status": "exploratory",
+  "related_work": "2026 finite-capture hole magnification",
+  "limitations": "Theorem-level proof does not rely on visual inspection."
+}

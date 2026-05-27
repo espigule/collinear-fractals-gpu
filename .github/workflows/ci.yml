@@ -52,7 +52,12 @@ jobs:
           git check-ignore artifacts/example.txt
           git check-ignore dist/out.tar.gz
           git check-ignore coverage/index.html
-          git check-ignore certificates/foo.json
+          git check-ignore certificates/generated/foo.json
+          git check-ignore certificates/scratch/foo.json
+          git check-ignore paper_figures/output/example.png
+          ! git check-ignore examples/e_c4_overlap/config.json
+          ! git check-ignore examples/trap_enclosure_n3/certificate_interior.json
+          ! git check-ignore certificates/verified/example.json
 
       - name: Swift package tests
         working-directory: swift

@@ -1,0 +1,13 @@
+{
+  "title": "Finite-capture layers for n=3",
+  "n": 3,
+  "N": 5,
+  "parameter": {
+    "re": 0.5,
+    "im": 1.1
+  },
+  "k_max": 37,
+  "l_max": 1000,
+  "mode": "finite-capture-layers",
+  "expected_status": "illustrative"
+}

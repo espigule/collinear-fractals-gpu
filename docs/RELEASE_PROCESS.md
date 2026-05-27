@@ -4,7 +4,10 @@ This project ships source-first GitHub releases. Registry publication to npm, Py
 
 ## Release branches and versions
 
-- Use semantic versioning with prerelease identifiers: `v0.1.0-alpha`, `v0.1.0-beta.1`, `v0.1.0`.
+- Use semantic versioning with prerelease identifiers: `v0.1.0-alpha`,
+  `v0.1.1-alpha`, `v0.2.0-alpha`, `v0.1.0-beta.1`, `v0.1.0`.
+- Treat `v0.2.0-alpha` as the next candidate only when the staged Pages site,
+  share URLs, curated example metadata, gallery index, schemas, and CI pass.
 - Keep `VERSION`, `README.md`, `CHANGELOG.md`, `CITATION.cff`, browser metadata, and package manifests in sync.
 - Use annotated tags for public releases.
 
@@ -25,7 +28,12 @@ The GitHub Actions CI workflow must pass on `main` before publishing a non-draft
 
 ## Artifact policy
 
-Keep generated archives and certificates out of git. Attach release bundles and checksum files to GitHub Releases instead. The repository's automatic GitHub source archives are acceptable for normal source downloads.
+Keep generated archives, local certificates, scratch certificates, and large
+figure outputs out of git. Curated example certificates and
+`certificates/verified/*.json` are allowed when they are reviewed
+reproducibility artifacts. Attach release bundles and checksum files to GitHub
+Releases instead. The repository's automatic GitHub source archives are
+acceptable for normal source downloads.
 
 ## Release checklist
 

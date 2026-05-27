@@ -38,8 +38,17 @@ coverage/
 htmlcov/
 site/
 release-assets/
-certificates/*.json
-certificates/**/*.json
+
+# Generated local certificate exports
+certificates/generated/
+certificates/scratch/
+certificates/local/
+!certificates/verified/
+!certificates/verified/*.json
+
+# Generated figure and example outputs
 gallery/generated/
 paper_figures/output/
 examples/**/rendered/
+!examples/**/*.json
+!examples/**/certificate*.json

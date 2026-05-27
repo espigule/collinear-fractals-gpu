@@ -47,24 +47,40 @@ REQUIRED_FILES = [
     "examples/README.md",
     "examples/examples.json",
     "examples/e_c4_overlap/config.json",
+    "examples/e_c4_overlap/metadata.json",
     "examples/e_c4_overlap/notes.md",
     "examples/e_c5_plane_filling/config.json",
+    "examples/e_c5_plane_filling/metadata.json",
     "examples/e_c5_plane_filling/notes.md",
     "examples/theta0_base_capture/config.json",
+    "examples/theta0_base_capture/metadata.json",
     "examples/theta0_base_capture/notes.md",
     "examples/trap_enclosure_n3/config.json",
+    "examples/trap_enclosure_n3/metadata.json",
     "examples/trap_enclosure_n3/certificate_interior.json",
     "examples/trap_enclosure_n3/certificate_exterior.json",
     "examples/trap_enclosure_n3/notes.md",
     "examples/threshold_n20/config.json",
+    "examples/threshold_n20/metadata.json",
     "examples/threshold_n20/notes.md",
     "examples/hole_zoom_n13/config.json",
-    "examples/hole_zoom_n13/certificate.json",
+    "examples/hole_zoom_n13/metadata.json",
     "examples/hole_zoom_n13/notes.md",
+    "examples/off_lens_witnesses_n2_to_n19/config.json",
+    "examples/off_lens_witnesses_n2_to_n19/metadata.json",
+    "examples/off_lens_witnesses_n2_to_n19/notes.md",
+    "examples/finite_capture_layers_n3/config.json",
+    "examples/finite_capture_layers_n3/metadata.json",
+    "examples/finite_capture_layers_n3/notes.md",
     "gallery/README.md",
+    "gallery/index.json",
+    "paper_figures/README.md",
     "paper_figures/make_all_figures.py",
     "paper_figures/figure_metadata.json",
     "paper_figures/output_hashes.sha256",
+    "schemas/certificate.schema.json",
+    "schemas/example-config.schema.json",
+    "schemas/figure-metadata.schema.json",
     "qa/explorer-prefix-smoke-test.js",
     "tools/validate_bundle.py",
 ]
@@ -80,6 +96,7 @@ TEXT_EXTENSIONS = {
     ".mpl",
     ".py",
     ".sha256",
+    ".svg",
     ".swift",
     ".toml",
     ".txt",
@@ -129,6 +146,12 @@ TOP_LEVEL_KEYS = [
     "version",
 ]
 
+DYNAMIC_DOM_IDS = {
+    "modal-copy-primary",
+    "tour-next",
+    "tour-prev",
+}
+
 BANNED_PHRASES = [
     "verification " + "package",
     "full " + "verification",
@@ -140,6 +163,25 @@ BANNED_PHRASES = [
     "2 " + "px " + "final",
     "adaptive " + "final " + "resolution",
 ]
+
+OVERCLAIM_PATTERNS = [
+    r"\b(is|as|becomes|serves as)\s+a\s+formal\s+proof\s+checker\b",
+    r"\bv0\.[12][^\n.]{0,80}\bverification\s+package\b",
+]
+
+IMAGE_EXTENSIONS = {
+    ".gif",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".svg",
+    ".webp",
+}
+
+CURATED_IMAGE_PREFIXES = (
+    "gallery/",
+    "examples/",
+)
 
 
 def fail(message: str) -> None:
@@ -184,6 +226,61 @@ def validate_yaml_like_multiline(path: str) -> None:
             )
 
 
+def validate_markdown_heading_lines(path: str) -> None:
+    for index, line in enumerate(read(path).splitlines(), start=1):
+        if not line.startswith("#"):
+            continue
+        if re.search(r"\s#{1,6}\s+\S", line[1:]):
+            fail(f"{path}:{index} appears to contain collapsed Markdown headings")
+        if "## " in line[3:]:
+            fail(f"{path}:{index} appears to contain multiple headings on one line")
+
+
+def validate_large_image_policy() -> None:
+    offenders = []
+    for path in ROOT.rglob("*"):
+        if not path.is_file() or ".git" in path.parts:
+            continue
+        suffix = path.suffix.lower()
+        if suffix not in IMAGE_EXTENSIONS:
+            continue
+        rel = path.relative_to(ROOT).as_posix()
+        if rel.endswith(".svg"):
+            max_bytes = 250_000
+        else:
+            max_bytes = 750_000
+        if path.stat().st_size > max_bytes and not rel.startswith(CURATED_IMAGE_PREFIXES):
+            offenders.append(f"{rel} ({path.stat().st_size} bytes)")
+        if "generated" in path.parts or "output" in path.parts:
+            offenders.append(f"{rel} is generated/output imagery")
+    if offenders:
+        fail("large or generated image assets found outside policy: " + ", ".join(offenders))
+
+
+def validate_example_index() -> None:
+    index = json.loads(read("examples/examples.json"))
+    ids = set()
+    for item in index.get("examples", []):
+        example_id = item.get("id")
+        ids.add(example_id)
+        for key in ["config", "metadata"]:
+            path = item.get(key)
+            if not path or not (ROOT / path).is_file():
+                fail(f"examples/examples.json entry {example_id} has missing {key}")
+    required = {
+        "e_c4_overlap",
+        "e_c5_plane_filling",
+        "theta0_base_capture",
+        "trap_enclosure_n3",
+        "threshold_n20",
+        "hole_zoom_n13",
+        "off_lens_witnesses_n2_to_n19",
+        "finite_capture_layers_n3",
+    }
+    if not required.issubset(ids):
+        fail("examples/examples.json missing required examples: " + ", ".join(sorted(required - ids)))
+
+
 def main() -> int:
     missing = [p for p in REQUIRED_FILES if not (ROOT / p).is_file()]
     if missing:
@@ -202,6 +299,10 @@ def main() -> int:
     for path in YAML_LIKE_FILES:
         validate_yaml_like_multiline(path)
 
+    for path in ROOT.rglob("*.md"):
+        if ".git" not in path.parts:
+            validate_markdown_heading_lines(path.relative_to(ROOT).as_posix())
+
     pages = read(".github/workflows/pages.yml")
     if re.search(r"(?m)^\s+path:\s*\.\s*$", pages):
         fail("pages.yml deploys the repository root instead of a staged site directory")
@@ -212,10 +313,12 @@ def main() -> int:
     required_headings = [
         "# Collinear Fractals GPU",
         "## Quick visual summary",
+        "## Browser quick start",
         "## What is included",
         "## Mathematical scope",
-        "## Browser quick start",
+        "## Verdicts: Interior, Interior-offLens, Exterior, Undetermined",
         "## Examples and gallery",
+        "## Share URLs and reproducible states",
         "## Package tests",
         "## QA status and limitations",
         "## Related mathematical work",
@@ -227,6 +330,9 @@ def main() -> int:
     missing_headings = [heading for heading in required_headings if heading not in readme_lines]
     if missing_headings:
         fail("README.md missing required headings: " + ", ".join(missing_headings))
+    heading_positions = [readme_lines.index(heading) for heading in required_headings]
+    if heading_positions != sorted(heading_positions):
+        fail("README.md required headings are not in the expected order")
 
     cff = read("CITATION.cff")
     for required in [
@@ -238,21 +344,12 @@ def main() -> int:
         if required not in cff:
             fail(f"CITATION.cff missing required metadata: {required}")
 
-    for path in [
-        "examples/examples.json",
-        "examples/e_c4_overlap/config.json",
-        "examples/e_c5_plane_filling/config.json",
-        "examples/theta0_base_capture/config.json",
-        "examples/trap_enclosure_n3/config.json",
-        "examples/trap_enclosure_n3/certificate_interior.json",
-        "examples/trap_enclosure_n3/certificate_exterior.json",
-        "examples/threshold_n20/config.json",
-        "examples/hole_zoom_n13/config.json",
-        "examples/hole_zoom_n13/certificate.json",
-        "paper_figures/figure_metadata.json",
-        "javascript/package.json",
-    ]:
-        validate_json(path)
+    for path in ROOT.rglob("*.json"):
+        if ".git" not in path.parts and "node_modules" not in path.parts:
+            validate_json(path.relative_to(ROOT).as_posix())
+
+    validate_example_index()
+    validate_large_image_policy()
 
     # No local absolute links or previous development paths.
     offenders = []
@@ -279,6 +376,9 @@ def main() -> int:
                 for phrase in BANNED_PHRASES:
                     if phrase in lowered:
                         language_offenders.append(f"{path.relative_to(ROOT)}: {phrase}")
+                for pattern in OVERCLAIM_PATTERNS:
+                    if re.search(pattern, lowered):
+                        language_offenders.append(f"{path.relative_to(ROOT)}: {pattern}")
     if offenders:
         fail("local-path leakage found in: " + ", ".join(offenders))
     if fake_doi_offenders:
@@ -291,7 +391,7 @@ def main() -> int:
     js = read("explorer.js")
     ids = set(re.findall(r'id="([^"]+)"', html))
     refs = set(re.findall(r"document\.getElementById\('([^']+)'\)", js))
-    missing_refs = sorted(refs - ids)
+    missing_refs = sorted(refs - ids - DYNAMIC_DOM_IDS)
     if missing_refs:
         fail("missing DOM ids referenced by explorer.js: " + ", ".join(missing_refs))
 

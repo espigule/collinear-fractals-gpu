@@ -1,0 +1,13 @@
+{
+  "title": "Off-lens witnesses for 2 <= n <= 19",
+  "n": 13,
+  "N": 25,
+  "parameter": {
+    "re": 0.72,
+    "im": 1.38
+  },
+  "k_max": 37,
+  "l_max": 1000,
+  "mode": "off-lens-witness",
+  "expected_status": "exploratory"
+}

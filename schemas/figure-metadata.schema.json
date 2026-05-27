@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/espigule/collinear-fractals-gpu/schemas/figure-metadata.schema.json",
+  "title": "Collinear Fractals GPU figure metadata",
+  "type": "object",
+  "required": [
+    "version",
+    "figures"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "figures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "example",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "example": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "asset": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "output_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
