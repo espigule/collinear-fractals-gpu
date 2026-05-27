@@ -2,7 +2,7 @@
 name = "collinear-fractals"
 version = "0.1.0a0"
 description = "Companion software for collinear fractals, finite capture, and restricted polynomial roots"
-authors = [{ name = "Bernat Espigulé-Pons" }]
+authors = [{ name = "Bernat Espigule" }]
 license = { text = "Apache-2.0" }
 license-files = ["LICENSE"]
 readme = "README.md"

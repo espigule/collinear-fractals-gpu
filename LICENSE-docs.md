@@ -8,4 +8,4 @@ The full Creative Commons Attribution 4.0 International legal text is included i
 
 SPDX-License-Identifier: CC-BY-4.0
 
-Copyright 2026 Bernat Espigulé-Pons.
+Copyright 2026 Bernat Espigule.

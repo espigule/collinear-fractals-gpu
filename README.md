@@ -7,7 +7,7 @@ Version: **0.1.0-alpha**
 
 Candidate maintenance line: **v0.2.0-alpha candidate** when the examples,
 gallery, staged Pages site, schemas, and CI remain green.
-Author: **Bernat Espigulé-Pons**
+Author: **Bernat Espigule**
 
 This repository contains a browser-based research explorer and multi-language
 reference implementations for canonical-coordinate inverse search associated
@@ -221,17 +221,17 @@ inspection.
 
 This software accompanies and supports the following mathematical work.
 
-1. Bernat Espigulé, David Juher, and Joan Saldaña,
+1. Bernat Espigule, David Juher, and Joan Saldaña,
    "Collinear Fractals and Bandt's Conjecture",
    *Fractal and Fractional* 8(12), 725, 2024.
    DOI: `10.3390/fractalfract8120725`.
 
-2. Bernat Espigulé and David Juher,
+2. Bernat Espigule and David Juher,
    "Finite Capture and the Closure of Roots of Restricted Polynomials",
    arXiv:2603.07397, 2026.
    DOI: `10.48550/arXiv.2603.07397`.
 
-3. Bernat Espigulé,
+3. Bernat Espigule,
    "Finite capture and the closure of roots of restricted polynomials",
    IHP audiovisual resource, 2026.
    DOI: `10.57987/IHP.2026.T1.WS3.016`.
@@ -245,7 +245,7 @@ the sharp `n >= 20` lens-containment threshold.
 
 Use the metadata in `CITATION.cff`. A compact text citation is:
 
-> Bernat Espigulé-Pons, *Collinear Fractals GPU: companion software for
+> Bernat Espigule, *Collinear Fractals GPU: companion software for
 > collinear fractals, finite capture, and restricted polynomial roots*,
 > version 0.1.0-alpha, 2026.
 
@@ -256,7 +256,7 @@ release is archived through Zenodo or an equivalent service.
 
 Parts of the mathematical framework, validation materials, examples, and
 companion software in this repository were developed during Bernat
-Espigulé-Pons's doctoral research at the Universitat de Girona, supervised by
+Espigule's doctoral research at the Universitat de Girona, supervised by
 Dr. Joan Saldaña Meca and Dr. David Juher Barrot.
 
 This work was supported by the Spanish Ministerio de Ciencia, Innovación y
@@ -264,7 +264,7 @@ Universidades through project PID2023-146424NB-I00, by the Generalitat de
 Catalunya through grant 2021 SGR 00113, and by the Universitat de Girona and
 Banco Santander Grant Programme for Researchers in Training, IFUdG 2022-2024.
 
-The repository is maintained by Bernat Espigulé-Pons. The funders,
+The repository is maintained by Bernat Espigule. The funders,
 supervisors, and affiliated institutions do not necessarily endorse the
 software, the public explorer, or any results obtained with it.
 
