@@ -1,6 +1,6 @@
-# QA Report for v0.1.0-alpha
+# QA Report for v0.2.0-alpha
 
-Date: 2026-05-27
+Date: 2026-05-28
 
 ## Scope checked
 
@@ -64,7 +64,7 @@ The test suite covers:
 Passed:
 
 - no local file-URL links or user-specific absolute filesystem paths remain;
-- visible version is `0.1.0-alpha`;
+- visible version is `0.2.0-alpha`;
 - README distinguishes Canvas/CPU implementation from the broader GPU-assisted programme;
 - README and docs distinguish `Interior` from `Interior-offLens`;
 - default `k_max = 37` is documented across the browser and packages;
@@ -72,7 +72,7 @@ Passed:
 - Pages workflow stages only the static explorer, gallery metadata, and safe
   example metadata instead of deploying the whole repository root.
 - `examples/`, `gallery/`, `paper_figures/`, and `schemas/` contain
-  reproducibility metadata for the alpha-candidate example layer.
+  reproducibility metadata for the alpha release example layer.
 
 ## Known limitations
 
@@ -83,5 +83,5 @@ Passed:
 - High-depth rendering can be computationally expensive in the browser. The
   current alpha keeps the behavior explicit by refining to single-pixel
   sampling rather than silently lowering final preview resolution.
-- The gallery is metadata-first in this alpha candidate. Large rendered figure
+- The gallery is metadata-first in this alpha release. Large rendered figure
   dumps remain ignored until small curated assets are reviewed and hash-checked.

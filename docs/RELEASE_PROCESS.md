@@ -16,12 +16,21 @@ This project ships source-first GitHub releases. Registry publication to npm, Py
 Run these before tagging:
 
 ```bash
+python3 tools/validate_bundle.py
+git diff --check
 node --check explorer.js
+node --check qa/render_smoke_tests.js
+node --check qa/kernel_equivalence_tests.js
+node --check tools/bench/render_metadata_bench.js
+node --check workers/certificate-worker.js
+node --check workers/histogram-worker.js
 node qa/explorer-prefix-smoke-test.js
+node qa/render_smoke_tests.js
+node qa/kernel_equivalence_tests.js
+node tools/bench/render_metadata_bench.js
 cd javascript && npm test
 cd ../python && python3 -m unittest -v test_collinear.py
 cd ../swift && swift test
-cd .. && python3 tools/validate_bundle.py
 ```
 
 The GitHub Actions CI workflow must pass on `main` before publishing a non-draft release.
@@ -40,6 +49,6 @@ acceptable for normal source downloads.
 1. Update release metadata and `CHANGELOG.md`.
 2. Run the required checks locally when the runtimes are available.
 3. Push to `main` and wait for CI.
-4. Create an annotated tag, for example `git tag -a v0.1.0-alpha -m "v0.1.0-alpha"`.
+4. Create an annotated tag, for example `git tag -a v0.2.0-alpha -m "v0.2.0-alpha"`.
 5. Create a GitHub prerelease with release notes, checksums, and any generated source bundle.
 6. Confirm GitHub Pages renders the explorer.

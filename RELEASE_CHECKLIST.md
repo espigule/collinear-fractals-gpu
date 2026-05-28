@@ -13,7 +13,14 @@ funding, support, and directory scaffolding without usable example presets.
 ## Required automated checks
 
 ```bash
+python3 tools/validate_bundle.py
+git diff --check
 node --check explorer.js
+node --check qa/render_smoke_tests.js
+node --check qa/kernel_equivalence_tests.js
+node --check tools/bench/render_metadata_bench.js
+node --check workers/certificate-worker.js
+node --check workers/histogram-worker.js
 node qa/explorer-prefix-smoke-test.js
 node qa/render_smoke_tests.js
 node qa/kernel_equivalence_tests.js
@@ -21,7 +28,7 @@ node tools/bench/render_metadata_bench.js
 cd javascript && npm test
 cd ../python && python3 -m unittest -v test_collinear.py
 cd ../swift && swift test
-git check-ignore collinear-fractals-gpu_v0.1.0-alpha_final-QA.zip
+git check-ignore collinear-fractals-gpu_v0.2.0-alpha_source.zip
 git check-ignore artifacts/example.txt
 git check-ignore dist/out.tar.gz
 git check-ignore coverage/index.html

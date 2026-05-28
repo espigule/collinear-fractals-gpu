@@ -3,10 +3,9 @@
 **Research explorer and companion software for collinear fractals, finite
 capture, and restricted polynomial roots.**
 
-Version: **0.1.0-alpha**
+Version: **0.2.0-alpha**
 
-Candidate maintenance line: **v0.2.0-alpha candidate** when the examples,
-gallery, staged Pages site, schemas, and CI remain green.
+Release line: **v0.2.0-alpha** GitHub-only prerelease.
 Author: **Bernat Espigule**
 
 This repository contains a browser-based research explorer and multi-language
@@ -84,7 +83,7 @@ The project keeps the historical `GPU` name because it is the companion
 repository for the broader GPU-assisted exploration programme; WebGL/WebGPU
 acceleration can be added later without changing the mathematical API.
 
-Feature status for this internal-review branch:
+Feature status for `v0.2.0-alpha`:
 
 | Feature | v0.2 status |
 |---|---|
@@ -277,7 +276,7 @@ Use the metadata in `CITATION.cff`. A compact text citation is:
 
 > Bernat Espigule, *Collinear Fractals GPU: companion software for
 > collinear fractals, finite capture, and restricted polynomial roots*,
-> version 0.1.0-alpha, 2026.
+> version 0.2.0-alpha, 2026.
 
 No Zenodo DOI has been assigned yet. Add an archival DOI only after a future
 release is archived through Zenodo or an equivalent service.

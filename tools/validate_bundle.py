@@ -13,7 +13,8 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-VERSION = "0.1.0-alpha"
+VERSION = "0.2.0-alpha"
+PYTHON_VERSION = "0.2.0a0"
 
 REQUIRED_FILES = [
     "README.md",
@@ -579,6 +580,8 @@ def main() -> int:
     package = json.loads(read("javascript/package.json"))
     if package.get("version") != VERSION:
         fail("javascript/package.json version mismatch")
+    if f'version = "{PYTHON_VERSION}"' not in read("python/pyproject.toml"):
+        fail("python/pyproject.toml version mismatch")
     for path in ["README.md", "index.html", "CITATION.cff"]:
         if VERSION not in read(path):
             fail(f"{path} does not contain {VERSION}")

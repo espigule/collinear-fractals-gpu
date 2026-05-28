@@ -31,5 +31,5 @@ are recorded after a real browser session is completed.
 - QA was performed against the feature branch before merge to `main`.
 - Screenshots were not committed; keep screenshots untracked unless they are
   explicitly approved as curated review evidence.
-- Browser QA passing supports internal review. Pages must still be verified
-  from `main` before release-candidate review.
+- Browser QA passing supports release-candidate review. Pages must still be
+  verified from `main` before publishing a release.
