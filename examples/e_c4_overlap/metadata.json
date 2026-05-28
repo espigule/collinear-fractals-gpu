@@ -5,15 +5,20 @@
   "n": 4,
   "N": 7,
   "parameter": {
-    "re": 1.6,
-    "im": 0.8
+    "re": 1.5,
+    "im": 1.6583123951777,
+    "exact": "(3 + i sqrt(11))/2"
   },
   "k_max": 37,
   "L_max": 1000,
-  "renderer": "canvas-cpu",
+  "renderer": "prefix-cylinder",
+  "renderer_depth": 7,
+  "certificate_renderer": "canvas-cpu",
   "mode": "collinear-attractor",
-  "expected_verdict": "illustrative",
-  "proof_status": "illustrative",
+  "visual_status": "visual-approximation",
+  "expected_verdict": "illustrative-thesis-example",
+  "proof_status": "illustrative-thesis-example",
+  "related_thesis_figure": "Figure 3.1",
   "related_work": "2024 collinear-fractals/Bandt framework",
   "limitations": "Theorem-level proof does not rely on visual inspection."
 }

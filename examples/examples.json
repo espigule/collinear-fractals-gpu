@@ -8,8 +8,8 @@
       "path": "examples/e_c4_overlap",
       "config": "examples/e_c4_overlap/config.json",
       "metadata": "examples/e_c4_overlap/metadata.json",
-      "status": "illustrative",
-      "share_hash": "n=4&cx=1.6&cy=0.8&k=37&l=1000&q=3&mode=overlay"
+      "status": "illustrative-thesis-example",
+      "share_hash": "n=4&cx=1.5&cy=1.6583123951777&k=37&l=1000&q=3&mode=overlay&renderer=prefix&adepth=7&hseed=20260227&hsamples=50000&pieces=1&aop=0.72"
     },
     {
       "id": "e_c5_plane_filling",
@@ -17,8 +17,8 @@
       "path": "examples/e_c5_plane_filling",
       "config": "examples/e_c5_plane_filling/config.json",
       "metadata": "examples/e_c5_plane_filling/metadata.json",
-      "status": "illustrative",
-      "share_hash": "n=5&cx=1.75&cy=0.95&k=37&l=1000&q=3&mode=overlay"
+      "status": "illustrative-thesis-example",
+      "share_hash": "n=5&cx=1.0&cy=2.0&k=37&l=1000&q=3&mode=overlay&renderer=prefix&adepth=7&hseed=20260227&hsamples=50000&pieces=1&aop=0.72"
     },
     {
       "id": "theta0_base_capture",
@@ -27,7 +27,7 @@
       "config": "examples/theta0_base_capture/config.json",
       "metadata": "examples/theta0_base_capture/metadata.json",
       "status": "illustrative",
-      "share_hash": "n=3&cx=0.5&cy=1.1&k=37&l=1000&q=3&mode=overlay"
+      "share_hash": "n=3&cx=0.5&cy=1.1&k=37&l=1000&q=3&mode=overlay&renderer=prefix&adepth=7&hseed=20260227&hsamples=50000&pieces=1&aop=0.72"
     },
     {
       "id": "trap_enclosure_n3",
@@ -36,7 +36,7 @@
       "config": "examples/trap_enclosure_n3/config.json",
       "metadata": "examples/trap_enclosure_n3/metadata.json",
       "status": "finite-search-certified",
-      "share_hash": "n=3&cx=0.5&cy=1.1&k=37&l=1000&q=3&mode=overlay"
+      "share_hash": "n=3&cx=0.5&cy=1.1&k=37&l=1000&q=3&mode=overlay&renderer=prefix&adepth=7&hseed=20260227&hsamples=50000&pieces=1&aop=0.72"
     },
     {
       "id": "threshold_n20",
@@ -45,7 +45,7 @@
       "config": "examples/threshold_n20/config.json",
       "metadata": "examples/threshold_n20/metadata.json",
       "status": "exploratory",
-      "share_hash": "n=20&cx=2.0&cy=4.0&k=37&l=1000&q=3&mode=overlay"
+      "share_hash": "n=20&cx=2.0&cy=4.0&k=37&l=1000&q=3&mode=overlay&renderer=prefix&adepth=7&hseed=20260227&hsamples=50000&pieces=1&aop=0.72"
     },
     {
       "id": "hole_zoom_n13",
@@ -54,7 +54,7 @@
       "config": "examples/hole_zoom_n13/config.json",
       "metadata": "examples/hole_zoom_n13/metadata.json",
       "status": "exploratory",
-      "share_hash": "n=13&cx=2.0719&cy=3.0537&k=37&l=1000&q=3&mode=overlay"
+      "share_hash": "n=13&cx=2.0719&cy=3.0537&k=37&l=1000&q=3&mode=overlay&renderer=prefix&adepth=7&hseed=20260227&hsamples=50000&pieces=1&aop=0.72"
     },
     {
       "id": "off_lens_witnesses_n2_to_n19",
@@ -63,7 +63,7 @@
       "config": "examples/off_lens_witnesses_n2_to_n19/config.json",
       "metadata": "examples/off_lens_witnesses_n2_to_n19/metadata.json",
       "status": "exploratory",
-      "share_hash": "n=13&cx=0.72&cy=1.38&k=37&l=1000&q=3&mode=overlay"
+      "share_hash": "n=13&cx=0.72&cy=1.38&k=37&l=1000&q=3&mode=overlay&renderer=prefix&adepth=7&hseed=20260227&hsamples=50000&pieces=1&aop=0.72"
     },
     {
       "id": "finite_capture_layers_n3",
@@ -72,7 +72,16 @@
       "config": "examples/finite_capture_layers_n3/config.json",
       "metadata": "examples/finite_capture_layers_n3/metadata.json",
       "status": "illustrative",
-      "share_hash": "n=3&cx=0.5&cy=1.1&k=37&l=1000&q=3&mode=escape"
+      "share_hash": "n=3&cx=0.5&cy=1.1&k=37&l=1000&q=3&mode=escape&renderer=prefix&adepth=7&hseed=20260227&hsamples=50000&pieces=1&aop=0.72"
+    },
+    {
+      "id": "level2_boundary_atlas",
+      "title": "Level-2 boundary atlas scaffold",
+      "path": "examples/level2_boundary_atlas",
+      "config": "examples/level2_boundary_atlas/config.json",
+      "metadata": "examples/level2_boundary_atlas/metadata.json",
+      "status": "exploratory",
+      "share_hash": "n=3&cx=0.5&cy=1.1&k=37&l=1000&q=3&mode=overlay&renderer=prefix&adepth=7&hseed=20260227&hsamples=50000&pieces=1&aop=0.72"
     }
   ]
 }

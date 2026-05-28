@@ -5,6 +5,13 @@
   "k_max": 37,
   "l_max": 1000,
   "mode": "trap-enclosure",
+  "expected_status": "finite-search-certified",
+  "renderer_mode": "prefix",
+  "visual_renderer": {
+    "mode": "prefix",
+    "depth": 7,
+    "first_level_pieces": true
+  },
   "cases": [
     {
       "id": "interior",

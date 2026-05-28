@@ -1,5 +1,7 @@
 {
   "version": "0.1.0-alpha",
+  "default_renderer": "prefix-cylinder",
+  "proof_status_note": "Figure renderer metadata is illustrative unless paired with finite-search certificate JSON.",
   "figures": [
     {
       "id": "e_c4_overlap",
@@ -47,6 +49,12 @@
       "id": "finite_capture_layers_n3",
       "title": "Finite-capture layers for n=3",
       "example": "examples/finite_capture_layers_n3",
+      "status": "metadata-only"
+    },
+    {
+      "id": "level2_boundary_atlas",
+      "title": "Level-2 boundary atlas scaffold",
+      "example": "examples/level2_boundary_atlas",
       "status": "metadata-only"
     }
   ]

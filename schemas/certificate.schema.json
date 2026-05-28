@@ -93,6 +93,13 @@
     "renderer": {
       "type": "string"
     },
+    "visual_renderer": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Optional visual-renderer metadata. This is not a proof field."
+    },
     "proof_status": {
       "enum": [
         "finite-search-certificate",

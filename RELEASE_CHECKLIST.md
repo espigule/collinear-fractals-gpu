@@ -14,6 +14,10 @@ funding, support, and directory scaffolding without usable example presets.
 
 ```bash
 node --check explorer.js
+node qa/explorer-prefix-smoke-test.js
+node qa/render_smoke_tests.js
+node qa/kernel_equivalence_tests.js
+node tools/bench/render_metadata_bench.js
 cd javascript && npm test
 cd ../python && python3 -m unittest -v test_collinear.py
 cd ../swift && swift test
@@ -37,6 +41,10 @@ git check-ignore paper_figures/output/example.png
 - `Interior` and `Interior-offLens` remain separate verdict labels.
 - The browser explorer refines to single-pixel sampling unless an explicit UI
   quality/performance control is added in a later release.
+- The original-attractor visual renderer is separate from finite-search
+  certificate/status rendering.
+- Share URLs preserve renderer mode, prefix depth, histogram seed, sample count,
+  first-level piece coloring, and layer opacity.
 - Key Markdown, YAML, CFF, and gitignore files are not line-collapsed.
 - No fake DOI, local filesystem path, secret, or proof-verification overclaim
   is present.
@@ -52,6 +60,9 @@ Open `index.html` in a modern browser and verify:
 - The default parameter reports an in-lens `Interior` verdict.
 - Changing `n`, `k_max`, and `mod q` triggers re-rendering.
 - Dragging the red locator updates the dynamical panel and status bar.
+- Prefix-cylinder mode renders \(E(c,n)\) without color inversion or hidden
+  dilation.
+- Histogram mode is deterministic for a fixed seed.
 - `Copy Certificate JSON` and `Download Certificate JSON` work.
 - `Share View`, `Copy Embed`, `Save Image`, curated presets, undo/redo,
   panel focus, palette controls, and About/Cite and Support dialogs work.

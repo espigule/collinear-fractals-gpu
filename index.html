@@ -85,6 +85,37 @@
         </select>
       </div>
 
+      <!-- Original Attractor Renderer -->
+      <div class="control-group">
+        <label for="original-renderer-mode">Original Attractor Renderer</label>
+        <select id="original-renderer-mode">
+          <option value="prefix">Prefix cylinders</option>
+          <option value="histogram">Seeded histogram</option>
+          <option value="survival">Inverse-search status</option>
+        </select>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.25rem;">
+          <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+            <span style="font-size: 0.75rem; color: var(--text-secondary);">Visual Depth</span>
+            <input type="number" id="attractor-depth" value="7" min="1" max="12">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+            <span style="font-size: 0.75rem; color: var(--text-secondary);">Histogram Seed</span>
+            <input type="number" id="histogram-seed" value="20260227" min="1" step="1">
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center;">
+          <input type="number" id="histogram-samples" value="50000" min="1000" max="1000000" step="1000" title="Histogram sample count">
+          <label class="checkbox-label" style="white-space: nowrap;">
+            <input type="checkbox" id="first-level-pieces" checked>
+            Pieces
+          </label>
+        </div>
+        <div class="slider-container">
+          <input type="range" id="original-attractor-opacity" min="0" max="100" value="72" step="1">
+          <span class="slider-val" id="original-attractor-opacity-val">72%</span>
+        </div>
+      </div>
+
       <!-- Layer Visibilities -->
       <div class="control-group" style="gap: 0.5rem; margin-top: 0.25rem;">
         <label>Layers & Display</label>
@@ -94,7 +125,7 @@
         </label>
         <label class="checkbox-label">
           <input type="checkbox" id="show-collinear-attractor">
-          Collinear Attractor E(c,n) [Negated]
+          Collinear Attractor E(c,n)
         </label>
         <label class="checkbox-label">
           <input type="checkbox" id="show-canonical-trap" checked>

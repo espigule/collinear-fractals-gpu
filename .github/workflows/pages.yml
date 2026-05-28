@@ -33,6 +33,18 @@ jobs:
         run: |
           mkdir -p site
           cp index.html index.css explorer.js .nojekyll site/
+          if [ -d src ]; then
+            mkdir -p site/src
+            cp -R src/. site/src/
+          fi
+          if [ -d workers ]; then
+            mkdir -p site/workers
+            cp -R workers/. site/workers/
+          fi
+          if [ -d schemas ]; then
+            mkdir -p site/schemas
+            cp schemas/*.json site/schemas/
+          fi
           if [ -d gallery ]; then
             mkdir -p site/gallery
             find gallery -maxdepth 2 -type f \( -name 'README.md' -o -name 'index.json' -o -name '*.webp' -o -name '*.png' -o -name '*.svg' \) -exec sh -c 'mkdir -p "site/$(dirname "$1")"; cp "$1" "site/$1"' sh {} \;

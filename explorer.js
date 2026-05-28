@@ -320,6 +320,13 @@ const state = {
   showPath: true,
   showEscapeStrata: false,
   comparisonMode: 'overlay',
+  rendererMode: 'prefix',
+  attractorDepth: 7,
+  histogramSeed: 20260227,
+  histogramSamples: 50000,
+  firstLevelPieces: true,
+  originalAttractorOpacity: 0.72,
+  survivalOverlayOpacity: 0.45,
   palette: 'research',
   customPalette: {
     interior: '#059669',
@@ -346,19 +353,23 @@ const EXAMPLE_PRESETS = [
     id: 'e_c4_overlap',
     title: 'Neighboring overlap for E(c,4)',
     n: 4,
-    parameter: { re: 1.6, im: 0.8 },
+    parameter: { re: 1.5, im: 1.6583123951777, exact: '(3 + i sqrt(11))/2' },
     k_max: 37,
     l_max: 1000,
-    mode: 'collinear-attractor'
+    mode: 'collinear-attractor',
+    renderer_mode: 'prefix',
+    visual_renderer: { mode: 'prefix', depth: 7, first_level_pieces: true }
   },
   {
     id: 'e_c5_plane_filling',
     title: 'Plane-filling collinear example for E(c,5)',
     n: 5,
-    parameter: { re: 1.75, im: 0.95 },
+    parameter: { re: 1.0, im: 2.0, exact: '1 + 2i' },
     k_max: 37,
     l_max: 1000,
-    mode: 'collinear-attractor'
+    mode: 'collinear-attractor',
+    renderer_mode: 'prefix',
+    visual_renderer: { mode: 'prefix', depth: 7, first_level_pieces: true }
   },
   {
     id: 'theta0_base_capture',
@@ -367,7 +378,9 @@ const EXAMPLE_PRESETS = [
     parameter: { re: 0.5, im: 1.1 },
     k_max: 37,
     l_max: 1000,
-    mode: 'base-capture'
+    mode: 'base-capture',
+    renderer_mode: 'prefix',
+    visual_renderer: { mode: 'prefix', depth: 7, first_level_pieces: true }
   },
   {
     id: 'trap_enclosure_n3',
@@ -376,7 +389,9 @@ const EXAMPLE_PRESETS = [
     parameter: { re: 0.5, im: 1.1 },
     k_max: 37,
     l_max: 1000,
-    mode: 'trap-enclosure'
+    mode: 'trap-enclosure',
+    renderer_mode: 'prefix',
+    visual_renderer: { mode: 'prefix', depth: 7, first_level_pieces: true }
   },
   {
     id: 'threshold_n20',
@@ -385,7 +400,9 @@ const EXAMPLE_PRESETS = [
     parameter: { re: 2.0, im: 4.0 },
     k_max: 37,
     l_max: 1000,
-    mode: 'finite-capture-threshold'
+    mode: 'finite-capture-threshold',
+    renderer_mode: 'prefix',
+    visual_renderer: { mode: 'prefix', depth: 7, first_level_pieces: true }
   },
   {
     id: 'hole_zoom_n13',
@@ -394,7 +411,9 @@ const EXAMPLE_PRESETS = [
     parameter: { re: 2.0719, im: 3.0537 },
     k_max: 37,
     l_max: 1000,
-    mode: 'finite-capture-zoom'
+    mode: 'finite-capture-zoom',
+    renderer_mode: 'prefix',
+    visual_renderer: { mode: 'prefix', depth: 7, first_level_pieces: true }
   },
   {
     id: 'off_lens_witnesses_n2_to_n19',
@@ -403,7 +422,9 @@ const EXAMPLE_PRESETS = [
     parameter: { re: 0.72, im: 1.38 },
     k_max: 37,
     l_max: 1000,
-    mode: 'off-lens-witness'
+    mode: 'off-lens-witness',
+    renderer_mode: 'prefix',
+    visual_renderer: { mode: 'prefix', depth: 7, first_level_pieces: true }
   },
   {
     id: 'finite_capture_layers_n3',
@@ -412,7 +433,20 @@ const EXAMPLE_PRESETS = [
     parameter: { re: 0.5, im: 1.1 },
     k_max: 37,
     l_max: 1000,
-    mode: 'finite-capture-layers'
+    mode: 'finite-capture-layers',
+    renderer_mode: 'prefix',
+    visual_renderer: { mode: 'prefix', depth: 7, first_level_pieces: true }
+  },
+  {
+    id: 'level2_boundary_atlas',
+    title: 'Level-2 boundary atlas scaffold',
+    n: 3,
+    parameter: { re: 0.5, im: 1.1 },
+    k_max: 37,
+    l_max: 1000,
+    mode: 'level2-boundary-atlas',
+    renderer_mode: 'prefix',
+    visual_renderer: { mode: 'prefix', depth: 7, first_level_pieces: true }
   }
 ];
 
@@ -558,6 +592,13 @@ const elModulo = document.getElementById('param-modulo');
 const elModuloVal = document.getElementById('modulo-val');
 const elExamplePreset = document.getElementById('example-preset');
 const elComparisonMode = document.getElementById('comparison-mode');
+const elOriginalRendererMode = document.getElementById('original-renderer-mode');
+const elAttractorDepth = document.getElementById('attractor-depth');
+const elHistogramSeed = document.getElementById('histogram-seed');
+const elHistogramSamples = document.getElementById('histogram-samples');
+const elFirstLevelPieces = document.getElementById('first-level-pieces');
+const elOriginalAttractorOpacity = document.getElementById('original-attractor-opacity');
+const elOriginalAttractorOpacityVal = document.getElementById('original-attractor-opacity-val');
 const elPaletteMode = document.getElementById('palette-mode');
 const elPaletteInterior = document.getElementById('palette-interior');
 const elPaletteOffLens = document.getElementById('palette-offlens');
@@ -618,9 +659,12 @@ let dynRenderRequestId = null;
 let currentDynStage = 0; // 0: 4x4 blocks, 1: 2x2, 2: 1x1 pixels
 let dynY = 0;
 let diffGrid = []; // Grid storage of verdicts for Difference Attractor
-let collGrid = []; // Grid storage of 1/0 inside Collinear Attractor
+let collGrid = []; // Grid storage of explicit inverse-survival status for E(c,n)
 let gridW = 0;
 let gridH = 0;
+let attractorRenderers = null;
+let attractorRendererLoadStarted = false;
+let lastAttractorMetadata = null;
 
 // Drag state for locators
 let draggingParamLocator = false;
@@ -696,6 +740,25 @@ function renderAfterStateChange(target) {
   }
 }
 
+function loadAttractorRenderers() {
+  if (attractorRenderers || attractorRendererLoadStarted) return;
+  attractorRendererLoadStarted = true;
+  Promise.all([
+    import('./src/renderers/attractor_prefix.mjs'),
+    import('./src/renderers/attractor_histogram.mjs')
+  ])
+    .then(([prefix, histogram]) => {
+      attractorRenderers = {
+        renderPrefixAttractor: prefix.renderPrefixAttractor,
+        renderHistogramAttractor: histogram.renderHistogramAttractor
+      };
+      triggerDynRender();
+    })
+    .catch(err => {
+      console.error('Could not load attractor renderer modules:', err);
+    });
+}
+
 function updateControlsFromState() {
   if (elAritySlider) elAritySlider.value = state.n;
   if (elArityVal) elArityVal.textContent = state.n;
@@ -704,6 +767,13 @@ function updateControlsFromState() {
   if (elModulo) elModulo.value = state.modulo;
   if (elModuloVal) elModuloVal.textContent = state.modulo;
   if (elComparisonMode) elComparisonMode.value = state.comparisonMode || 'overlay';
+  if (elOriginalRendererMode) elOriginalRendererMode.value = state.rendererMode || 'prefix';
+  if (elAttractorDepth) elAttractorDepth.value = state.attractorDepth;
+  if (elHistogramSeed) elHistogramSeed.value = state.histogramSeed;
+  if (elHistogramSamples) elHistogramSamples.value = state.histogramSamples;
+  if (elFirstLevelPieces) elFirstLevelPieces.checked = Boolean(state.firstLevelPieces);
+  if (elOriginalAttractorOpacity) elOriginalAttractorOpacity.value = Math.round(100 * state.originalAttractorOpacity);
+  if (elOriginalAttractorOpacityVal) elOriginalAttractorOpacityVal.textContent = `${Math.round(100 * state.originalAttractorOpacity)}%`;
   if (elPaletteMode) elPaletteMode.value = state.palette || 'research';
   if (elPaletteInterior) elPaletteInterior.value = state.customPalette.interior;
   if (elPaletteOffLens) elPaletteOffLens.value = state.customPalette.offLens;
@@ -773,6 +843,12 @@ function stateToSearchParams() {
   params.set('dcy', roundForUrl(state.dynCenter.y));
   params.set('dz', roundForUrl(state.dynZoom));
   params.set('mode', state.comparisonMode);
+  params.set('renderer', state.rendererMode);
+  params.set('adepth', state.attractorDepth);
+  params.set('hseed', state.histogramSeed);
+  params.set('hsamples', state.histogramSamples);
+  params.set('pieces', state.firstLevelPieces ? '1' : '0');
+  params.set('aop', roundForUrl(state.originalAttractorOpacity));
   params.set('palette', state.palette);
   params.set('layers', [
     state.showDifference,
@@ -817,6 +893,16 @@ function applyStateFromHash() {
   state.dynZoom = Math.max(1e-6, readNum('dz', state.dynZoom));
   const mode = params.get('mode');
   if (mode) setComparisonMode(mode);
+  const renderer = params.get('renderer');
+  if (['prefix', 'histogram', 'survival'].includes(renderer)) {
+    state.rendererMode = renderer;
+  }
+  state.attractorDepth = Math.max(1, Math.min(12, Math.round(readNum('adepth', state.attractorDepth))));
+  state.histogramSeed = Math.max(1, Math.round(readNum('hseed', state.histogramSeed)));
+  state.histogramSamples = Math.max(1000, Math.min(1000000, Math.round(readNum('hsamples', state.histogramSamples))));
+  const pieces = params.get('pieces');
+  if (pieces === '0' || pieces === '1') state.firstLevelPieces = pieces === '1';
+  state.originalAttractorOpacity = Math.max(0, Math.min(1, readNum('aop', state.originalAttractorOpacity)));
   const palette = params.get('palette');
   if (palette) state.palette = palette;
   const layers = params.get('layers');
@@ -903,10 +989,29 @@ function applyExampleConfig(config) {
   }
   state.kMax = Math.max(1, Math.round(config.k_max || config.kMax || state.kMax));
   state.LMax = Math.max(10, Math.round(config.l_max || config.LMax || state.LMax));
+  const visual = config.visual_renderer || {};
+  if (['prefix', 'histogram', 'survival'].includes(config.renderer_mode || visual.mode)) {
+    state.rendererMode = config.renderer_mode || visual.mode;
+  }
+  if (Number.isFinite(config.attractor_depth || visual.depth)) {
+    state.attractorDepth = Math.max(1, Math.min(12, Math.round(config.attractor_depth || visual.depth)));
+  }
+  if (Number.isFinite(config.histogram_seed || visual.seed)) {
+    state.histogramSeed = Math.max(1, Math.round(config.histogram_seed || visual.seed));
+  }
+  if (Number.isFinite(config.histogram_samples || visual.samples)) {
+    state.histogramSamples = Math.max(1000, Math.min(1000000, Math.round(config.histogram_samples || visual.samples)));
+  }
+  if (typeof config.first_level_pieces === 'boolean') {
+    state.firstLevelPieces = config.first_level_pieces;
+  } else if (typeof visual.first_level_pieces === 'boolean') {
+    state.firstLevelPieces = visual.first_level_pieces;
+  }
   if (config.mode === 'collinear-attractor') {
     state.showCollinear = true;
     state.showDifference = true;
     state.comparisonMode = 'overlay';
+    if (!config.renderer_mode && !visual.mode) state.rendererMode = 'prefix';
   } else if (config.mode === 'off-lens-witness') {
     state.showCollinear = false;
     state.showDifference = true;
@@ -956,6 +1061,9 @@ const ABOUT_TABS = {
     <p>The explorer visualizes the condition that the marked point <code>2c</code>
     belongs to the difference attractor <code>E(c, 2n - 1)</code>. This is the
     computational view behind connectedness for the collinear family.</p>
+    <p>The original attractor <code>E(c,n)</code> is drawn by a visual renderer
+    by default. Prefix-cylinder and seeded-histogram views are separate from
+    finite-search certificate status.</p>
     <p>The Canvas renderer is progressive and interruptible. The selected
     certificate payload always uses the full chosen <code>k_max</code> and
     <code>L_max</code>, independent of preview resolution.</p>
@@ -1018,7 +1126,7 @@ function openShareModal(kind = 'share') {
   const value = kind === 'embed' ? embed : url;
   openModal(
     kind === 'embed' ? 'Embed Code' : 'Share Current View',
-    `<p>The URL records the current parameter, viewports, rendering layers, palette, and search limits.</p><pre>${htmlEscape(value)}</pre>`,
+    `<p>The URL records the current parameter, viewports, renderer mode, visual depth, rendering layers, palette, and search limits.</p><pre>${htmlEscape(value)}</pre>`,
     `<button class="btn" id="modal-copy-primary">Copy</button>`
   );
   const copyButton = document.getElementById('modal-copy-primary');
@@ -1038,7 +1146,7 @@ const TOUR_STEPS = [
   },
   {
     title: 'Dynamical plane',
-    body: 'The right canvas shows the difference attractor, optional collinear overlay, canonical trap, enclosure, and finite inverse-search path.'
+    body: 'The right canvas shows the difference attractor, optional original-attractor renderer, canonical trap, enclosure, and finite inverse-search path.'
   },
   {
     title: 'Search limits',
@@ -1418,11 +1526,14 @@ function renderDynStage() {
   const veN = encN.ve;
   const isLensN = inLens(cx, cy, n);
   
-  // Precompute bounds for E(c,n) (arity n)
-  const encn = computeEnclosureGeneral(cx, cy, n, state.tol);
-  const sen = encn.se;
-  const ven = encn.ve;
-  const isLensn = inLensColl(cx, cy, n);
+  const useSurvivalOverlay = state.showCollinear && state.rendererMode === 'survival';
+  let sen = 0.0;
+  let ven = 0.0;
+  if (useSurvivalOverlay) {
+    const encn = computeEnclosureGeneral(cx, cy, n, state.tol);
+    sen = encn.se;
+    ven = encn.ve;
+  }
   
   while (dynY < gridH) {
     for (let gx = 0; gx < gridW; gx++) {
@@ -1441,21 +1552,12 @@ function renderDynStage() {
       }
       diffGrid[gx][dynY] = { verdict: verdictN, depth: depthN };
       
-      // 2. Collinear Attractor: test w directly inside E(c,n)
+      // 2. Optional diagnostic survival renderer for E(c,n).
       let inColl = 0;
-      if (state.showCollinear) {
-        let useTrapNColl = true;
-        let isDisk = false;
-        let customS = null;
-        let customV = null;
+      if (useSurvivalOverlay) {
         const inLensCollVal = inLensColl(cx, cy, (n + 1) / 2);
-        if (!inLensCollVal) {
-          isDisk = true;
-          const pixelSize = state.dynZoom / canvasDyn.width;
-          customS = 1.5 * pixelSize;
-        }
-        const resn = inverseIterationTestGeneral(cx, cy, w.x, w.y, n, inLensCollVal, sen, ven, state.kMax, state.LMax, useTrapNColl, customS, customV, isDisk);
-        if (isInteriorVerdict(resn.verdict) || resn.verdict === 'Undetermined') {
+        const resn = inverseIterationTestGeneral(cx, cy, w.x, w.y, n, inLensCollVal, sen, ven, state.kMax, state.LMax);
+        if (isInteriorVerdict(resn.verdict)) {
           inColl = 1;
         }
       }
@@ -1471,6 +1573,7 @@ function renderDynStage() {
   }
   
   drawDynGrid();
+  drawOriginalAttractorOverlay();
   drawDynamicalGuidesAndOverlays();
   
   const maxAllowedStage = getMaxDynRenderStage();
@@ -1485,35 +1588,7 @@ function renderDynStage() {
 
 function drawDynGrid() {
   const step = DYN_RENDER_STEPS[currentDynStage];
-  
-  // $3 \times 3$ grid dilation for collinear attractor E(c,n)
-  const dilatedGrid = [];
-  for (let gx = 0; gx < gridW; gx++) {
-    dilatedGrid.push(new Array(gridH).fill(0));
-  }
-  
-  if (state.showCollinear) {
-    for (let gy = 0; gy < gridH; gy++) {
-      for (let gx = 0; gx < gridW; gx++) {
-        let hasNeighbor = false;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const nx = gx + dx;
-            const ny = gy + dy;
-            if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH) {
-              if (collGrid[nx][ny] === 1) {
-                hasNeighbor = true;
-                break;
-              }
-            }
-          }
-          if (hasNeighbor) break;
-        }
-        dilatedGrid[gx][gy] = hasNeighbor ? 1 : 0;
-      }
-    }
-  }
-  
+  const useSurvivalOverlay = state.showCollinear && state.rendererMode === 'survival';
   const width = canvasDyn.width;
   const height = canvasDyn.height;
   const imgData = ctxDyn.createImageData(width, height);
@@ -1530,7 +1605,7 @@ function drawDynGrid() {
       const node = diffGrid[gx][gy];
       const verdict = node.verdict;
       const depth = node.depth;
-      const isColl = dilatedGrid[gx][gy];
+      const isColl = useSurvivalOverlay ? collGrid[gx][gy] : 0;
       
       // Base color based on difference attractor 1/2 E(c,N)
       let exterior = hexToRgb(getExteriorColorString());
@@ -1557,11 +1632,12 @@ function drawDynGrid() {
         r = rgb.r; g = rgb.g; b = rgb.b;
       }
       
-      // Color negation effect if inside dilated collinear attractor E(c,n)
       if (isColl === 1) {
-        r = 255 - r;
-        g = 255 - g;
-        b = 255 - b;
+        const alpha = Math.max(0, Math.min(1, state.survivalOverlayOpacity));
+        const mark = hexToRgb(activePalette().branch || '#111827');
+        r = Math.round(r * (1 - alpha) + mark.r * alpha);
+        g = Math.round(g * (1 - alpha) + mark.g * alpha);
+        b = Math.round(b * (1 - alpha) + mark.b * alpha);
       }
       
       // Write pixels
@@ -1578,6 +1654,45 @@ function drawDynGrid() {
   }
   
   ctxDyn.putImageData(imgData, 0, 0);
+}
+
+function drawOriginalAttractorOverlay() {
+  lastAttractorMetadata = null;
+  if (!state.showCollinear || state.rendererMode === 'survival') return;
+  if (!attractorRenderers) {
+    loadAttractorRenderers();
+    return;
+  }
+
+  const eff = getEffectiveC(state.cx, state.cy);
+  const c = { re: eff.x, im: eff.y };
+  const rho = Math.sqrt(c.re * c.re + c.im * c.im);
+  if (rho <= 1.0 || c.im === 0.0) return;
+
+  const project = (x, y) => dynToScreen(x, y);
+  const pixelRadius = state.dynZoom / Math.max(1, canvasDyn.width);
+  const shared = {
+    c,
+    m: state.n,
+    project,
+    opacity: state.originalAttractorOpacity,
+    firstLevelPieces: state.firstLevelPieces,
+    baseColor: activePalette().branch || '#111827'
+  };
+
+  if (state.rendererMode === 'histogram') {
+    lastAttractorMetadata = attractorRenderers.renderHistogramAttractor(ctxDyn, {
+      ...shared,
+      seed: state.histogramSeed,
+      samples: state.histogramSamples
+    });
+  } else {
+    lastAttractorMetadata = attractorRenderers.renderPrefixAttractor(ctxDyn, {
+      ...shared,
+      requestedDepth: state.attractorDepth,
+      pixelRadius
+    });
+  }
 }
 
 function drawDynamicalGuidesAndOverlays() {
@@ -1816,6 +1931,15 @@ function currentCertificatePayload() {
     search: { kMax: state.kMax, LMax: state.LMax, tolerance: state.tol },
     k_max: state.kMax,
     L_max: state.LMax,
+    visual_renderer: lastAttractorMetadata ? {
+      ...lastAttractorMetadata,
+      role: 'visual-renderer',
+      renderer_mode: state.rendererMode
+    } : {
+      role: 'visual-renderer',
+      renderer_mode: state.rendererMode,
+      proof_status: 'visual-approximation'
+    },
     enclosure: enc.err ? null : {
       se: enc.se,
       ve: enc.ve,
@@ -2243,6 +2367,55 @@ if (elComparisonMode) {
   });
 }
 
+if (elOriginalRendererMode) {
+  elOriginalRendererMode.addEventListener('change', (e) => {
+    withHistory(() => {
+      state.rendererMode = e.target.value;
+      if (state.rendererMode !== 'survival') loadAttractorRenderers();
+    }, 'dyn');
+  });
+}
+
+if (elAttractorDepth) {
+  elAttractorDepth.addEventListener('change', (e) => {
+    withHistory(() => {
+      state.attractorDepth = Math.max(1, Math.min(12, parseInt(e.target.value) || 7));
+    }, 'dyn');
+  });
+}
+
+if (elHistogramSeed) {
+  elHistogramSeed.addEventListener('change', (e) => {
+    withHistory(() => {
+      state.histogramSeed = Math.max(1, parseInt(e.target.value) || 20260227);
+    }, 'dyn');
+  });
+}
+
+if (elHistogramSamples) {
+  elHistogramSamples.addEventListener('change', (e) => {
+    withHistory(() => {
+      state.histogramSamples = Math.max(1000, Math.min(1000000, parseInt(e.target.value) || 50000));
+    }, 'dyn');
+  });
+}
+
+if (elFirstLevelPieces) {
+  elFirstLevelPieces.addEventListener('change', (e) => {
+    withHistory(() => {
+      state.firstLevelPieces = e.target.checked;
+    }, 'dyn');
+  });
+}
+
+if (elOriginalAttractorOpacity) {
+  elOriginalAttractorOpacity.addEventListener('input', (e) => {
+    withHistory(() => {
+      state.originalAttractorOpacity = Math.max(0, Math.min(1, (parseInt(e.target.value) || 0) / 100));
+    }, 'dyn');
+  });
+}
+
 if (elPaletteMode) {
   elPaletteMode.addEventListener('change', (e) => {
     withHistory(() => {
@@ -2325,3 +2498,4 @@ updateControlsFromState();
 updateLegendColors();
 resizeCanvases({ resetViewports: !hasInitialHashState });
 updatePanelFocus();
+if (state.rendererMode !== 'survival') loadAttractorRenderers();

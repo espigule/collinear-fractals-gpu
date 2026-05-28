@@ -3,11 +3,22 @@
   "n": 5,
   "N": 9,
   "parameter": {
-    "re": 1.75,
-    "im": 0.95
+    "re": 1.0,
+    "im": 2.0,
+    "exact": "1 + 2i"
   },
   "k_max": 37,
   "l_max": 1000,
   "mode": "collinear-attractor",
-  "expected_status": "illustrative"
+  "renderer": "prefix",
+  "visual_status": "visual-approximation",
+  "proof_status": "illustrative-thesis-example",
+  "related_thesis_figure": "Figure 3.2",
+  "expected_status": "illustrative",
+  "renderer_mode": "prefix",
+  "visual_renderer": {
+    "mode": "prefix",
+    "depth": 7,
+    "first_level_pieces": true
+  }
 }

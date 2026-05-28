@@ -1,0 +1,20 @@
+{
+  "schema_version": "0.2.0",
+  "id": "level2_boundary_atlas",
+  "title": "Level-2 boundary atlas scaffold",
+  "n": 3,
+  "N": 5,
+  "parameter": {
+    "re": 0.5,
+    "im": 1.1
+  },
+  "k_max": 37,
+  "L_max": 1000,
+  "renderer": "prefix-cylinder",
+  "renderer_depth": 7,
+  "mode": "level2-boundary-atlas",
+  "expected_verdict": "exploratory",
+  "proof_status": "exploratory",
+  "related_work": "2026 finite-capture atlas and boundary-layer inspection",
+  "limitations": "This metadata records an exploratory atlas entry. Theorem-level proof does not rely on visual inspection."
+}
