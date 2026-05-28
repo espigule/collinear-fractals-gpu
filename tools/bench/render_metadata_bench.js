@@ -26,7 +26,7 @@
   console.log(JSON.stringify({
     schema_version: '0.2.0',
     benchmark: 'render-metadata',
-    software_version: '0.1.0-alpha',
+    software_version: '0.2.0-alpha',
     generated_at: new Date().toISOString(),
     prefix,
     histogram: {

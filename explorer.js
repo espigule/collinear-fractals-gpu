@@ -1910,8 +1910,8 @@ function currentCertificatePayload() {
   return {
     schema_version: '0.2.0',
     software: 'Collinear Fractals GPU Explorer',
-    software_version: '0.1.0-alpha',
-    version: '0.1.0-alpha',
+    software_version: '0.2.0-alpha',
+    version: '0.2.0-alpha',
     generatedAt: new Date().toISOString(),
     mode: 'finite-capture',
     renderer: 'canvas-cpu',

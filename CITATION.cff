@@ -6,8 +6,8 @@ type: software
 authors:
   - family-names: "Espigule"
     given-names: "Bernat"
-version: "0.1.0-alpha"
-date-released: "2026-05-27"
+version: "0.2.0-alpha"
+date-released: "2026-05-28"
 license: "Apache-2.0"
 repository-code: "https://github.com/espigule/collinear-fractals-gpu"
 url: "https://github.com/espigule/collinear-fractals-gpu"

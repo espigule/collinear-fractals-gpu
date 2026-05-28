@@ -2,7 +2,7 @@ export function buildCertificatePayload(result, options) {
   const N = 2 * options.n - 1;
   return {
     schema_version: '0.2.0',
-    software_version: options.softwareVersion || '0.2.0-alpha-candidate',
+    software_version: options.softwareVersion || '0.2.0-alpha',
     mode: 'finite-capture',
     n: options.n,
     N,

@@ -1,6 +1,6 @@
 [project]
 name = "collinear-fractals"
-version = "0.1.0a0"
+version = "0.2.0a0"
 description = "Companion software for collinear fractals, finite capture, and restricted polynomial roots"
 authors = [{ name = "Bernat Espigule" }]
 license = { text = "Apache-2.0" }

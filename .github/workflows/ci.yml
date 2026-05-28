@@ -6,6 +6,8 @@ on:
     branches:
       - main
       - "upgrade/**"
+      - "release*"
+      - "release/**"
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -59,7 +61,7 @@ jobs:
 
       - name: Artifact ignore policy
         run: |
-          git check-ignore collinear-fractals-gpu_v0.1.0-alpha_final-QA.zip
+          git check-ignore collinear-fractals-gpu_v0.2.0-alpha_source.zip
           git check-ignore artifacts/example.txt
           git check-ignore dist/out.tar.gz
           git check-ignore coverage/index.html

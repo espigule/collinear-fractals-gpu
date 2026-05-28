@@ -10,7 +10,7 @@ self.addEventListener('message', event => {
       c: { re: job.x, im: job.y },
       kMax: job.kMax || 37,
       LMax: job.LMax || 1000,
-      softwareVersion: job.softwareVersion || '0.2.0-alpha-candidate'
+      softwareVersion: job.softwareVersion || '0.2.0-alpha'
     });
     self.postMessage({ ok: true, result, certificate });
   } catch (error) {

@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-Alpha-candidate polish for a future `v0.2.0-alpha` release.
+No unreleased changes yet.
+
+## 0.2.0-alpha — 2026-05-28
 
 Highlights:
 

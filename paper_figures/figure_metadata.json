@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0-alpha",
+  "version": "0.2.0-alpha",
   "default_renderer": "prefix-cylinder",
   "proof_status_note": "Figure renderer metadata is illustrative unless paired with finite-search certificate JSON.",
   "figures": [
