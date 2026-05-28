@@ -244,6 +244,9 @@ exports are reproducibility artifacts; theorem-level proof relies on the
 mathematical text, finite certificates, and explicit inequalities rather than
 visual inspection.
 
+See `docs/RESPONSIBLE_USE.md` for certification boundaries and responsible-use
+guidance.
+
 ## Related mathematical work
 
 This software accompanies and supports the following mathematical work.
