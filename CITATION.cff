@@ -35,10 +35,11 @@ references:
     journal: "Fractal and Fractional"
     volume: "8"
     issue: "12"
+    start: "725"
     year: 2024
     doi: "10.3390/fractalfract8120725"
   - type: generic
-    title: "Finite Capture and the Closure of Roots of Restricted Polynomials"
+    title: "Finite capture and the closure of roots of restricted polynomials"
     authors:
       - family-names: "Espigule"
         given-names: "Bernat"

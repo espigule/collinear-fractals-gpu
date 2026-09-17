@@ -1,17 +1,15 @@
 'use strict';
 
 /**
- * Collinear Fractals GPU: Companion Software
- * Core inverse-iteration search utilities in JavaScript / Node.js.
- *
- * This package separates theorem-level in-lens trap hits (`Interior`) from
- * the exploratory off-lens trap rule (`Interior-offLens`).  Exterior verdicts
- * are produced by enclosure exhaustion or initial enclosure escape.
+ * Floating-point reference search for the expanding parameter c (|c| > 1).
+ * Interior is an in-lens trap hit; Interior-offLens is exploratory. These
+ * numerical results are not outward-rounded or exact mathematical certificates.
  */
 
 const DEFAULT_K_MAX = 37;
 const DEFAULT_L_MAX = 1000;
 const DEFAULT_TOL = 1e-8;
+const MAX_ORDER = Math.floor(Number.MAX_SAFE_INTEGER / 2);
 
 function assertFiniteNumber(value, name) {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -19,197 +17,187 @@ function assertFiniteNumber(value, name) {
   }
 }
 
+function assertInteger(value, name, minimum, maximum = Number.MAX_SAFE_INTEGER) {
+  assertFiniteNumber(value, name);
+  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    throw new RangeError(`${name} must be an integer from ${minimum} to ${maximum}`);
+  }
+}
+
+function assertOrder(n) {
+  assertInteger(n, 'n', 2, MAX_ORDER);
+}
+
+function assertTolerance(tol) {
+  assertFiniteNumber(tol, 'tol');
+  if (tol <= 0) throw new RangeError('tol must be positive');
+}
+
+function assertCoordinates(x, y) {
+  assertFiniteNumber(x, 'x');
+  assertFiniteNumber(y, 'y');
+}
+
 function getCanonicalCoordinates(ux, uy, cx, cy) {
-  [ux, uy, cx, cy].forEach((v, i) => assertFiniteNumber(v, ['ux', 'uy', 'cx', 'cy'][i]));
+  assertCoordinates(ux, uy);
+  assertCoordinates(cx, cy);
   const rho = Math.hypot(cx, cy);
-  if (rho === 0) throw new Error('c must be nonzero.');
-  return {
-    ls: (cx * uy + cy * ux) / rho,
-    lv: uy
-  };
+  if (rho === 0 || !Number.isFinite(rho)) throw new RangeError('c must have a finite, nonzero modulus');
+  // Normalize before multiplying: finite coordinates need not have finite products.
+  const ls = (cx / rho) * uy + (cy / rho) * ux;
+  if (!Number.isFinite(ls)) throw new RangeError('canonical coordinate exceeds numerical range');
+  return { ls, lv: uy };
 }
 
 function inLens(x, y, n) {
-  assertFiniteNumber(x, 'x');
-  assertFiniteNumber(y, 'y');
+  assertCoordinates(x, y);
+  assertOrder(n);
   const rho = Math.hypot(x, y);
-  const N = 2 * n - 1;
-  return rho > 1.0 && y !== 0.0 && (rho * rho + 2.0 * Math.abs(x) < N);
+  return rho > 1 && y !== 0 && rho * rho + 2 * Math.abs(x) < 2 * n - 1;
 }
 
 function chooseTailDepth(rho, tol = DEFAULT_TOL, minM = 30, maxM = 2000) {
   assertFiniteNumber(rho, 'rho');
-  assertFiniteNumber(tol, 'tol');
-  if (rho <= 1.0) throw new Error('rho must be greater than 1.');
-  if (tol <= 0.0) throw new Error('tol must be positive.');
-  const target = -Math.log(tol * (rho - 1.0)) / Math.log(rho);
+  assertTolerance(tol);
+  assertInteger(minM, 'minM', 0);
+  assertInteger(maxM, 'maxM', minM);
+  if (rho <= 1) throw new RangeError('rho must be greater than 1');
+  // Taking logs separately avoids underflow of tol * (rho - 1).
+  const target = -(Math.log(tol) + Math.log(rho - 1)) / Math.log(rho);
+  if (target > maxM) return { M: maxM, capped: true };
   let M = Math.max(minM, Math.ceil(target));
-  const capped = M > maxM;
-  if (capped) M = maxM;
-  return { M, capped };
+  while (M < maxM && Math.pow(rho, -M) / (rho - 1) > tol) M += 1;
+  return { M, capped: Math.pow(rho, -M) / (rho - 1) > tol };
 }
 
 function computeEnclosure(x, y, n, tol = DEFAULT_TOL) {
-  assertFiniteNumber(x, 'x');
-  assertFiniteNumber(y, 'y');
+  assertCoordinates(x, y);
+  assertOrder(n);
+  assertTolerance(tol);
   const rho = Math.hypot(x, y);
-  if (rho <= 1.0 || y === 0.0) {
-    throw new Error('c must satisfy |c| > 1 and Im(c) != 0 for enclosure bounds.');
+  if (!Number.isFinite(rho) || rho <= 1 || y === 0) {
+    throw new RangeError('c must have finite |c| > 1 and Im(c) != 0 for enclosure bounds');
   }
-
   const theta = Math.atan2(y, x);
-  const Nminus1 = 2 * n - 2;
+  const multiplier = 2 * n - 2;
   const { M, capped } = chooseTailDepth(rho, tol);
-
-  let valSum = 0.0;
+  let valSum = 0;
   for (let k = 1; k <= M; k++) {
     valSum += Math.pow(rho, -k) * Math.abs(Math.sin(k * theta));
   }
-
-  const tail = Math.pow(rho, -M) / (rho - 1.0);
-  const ve = Nminus1 * (valSum + tail);
-  const se = Nminus1 * Math.abs(y) / rho + ve / rho;
-
-  return {
-    se,
-    ve,
-    truncationDepth: M,
-    tail,
-    tailCertifiedToTol: tail <= tol,
-    tailCapHit: capped
-  };
+  // Always retain the full tail, including when its requested tolerance is capped.
+  const tail = Math.pow(rho, -M) / (rho - 1);
+  const ve = multiplier * (valSum + tail);
+  const se = multiplier * (Math.abs(y) / rho) + ve / rho;
+  if (!Number.isFinite(se) || !Number.isFinite(ve)) throw new RangeError('enclosure exceeds numerical range');
+  return { se, ve, truncationDepth: M, tail, tailCertifiedToTol: tail <= tol, tailCapHit: capped };
 }
 
 function getTrapHalfWidths(x, y, n) {
+  assertCoordinates(x, y);
+  assertOrder(n);
   const rho = Math.hypot(x, y);
+  if (!Number.isFinite(rho) || rho <= 1 || y === 0) {
+    throw new RangeError('c must have finite |c| > 1 and Im(c) != 0 for trap bounds');
+  }
   const N = 2 * n - 1;
-  const isLens = inLens(x, y, n);
-  if (isLens) {
+  const normalizedY = Math.abs(y) / rho;
+  if (inLens(x, y, n)) {
     return {
-      S: (N * Math.abs(y)) / rho,
-      V: Math.max(0.0, ((N - 2.0 * Math.abs(x)) * Math.abs(y)) / (rho * rho)),
+      S: N * normalizedY,
+      V: Math.max(0, ((N - 2 * Math.abs(x)) / rho) * normalizedY),
       region: 'lens'
     };
   }
-  const nPrime = (N + 1) / 2.0;
-  const kappa = nPrime > 7 ? 1 + Math.floor(-2.0 - 2.0 * Math.sqrt(nPrime) + nPrime) : 1;
-  return {
-    S: ((N - 1) * Math.abs(y)) / rho,
-    V: (kappa * Math.abs(y)) / (rho * rho),
-    region: 'off-lens'
-  };
+  const kappa = n > 7 ? 1 + Math.floor(-2 - 2 * Math.sqrt(n) + n) : 1;
+  return { S: (N - 1) * normalizedY, V: (kappa / rho) * normalizedY, region: 'off-lens' };
 }
 
 function firstAlphabetDigitAtOrAbove(a, m) {
-  const parity = ((m - 1) % 2 + 2) % 2;
+  assertFiniteNumber(a, 'a');
+  assertInteger(m, 'm', 1);
   let t = Math.ceil(a);
-  if (((t - parity) % 2 + 2) % 2 !== 0) t += 1;
-  return t;
+  if (!Number.isSafeInteger(t)) throw new RangeError('a must round to a safe integer');
+  const parity = (m - 1) % 2;
+  if (((t % 2) + 2) % 2 !== parity) t += 1;
+  if (!Number.isSafeInteger(t)) throw new RangeError('next parity-compatible integer exceeds numerical range');
+  // The caller intersects with the finite alphabet before using this parity helper.
+  return t === 0 ? 0 : t;
 }
 
-function interiorVerdict(isLensParameter) {
-  return isLensParameter ? 'Interior' : 'Interior-offLens';
+function searchResult(verdict, depth, nodesExplored, stopReason, extra = {}) {
+  return { verdict, depth, word: [], nodesExplored, stopReason, ...extra };
 }
 
 function inverseIterationTest(x, y, n, kMax = DEFAULT_K_MAX, LMax = DEFAULT_L_MAX, tol = DEFAULT_TOL) {
-  assertFiniteNumber(x, 'x');
-  assertFiniteNumber(y, 'y');
+  assertCoordinates(x, y);
+  assertOrder(n);
+  assertInteger(kMax, 'kMax', 0);
+  assertInteger(LMax, 'LMax', 1);
+  assertTolerance(tol);
+  const numericalRange = (depth, nodes) => searchResult('Undetermined', depth, nodes, 'numerical-range', {
+    reason: 'calculation exceeds finite floating-point range'
+  });
   const rho = Math.hypot(x, y);
-  if (rho <= 1.0 || y === 0.0) {
-    return {
-      verdict: 'Undetermined',
-      depth: 0,
-      nodesExplored: 0,
+  if (!Number.isFinite(rho)) return numericalRange(0, 0);
+  if (rho <= 1 || y === 0) {
+    return searchResult('Undetermined', 0, 0, 'outside-domain', {
       reason: 'c outside domain (|c| > 1 and Im(c) != 0)'
-    };
+    });
   }
-
   const N = 2 * n - 1;
   const isLensParameter = inLens(x, y, n);
+  const { se, ve } = computeEnclosure(x, y, n, tol);
+  const { S, V, region: trapRegion } = getTrapHalfWidths(x, y, n);
+  const interior = (depth, nodes, word = []) => searchResult(
+    isLensParameter ? 'Interior' : 'Interior-offLens', depth, nodes, 'trap-hit', { word, trapRegion }
+  );
+  const s0 = (4 * (x / rho)) * y;
+  const v0 = 2 * y;
+  if (![s0, v0, S, V].every(Number.isFinite)) return numericalRange(0, 0);
+  if (Math.abs(s0) > se || Math.abs(v0) > ve) return searchResult('Exterior', 0, 1, 'enclosure-escape');
+  if (Math.abs(s0) < S && Math.abs(v0) < V) return interior(0, 1);
 
-  let se, ve;
-  try {
-    const enc = computeEnclosure(x, y, n, tol);
-    se = enc.se;
-    ve = enc.ve;
-  } catch (err) {
-    return { verdict: 'Undetermined', depth: 0, nodesExplored: 0, reason: err.message };
-  }
-
-  const trap = getTrapHalfWidths(x, y, n);
-  const { S, V } = trap;
-  const trapRegion = isLensParameter ? 'lens' : 'off-lens';
-
-  const s0 = (4.0 * x * y) / rho;
-  const v0 = 2.0 * y;
-
-  if (Math.abs(s0) > se || Math.abs(v0) > ve) {
-    return { verdict: 'Exterior', depth: 0, nodesExplored: 1 };
-  }
-
-  if (Math.abs(s0) < S && Math.abs(v0) < V) {
-    return { verdict: interiorVerdict(isLensParameter), depth: 0, nodesExplored: 1, trapRegion };
-  }
-
-  let W = [{ s: s0, v: v0, word: [] }];
+  let frontier = [{ s: s0, v: v0, word: [] }];
   let totalNodes = 1;
-
+  const slantFactor = 2 * (x / rho);
   for (let k = 1; k <= kMax; k++) {
-    const Wprime = [];
-    for (const node of W) {
-      const t1 = (rho * node.s - ve) / y;
-      const t2 = (rho * node.s + ve) / y;
-      const tMin = Math.min(t1, t2);
-      const tMax = Math.max(t1, t2);
-
-      const a = Math.max(-N + 1, Math.ceil(tMin));
-      const b = Math.min(N - 1, Math.floor(tMax));
-
-      if (a <= b) {
-        const tStart = firstAlphabetDigitAtOrAbove(a, N);
-        for (let t = tStart; t <= b; t += 2) {
-          const vPrime = rho * node.s - y * t;
-          const sPrime = (2.0 * x / rho) * vPrime - rho * node.v;
-
-          if (Math.abs(sPrime) <= se) {
-            const nextWord = node.word.concat([t]);
-            if (Math.abs(sPrime) < S && Math.abs(vPrime) < V) {
-              return {
-                verdict: interiorVerdict(isLensParameter),
-                depth: k,
-                word: nextWord,
-                nodesExplored: totalNodes + Wprime.length + 1,
-                trapRegion
-              };
-            }
-            Wprime.push({ s: sPrime, v: vPrime, word: nextWord });
-            if (Wprime.length >= LMax) {
-              return { verdict: 'Undetermined', depth: k, nodesExplored: totalNodes + Wprime.length };
-            }
-          }
+    const next = [];
+    for (const node of frontier) {
+      const rhoS = rho * node.s;
+      if (!Number.isFinite(rhoS)) return numericalRange(k, totalNodes + next.length);
+      const t1 = (rhoS - ve) / y;
+      const t2 = (rhoS + ve) / y;
+      // Clip first: ratios can overflow near the real axis, but digits are bounded.
+      const lower = Math.max(-N + 1, Math.min(t1, t2));
+      const upper = Math.min(N - 1, Math.max(t1, t2));
+      if (lower > upper) continue;
+      const a = Math.ceil(lower);
+      const b = Math.floor(upper);
+      for (let t = firstAlphabetDigitAtOrAbove(a, N); t <= b; t += 2) {
+        const vPrime = rhoS - y * t;
+        const sPrime = slantFactor * vPrime - rho * node.v;
+        if (!Number.isFinite(sPrime) || !Number.isFinite(vPrime)) return numericalRange(k, totalNodes + next.length);
+        if (Math.abs(sPrime) > se) continue;
+        const word = node.word.concat(t);
+        if (Math.abs(sPrime) < S && Math.abs(vPrime) < V) return interior(k, totalNodes + next.length + 1, word);
+        next.push({ s: sPrime, v: vPrime, word });
+        if (next.length >= LMax) {
+          return searchResult('Undetermined', k, totalNodes + next.length, 'node-cap', {
+            reason: 'frontier reached LMax'
+          });
         }
       }
     }
-
-    totalNodes += Wprime.length;
-    if (Wprime.length === 0) {
-      return { verdict: 'Exterior', depth: k, nodesExplored: totalNodes };
-    }
-    W = Wprime;
+    totalNodes += next.length;
+    if (next.length === 0) return searchResult('Exterior', k, totalNodes, 'tree-exhausted');
+    frontier = next;
   }
-
-  return { verdict: 'Undetermined', depth: kMax, nodesExplored: totalNodes };
+  return searchResult('Undetermined', kMax, totalNodes, 'depth-cap', { reason: 'search reached kMax' });
 }
 
 module.exports = {
-  DEFAULT_K_MAX,
-  DEFAULT_L_MAX,
-  DEFAULT_TOL,
-  getCanonicalCoordinates,
-  inLens,
-  chooseTailDepth,
-  computeEnclosure,
-  getTrapHalfWidths,
-  firstAlphabetDigitAtOrAbove,
-  inverseIterationTest
+  DEFAULT_K_MAX, DEFAULT_L_MAX, DEFAULT_TOL,
+  getCanonicalCoordinates, inLens, chooseTailDepth, computeEnclosure,
+  getTrapHalfWidths, firstAlphabetDigitAtOrAbove, inverseIterationTest
 };

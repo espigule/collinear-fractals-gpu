@@ -1,7 +1,10 @@
 # Paper Figures
 
-This directory records reproducible figure metadata without committing large
-render dumps. The alpha workflow is metadata-first:
+This directory lists planned figure jobs. Despite its historical name,
+`make_all_figures.py` only prints the manifest: it does not render images or
+verify output hashes. No generated figure corpus is included.
+
+The workflow is:
 
 1. Add or update an example in `examples/`.
 2. Add figure metadata to `figure_metadata.json`.

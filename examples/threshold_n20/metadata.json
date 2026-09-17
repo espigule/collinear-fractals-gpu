@@ -14,7 +14,7 @@
   "renderer_depth": 7,
   "certificate_renderer": "canvas-cpu",
   "mode": "finite-capture-threshold",
-  "expected_verdict": "exploratory",
+  "expected_verdict": "Undetermined",
   "proof_status": "exploratory",
   "related_work": "2026 n >= 20 lens-containment threshold",
   "limitations": "Theorem-level proof does not rely on visual inspection."

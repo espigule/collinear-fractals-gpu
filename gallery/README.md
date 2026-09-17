@@ -5,7 +5,7 @@ Large render dumps should not be committed. Prefer compressed WebP, SVG, or
 PNG assets only when they are tied to metadata in `examples/` or
 `paper_figures/`.
 
-Planned gallery entries:
+No rendered assets are included yet. Planned gallery entries:
 
 | Asset | Source example | Status |
 |---|---|---|
@@ -15,7 +15,7 @@ Planned gallery entries:
 | `theta0_base_capture.svg` | `examples/theta0_base_capture` | planned |
 | `trap_enclosure_certificate.svg` | `examples/trap_enclosure_n3` | planned |
 | `threshold_n20_lens.webp` | `examples/threshold_n20` | planned |
-| `off_lens_witnesses_n2_to_n19.webp` | `examples/off_lens_witnesses_n2_to_n19` | planned |
+| `off_lens_n3.webp` | `examples/off_lens_witnesses_n2_to_n19` (single $n=3$ case) | planned |
 | `finite_capture_layers_n3.webp` | `examples/finite_capture_layers_n3` | planned |
 | `level2_boundary_atlas.webp` | `examples/level2_boundary_atlas` | planned |
 

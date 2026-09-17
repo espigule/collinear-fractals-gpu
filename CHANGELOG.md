@@ -2,7 +2,37 @@
 
 ## Unreleased
 
-No unreleased changes yet.
+### Correctness
+
+- Corrected prefix and histogram rendering to use the documented IFS
+  `z -> t + z/c`, including the unscaled first digit and matching tail radius.
+  Previously those visual renderers showed a scaled/rotated attractor.
+- Made input validation, depth-zero searches, frontier limits, and termination
+  reasons explicit. Search arithmetic and reciprocal-coordinate provenance are
+  recorded separately from visual settings.
+- Corrected the off-lens preset to a tested `n=3` case. The earlier `n=13`
+  parameter was inside the lens. The legacy preset ID remains usable.
+- Replaced incompatible legacy certificate examples with schema-conforming
+  numerical search records; added inverse-word cases and a replay command.
+
+### Browser and performance
+
+- Reuse typed-array frontiers for verdict-only pixel searches while retaining
+  the detailed reference search for selected-parameter trees and inverse words.
+- Share validated numerical helpers and histogram sampling across entry points.
+- Hardened URL-state parsing and clarified the distinction between numerical
+  search results, finite visual approximations, and unresolved search limits.
+
+### Maintenance and documentation
+
+- Added a consistent local/CI validation workflow, real Chromium checks,
+  JSON Schema validation, and a gated static Pages artifact.
+- Documented direct versus reciprocal parameter input, the per-depth width
+  cap, the IFS convention, and floating-point certification limits.
+- Aligned example metadata with actual search outcomes and distinguished
+  implemented features from planned gallery and atlas work.
+- Marked prior QA reports as historical and kept the released `0.2.0-alpha`
+  version unchanged while these changes are under review.
 
 ## 0.2.0-alpha — 2026-05-28
 

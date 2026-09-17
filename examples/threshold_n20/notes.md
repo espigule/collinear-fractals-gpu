@@ -4,7 +4,7 @@ This example is a placeholder for the threshold/lens picture linked to the
 finite-capture theorem. Here \(n = 20\) and \(N = 2n-1 = 39\).
 
 - Parameter: \(c = 2.0 + 4.0i\), with \(n = 20\) and \(N = 2n-1 = 39\).
-- Expected verdict: exploratory until a curated certificate corpus is added.
+- Expected numerical verdict: `Undetermined` at the frontier cap with the default limits.
 - Status: exploratory.
 - Related work: 2026 finite-capture/trap-enclosure framework and the
   \(n \ge 20\) lens-containment threshold.

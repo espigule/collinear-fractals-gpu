@@ -51,11 +51,13 @@
     },
     "k_max": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 0,
+      "description": "Maximum inverse depth; zero tests only the initial point."
     },
     "l_max": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 1,
+      "description": "Per-depth retained-frontier cap, not a total node budget."
     },
     "mode": {
       "type": "string"

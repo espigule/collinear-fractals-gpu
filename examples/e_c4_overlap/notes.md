@@ -5,7 +5,7 @@ collinear attractor \(E(c,4)\), where \(N = 2n-1 = 7\).
 
 - Parameter: \(c = (3 + i\sqrt{11})/2\), numerically
   \(c = 1.5 + 1.6583123951777i\), with \(n = 4\) and \(N = 2n-1 = 7\).
-- Expected verdict: illustrative geometry, not a theorem-level certificate.
+- Expected numerical verdict: `Undetermined` at depth 37 with the default limits.
 - Status: illustrative-thesis-example with visual status `visual-approximation`.
 - Related thesis figure: Figure 3.1.
 - Related work: 2024 collinear-fractals/Bandt framework and the thesis

@@ -5,14 +5,14 @@ where \(N = 2n-1 = 25\).
 
 - Parameter: \(c = 2.0719 + 3.0537i\), with \(n = 13\) and
   \(N = 2n-1 = 25\).
-- Expected verdict: exploratory until a verified certificate is exported.
+- Expected numerical verdict: `Exterior` at depth 5 with the default limits.
 - Status: exploratory.
 - Related work: 2026 finite-capture hole magnification and the thesis
   \(n = 13\) zoom example.
 
 To reproduce, open the browser explorer, set `n = 13`, set `k_max = 37`, and
-zoom near the listed parameter. Add certificate JSON only after a verified
-finite-search export is available.
+zoom near the listed parameter. An exterior sample alone does not establish
+that its complementary component is bounded.
 
 The visualization is intended to be visually memorable, but theorem-level
 proofs do not rely on visual inspection.

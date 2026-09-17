@@ -1,320 +1,263 @@
 # Collinear Fractals GPU
 
-**Research explorer and companion software for collinear fractals, finite
-capture, and restricted polynomial roots.**
+**Explore collinear self-similar sets, connectedness loci, and finite capture.**
 
-Version: **0.2.0-alpha**
+[Open the explorer](https://espigule.github.io/collinear-fractals-gpu/) ·
+[Examples](examples/README.md) · [Mathematical conventions](docs/IMPLEMENTATION_NOTES.md) ·
+[Validation](docs/VALIDATION.md) · [Citation metadata](CITATION.cff)
 
-Release line: **v0.2.0-alpha** GitHub-only prerelease.
-Author: **Bernat Espigule**
+Author: **Bernat Espigule**. Release line: **0.2.0-alpha**.
+Changes after that release are listed under [Unreleased](CHANGELOG.md).
 
-This repository contains a browser-based research explorer and multi-language
-reference implementations for canonical-coordinate inverse search associated
-with the collinear connectedness loci \(\mathcal M_n\).
+This repository contains a build-free browser explorer and reference packages
+for inverse search in the collinear connectedness loci $\mathcal M_n$.
+The browser uses **Canvas and CPU computation**. The historical GPU name does
+not imply that WebGL or WebGPU acceleration is implemented.
 
-The current public release is an alpha intended for reproducible exploration,
-finite inverse-word export, figure preparation, and independent inspection. It
-is not a formal proof checker; theorem-level proofs remain in the papers and
-thesis.
+Search results use floating-point arithmetic. They are reproducible numerical
+evidence, with finite inverse words when capture succeeds. Turning such a
+result into a mathematical certificate requires justified error bounds and the
+hypotheses of the corresponding theorem.
 
 ## Quick visual summary
 
-The browser explorer renders the parameter plane, dynamical plane, canonical
-traps, canonical enclosures, finite inverse-search data, and selected
-certificate JSON. The default original-attractor view now uses a
-prefix-cylinder visual renderer for \(E(c,n)\), with a seeded histogram preview
-available as an explicit alternative. Finite inverse-search status remains a
-separate certificate/status renderer, not the default visual overlay.
+Use the left panel to explore parameter space and select $c$. The right panel
+shows the original attractor $E(c,n)$, the difference-attractor search, the
+canonical trap and enclosure, and the inverse-search tree.
 
-The explorer also includes curated example presets, share URLs, embed code,
-save-image export, undo/redo, comparison modes, palette controls, panel focus,
-and About/Cite and Support dialogs.
+The default prefix renderer draws finite approximations of the original
+attractor. A seeded histogram offers a second visual preview; the survival
+renderer shows points still admissible after a finite inverse search. The selected-parameter search uses its
+own depth and frontier-width limits, independently of visual rendering depth.
 
-Curated example metadata lives in `examples/`, gallery metadata lives in
-`gallery/`, and reproducible figure job metadata lives in `paper_figures/`.
-Large generated images are intentionally kept out of git until they are
-curated, compressed, and tied to reproducible metadata.
+The browser includes share links, image export, search JSON export, example
+presets, undo/redo, layer and palette controls, and comparison modes.
 
 ## Browser quick start
 
-For the best experience, serve the repository locally:
+Clone the repository and serve its root:
 
 ```bash
+git clone https://github.com/espigule/collinear-fractals-gpu.git
+cd collinear-fractals-gpu
 python3 -m http.server 8000
 ```
 
-Then open `http://localhost:8000/` in a modern browser. Opening `index.html`
-directly also works for core rendering, but browser security rules may block
-loading example metadata from local JSON files.
+Open [localhost:8000](http://localhost:8000/) in a modern browser. An HTTP server
+is required for reliable ES-module and preset loading; opening `index.html`
+as a local file is not the supported workflow.
 
-The left panel renders the parameter plane. The right panel renders the
-dynamical plane, the canonical trap, the canonical enclosure, and the
-inverse-search tree. The selected certificate can be copied or downloaded as
-JSON from the sidebar.
+A useful first example is `n = 3`, `c = 0.5 + 1.1i`. Its marked point is already
+inside the trap and the search returns `Interior` at depth zero. Compare with
+`c = 3 + 3i`, which returns `Exterior` from the initial enclosure test.
 
-The Canvas renderer refines progressively to single-pixel sampling. Visual
-controls such as prefix depth, histogram seed, histogram sample count, and layer
-opacity affect the drawing only. The selected-parameter verdict and exported
-certificate JSON always use the full selected search depth and node cap.
+**Parameter convention:** the browser interprets a nonzero input $p$ inside
+the unit disk as the reciprocal coordinate, using $c=1/p$. Outside the unit
+disk it uses $c=p$. The language packages take the expanding parameter $c$
+directly. Non-real $c$ with $|c|>1$ is the domain of this canonical search;
+real-axis and unit-circle inputs are not classified by it. See
+[the input and output contract](docs/IMPLEMENTATION_NOTES.md#input-domain-and-coordinates).
 
 ## What is included
 
-| Path | Contents |
+| Path | Contents and current status |
 |---|---|
-| `index.html`, `index.css`, `explorer.js` | Single-page Canvas/CPU browser explorer. |
-| `src/` | Build-free browser ES modules for visual renderers and finite-search kernels. |
-| `workers/` | Worker entry points for future certificate and histogram jobs. |
-| `javascript/` | Node.js reference package and tests. |
-| `python/` | Pure-Python reference package and tests. |
-| `swift/` | Swift Package Manager implementation and tests. |
-| `mathematica/` | Wolfram Language package. |
-| `matlab/` | MATLAB static-class implementation. |
-| `maple/` | Maple module implementation. |
-| `examples/` | Curated example configurations, metadata, certificates, and notes. |
-| `gallery/` | Gallery index and placeholder documentation for curated figures. |
-| `paper_figures/` | Metadata and scripts for reproducible figure generation. |
-| `schemas/` | JSON Schemas for certificates, examples, and figure metadata. |
-| `docs/` | Implementation, validation, release, and QA notes. |
-| `qa/` | Browser-engine, renderer, and kernel smoke tests. |
-| `tools/` | Dependency-free static bundle validator and metadata-only benchmark scripts. |
+| `index.html`, `index.css`, `explorer.js` | Canvas/CPU browser explorer. |
+| `src/` | Browser ES modules, finite-search reference kernel, and visual renderers. |
+| `workers/` | Standalone worker entry points; the explorer does not schedule its rendering through them. |
+| `javascript/`, `python/` | Executable reference packages and regression tests. |
+| `swift/` | Swift Package Manager reference implementation and tests. |
+| `mathematica/`, `matlab/`, `maple/` | Reference ports requiring validation in their native runtimes. |
+| `examples/` | Presets, parameters, search records, and reproduction notes. |
+| `gallery/` | Metadata for planned curated assets; no rendered gallery yet. |
+| `paper_figures/` | Figure-job manifest and listing script; no batch figure renderer yet. |
+| `schemas/` | JSON Schemas for search exports, examples, and figure metadata. |
+| `qa/`, `tools/`, `docs/` | Regression checks, validation tools, and maintenance documentation. |
 
-The browser explorer is currently a **Canvas/CPU reference implementation**.
-The project keeps the historical `GPU` name because it is the companion
-repository for the broader GPU-assisted exploration programme; WebGL/WebGPU
-acceleration can be added later without changing the mathematical API.
-
-Feature status for `v0.2.0-alpha`:
-
-| Feature | v0.2 status |
-|---|---|
-| Prefix renderer for \(E(c,n)\) | Implemented |
-| Seeded histogram renderer | Implemented / smoke-tested |
-| Certificate/status renderer | Implemented |
-| Worker scaffold | Present |
-| Typed-array optimized kernel | Experimental scaffold/wrapper only; reference kernel remains default |
-| Active certificate inspector UI | Planned / not implemented |
-| Level 0/1/2 atlas | Metadata scaffold |
-| Curated thumbnails | Planned |
+Pixel rendering uses a scalar kernel with reusable typed-array frontiers. The
+selected-parameter search retains the detailed reference tree and inverse
+word. A GPU backend, per-pixel certificate inspector, and completed boundary
+atlas remain future work.
 
 ## Mathematical scope
 
-For the collinear alphabet
+The conventions are
 
-```text
-A_m = {-m+1, -m+3, ..., m-1},
-```
+$$
+A_m=\{-m+1,-m+3,\ldots,m-1\},\qquad
+f_t(z)=t+\frac{z}{c},\quad |c|>1.
+$$
 
-the explorer studies the marked-point condition
+Thus $E(c,m)$ consists of sums $\sum_{j=0}^{\infty}t_j c^{-j}$ with
+$t_j\in A_m$. In particular, the first digit is **unscaled**. For
+$N=2n-1$, the difference set is $E(c,n)-E(c,n)=E(c,N)$ and
 
-```text
-2c in E(c, 2n - 1),
-```
+$$
+c\in\mathcal M_n\quad\Longleftrightarrow\quad 2c\in E(c,N).
+$$
 
-which encodes connectedness of the original \(n\)-ary collinear attractor
-\(E(c,n)\). The inverse search works in canonical coordinates, prunes by a
-canonical enclosure, and detects canonical trap entry.
+The search follows the marked point $2c$ under inverse branches
+$g_t(z)=c(z-t)$, prunes against an enclosure, and tests for entry into a trap.
+The non-real parameter lens is characterized by
+$|c|>1$ and $|c|^2+2|\operatorname{Re}c|<2n-1$.
+These conventions and the finite-capture filtration are developed in the
+[finite-capture paper](https://arxiv.org/abs/2603.07397).
 
-The repository uses the following theorem spine:
-
-- marked point `2c`;
-- difference attractor `E(c, 2n - 1)`;
-- canonical coordinates, trap, and enclosure;
-- finite inverse search and finite inverse-word export;
-- finite-capture filtration `Theta_k(n)`;
-- bounded `+2` boundary repair;
-- lens-containment threshold `n >= 20`;
-- off-lens witnesses for `2 <= n <= 19`.
-
-The software supports exploration, figure generation, finite inverse-word
-export, and independent inspection. The theorem-level proofs remain in the
-papers and thesis, using explicit inequalities and finite certificates.
+That paper establishes the two-step closure inclusion for the finite-capture
+layers and the sharp $n\geq20$ lens-containment threshold. The explorer
+implements numerical searches associated with this framework; running it
+does not independently verify those theorems or their full certificate corpus.
 
 ## Verdicts: Interior, Interior-offLens, Exterior, Undetermined
 
-The repository deliberately keeps these labels separate:
+| Verdict | Meaning of the numerical search result |
+|---|---|
+| `Interior` | Strict trap entry for an in-lens parameter. |
+| `Interior-offLens` | Strict trap entry using the separate off-lens rule. |
+| `Exterior` | Initial enclosure escape or exhaustion of the enclosure-admissible inverse tree. |
+| `Undetermined` | A depth/width limit, unsupported input domain, or numerical-range limit prevented a conclusion. |
 
-- `Interior`: trap hit inside the parameter lens \(X_n\setminus\mathbb R\),
-  matching the canonical trap framework.
-- `Interior-offLens`: off-lens trap hit using the enabled off-lens rule. This
-  is intentionally not merged with the in-lens label.
-- `Exterior`: enclosure escape or complete enclosure-admissible tree
-  exhaustion.
-- `Undetermined`: selected depth or node cap reached.
+`Undetermined` does not assert boundary membership, connectedness, or
+disconnectedness. `Interior-offLens` records a different trap rule and must
+retain that provenance. All four labels describe the computation performed in
+floating point, including the enclosure comparisons.
 
-The default search depth is:
-
-```text
-k_max = 37
-```
-
-That default is shared by the web explorer and the companion packages.
+The defaults are `k_max = 37`, `L_max = 1000`, and `tol = 1e-8`.
+`L_max` caps the retained nodes **at one depth**, not the total nodes explored.
+The search stops conservatively when that cap is reached; `k_max = 0` performs
+only the initial trap/enclosure test. The tolerance controls the truncated
+geometric tail, not a bound on all floating-point rounding errors.
 
 ## Examples and gallery
 
-The `examples/` directory contains curated starting points for reproducible
-exploration:
+| Example | Reproducible role |
+|---|---|
+| `theta0_base_capture`, `trap_enclosure_n3` | Initial trap/enclosure cases plus a one-step inverse word, with compact search JSON. |
+| `e_c4_overlap` | Original attractor at $c=(3+i\sqrt{11})/2$, $n=4$; the default search is `Undetermined`. |
+| `e_c5_plane_filling` | Original attractor at $c=1+2i$, $n=5$; the default search is `Undetermined`. |
+| `off_lens_witnesses_n2_to_n19` | One numerical off-lens example for $n=3$; the directory name is retained for existing links. |
+| `hole_zoom_n13` | An `Exterior` sample near an $n=13$ hole; one sample does not establish the topology of a hole. |
+| `finite_capture_layers_n3` | View for comparing finite-search depth layers. |
+| `threshold_n20` | Exploratory starting point at $n=20$. |
+| `level2_boundary_atlas` | A preset for future atlas work; no completed atlas is supplied. |
 
-| Example | Purpose | Status |
-|---|---|---|
-| `e_c4_overlap` | Thesis Figure 3.1 example \(c=(3+i\sqrt{11})/2\). | Illustrative thesis example |
-| `e_c5_plane_filling` | Thesis Figure 3.2 example \(c=1+2i\). | Illustrative thesis example |
-| `theta0_base_capture` | Base-capture geometry for `Theta_0(n)`. | Illustrative |
-| `trap_enclosure_n3` | Interior and Exterior trap/enclosure certificates. | Finite-search certified |
-| `threshold_n20` | Threshold/lens example linked to the finite-capture theorem. | Exploratory |
-| `hole_zoom_n13` | Finite-capture zoom near an \(n=13\) hole. | Exploratory |
-| `off_lens_witnesses_n2_to_n19` | Off-lens witness scaffold preserving `Interior-offLens`. | Exploratory |
-| `finite_capture_layers_n3` | Early finite-capture layer visualization for \(n=3\). | Illustrative |
-| `level2_boundary_atlas` | Level-2 boundary-atlas metadata and share-state scaffold. | Exploratory |
-
-Each example records parameters, expected status, reproducibility notes,
-metadata, and whether the case is illustrative, finite-search certified,
-theorem-certified, or exploratory. Certificate JSON is included only for
-curated cases where a compact finite-search export is already known.
+See [the example guide](examples/README.md) for exact parameters, limits, and
+status. Gallery and figure metadata are manifests for future assets. Save
+Image exports the completed browser view with parameter and search captions; `paper_figures/make_all_figures.py`
+only lists planned jobs.
 
 ## Share URLs and reproducible states
 
-The browser explorer can create share URLs and iframe embed code from the
-current state. The hash records the selected parameter, search limits,
-viewports, palette, comparison mode, visible layers, original-attractor renderer
-mode, prefix depth, histogram seed, histogram sample count, first-level piece
-coloring, and layer opacity.
+Share View records the selected parameter, viewports, search limits, palette,
+comparison mode, layers, renderer, visual depth, histogram seed/sample count,
+piece coloring, and opacity in the URL fragment. A share link restores the
+view; a search JSON export records the numerical result.
 
-Curated presets are loaded from `examples/examples.json` when the explorer is
-served over HTTP. If metadata loading is blocked, the explorer falls back to a
-built-in copy of the same public preset list.
+For a reproducible issue or figure, retain both, together with the git commit
+or release used. Floating-point behavior near decision boundaries can depend
+on the runtime. A fixed histogram seed reproduces a sample sequence within the
+same implementation; it does not make the sampled picture exact.
+
+Presets load from `examples/examples.json`, with a built-in fallback for the
+same public list.
 
 ## Package tests
 
-Run these from the repository root after cloning or downloading the bundle.
-
-Browser engine smoke test:
+From the repository root, install the development dependencies and run:
 
 ```bash
-node qa/explorer-prefix-smoke-test.js
-node qa/render_smoke_tests.js
-node qa/kernel_equivalence_tests.js
+npm ci
+python3 -m pip install -r requirements-qa.txt
+npx playwright install chromium
+npm run test:all
 ```
 
-JavaScript:
+Use Node.js 22 or later and Python 3.11 or later. `npm test` runs the
+non-browser suite, while `npm run test:browser` runs real Chromium checks.
+If needed, use `PYTHON=python3 npm test` to select the Python executable.
+
+With Swift installed:
 
 ```bash
-cd javascript
-npm test
+swift test --package-path swift --jobs 2
 ```
 
-Python:
-
-```bash
-cd python
-python3 -m unittest -v test_collinear.py
-```
-
-Swift:
-
-```bash
-cd swift
-swift test
-```
-
-Static bundle validation:
-
-```bash
-python3 tools/validate_bundle.py
-```
-
-The Wolfram Language, MATLAB, and Maple packages are included as reference
-implementations with matching formulas and defaults. See `docs/QA_REPORT.md`
-for the exact validation scope and runtime limitations.
+[Validation notes](docs/VALIDATION.md) describe the complete browser and CI
+workflow, dependencies, and manual checks. Package READMEs contain language
+API examples.
 
 ## QA status and limitations
 
-The release tree includes `docs/QA_REPORT.md`, `docs/VALIDATION.md`, and
-`RELEASE_CHECKLIST.md`. The automated checks cover JavaScript, Python, Swift,
-browser-engine smoke tests, renderer smoke tests, kernel equivalence tests,
-formatting hygiene, staged Pages deployment, and static bundle validation.
+Numerical regression tests compare known search cases, input validation,
+enclosure calculations, digit parity, renderer coordinates, and deterministic
+sampling. Agreement between ports checks consistency, not mathematical rigor.
+The browser and schema checks exercise separate concerns: user interactions
+and reproducibility data.
 
-The Wolfram Language, MATLAB, and Maple ports are reference implementations
-that should be checked in their native runtimes before stronger release claims
-are made.
+[The original release report](docs/QA_REPORT.md) is a historical record for
+`0.2.0-alpha`; it is not a test result for a newer checkout. Run the validation
+suite and consult the CI result for the commit you use. Native Wolfram
+Language, MATLAB, Maple, and Swift checks require their respective runtimes;
+absence of a runtime is not a passing test.
 
-The browser renderer is a research explorer. Original-attractor visual metadata
-is recorded separately from finite-search certificate fields. Certificate JSON
-exports are reproducibility artifacts; theorem-level proof relies on the
-mathematical text, finite certificates, and explicit inequalities rather than
-visual inspection.
-
-See `docs/RESPONSIBLE_USE.md` for certification boundaries and responsible-use
-guidance.
+Rendering and search costs rise with arity, depth, and viewport resolution.
+Prefix drawings use bounded point counts; histogram drawings are sampled.
+Neither a rendered pixel nor an exported floating-point search record is an
+interval-arithmetic proof. See [numerical interpretation](docs/RESPONSIBLE_USE.md).
 
 ## Related mathematical work
 
-This software accompanies and supports the following mathematical work.
-
 1. Bernat Espigule, David Juher, and Joan Saldaña,
-   "Collinear Fractals and Bandt's Conjecture",
-   *Fractal and Fractional* 8(12), 725, 2024.
-   DOI: `10.3390/fractalfract8120725`.
-
+   [“Collinear Fractals and Bandt's Conjecture”](https://doi.org/10.3390/fractalfract8120725),
+   *Fractal and Fractional* 8(12), article 725, 2024.
+   The original covering framework gives the global non-real result for
+   $n\geq21$; an [author version is on arXiv](https://arxiv.org/abs/2411.00160).
 2. Bernat Espigule and David Juher,
-   "Finite Capture and the Closure of Roots of Restricted Polynomials",
-   arXiv:2603.07397, 2026.
-   DOI: `10.48550/arXiv.2603.07397`.
-
+   [“Finite capture and the closure of roots of restricted polynomials”](https://arxiv.org/abs/2603.07397),
+   arXiv:2603.07397, 2026. The canonical trap/enclosure framework, finite-capture
+   layers, two-step closure theorem, and sharp $n\geq20$ threshold.
 3. Bernat Espigule,
-   "Finite capture and the closure of roots of restricted polynomials",
-   IHP audiovisual resource, 2026.
-   DOI: `10.57987/IHP.2026.T1.WS3.016`.
-
-The 2024 paper gives the rectangle-covering/lens-local route and a global
-large-\(n\) result. The 2026 finite-capture work uses canonical traps,
-canonical enclosures, finite inverse search, and bounded-lag repair to obtain
-the sharp `n >= 20` lens-containment threshold.
+   [“Finite capture and the closure of roots of restricted polynomials”](https://www.carmin.tv/en/video/finite-capture-and-the-closure-of-roots-of-restricted-polynomials),
+   IHP audiovisual resource, recorded 27 March 2026.
+   DOI: [10.57987/IHP.2026.T1.WS3.016](https://doi.org/10.57987/IHP.2026.T1.WS3.016).
 
 ## Citing
 
-Use the metadata in `CITATION.cff`. A compact text citation is:
+Use [CITATION.cff](CITATION.cff) for software metadata and cite the relevant
+mathematical paper separately. Include the exact version or commit used:
 
-> Bernat Espigule, *Collinear Fractals GPU: companion software for
-> collinear fractals, finite capture, and restricted polynomial roots*,
-> version 0.2.0-alpha, 2026.
+> Bernat Espigule, *Collinear Fractals GPU: companion software for collinear
+> fractals, finite capture, and restricted polynomial roots*, version
+> 0.2.0-alpha, 2026.
 
-No Zenodo DOI has been assigned yet. Add an archival DOI only after a future
-release is archived through Zenodo or an equivalent service.
+The release metadata currently records no archival software DOI. Do not use a
+paper DOI as though it identified a software release.
 
 ## Funding and acknowledgements
 
 Parts of the mathematical framework, validation materials, examples, and
-companion software in this repository were developed during Bernat
-Espigule's doctoral research at the Universitat de Girona, supervised by
-Dr. Joan Saldaña Meca and Dr. David Juher Barrot.
+companion software were developed during Bernat Espigule's doctoral research
+at the Universitat de Girona, supervised by Dr. Joan Saldaña Meca and
+Dr. David Juher Barrot.
 
 This work was supported by the Spanish Ministerio de Ciencia, Innovación y
 Universidades through project PID2023-146424NB-I00, by the Generalitat de
 Catalunya through grant 2021 SGR 00113, and by the Universitat de Girona and
 Banco Santander Grant Programme for Researchers in Training, IFUdG 2022-2024.
 
-The repository is maintained by Bernat Espigule. The funders,
-supervisors, and affiliated institutions do not necessarily endorse the
-software, the public explorer, or any results obtained with it.
+The repository is maintained by Bernat Espigule. The funders, supervisors, and
+affiliated institutions do not necessarily endorse the software or results
+obtained with it.
 
 ## Support
 
-This repository is open-access research software accompanying my work on
-collinear fractals, finite capture, and restricted polynomial roots.
-
-I am maintaining it while preparing my PhD defence and developing the next
-generation of reproducible figures, examples, and validation tools. Small
-sponsorships help support continued maintenance, documentation, public
-visualization, and research-software development.
-
-Support is optional and does not affect access to the code, examples,
-documentation, issues, or citation materials.
+Optional sponsorship supports maintenance, documentation, public
+visualization, and research-software development. The code, examples,
+documentation, issues, and citation materials remain openly accessible.
 
 ## License
 
-Source code is distributed under the **Apache License 2.0**; see `LICENSE`.
-
-Documentation, README files, examples, non-code figures generated by this
-repository, and non-code repository materials are distributed under **Creative
-Commons Attribution 4.0 International** unless otherwise stated; see
-`LICENSE-docs.md` and `LICENSES/CC-BY-4.0.txt`.
+Source code is distributed under the **Apache License 2.0**; see [LICENSE](LICENSE).
+Documentation and non-code repository materials use **Creative Commons
+Attribution 4.0 International** unless otherwise stated; see
+[LICENSE-docs.md](LICENSE-docs.md) and [the full license](LICENSES/CC-BY-4.0.txt).

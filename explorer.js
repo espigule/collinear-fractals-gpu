@@ -2,347 +2,28 @@
  * Collinear Fractals GPU Explorer
  * Interactive engine for rendering parameter and dynamical planes.
  * Features: aspect-ratio preservation, locator dragging on both planes,
- * cyclable modulo coloring, and smart zoom resets.
+ * cyclic capture coloring, and smart zoom resets.
  */
 
-// Math functions and algorithms
-function getEffectiveC(x, y) {
-  const rho2 = x * x + y * y;
-  if (rho2 < 1.0 && rho2 > 0.0) {
-    return { x: x / rho2, y: -y / rho2 };
-  }
-  return { x, y };
-}
-
-function inLens(x, y, n) {
-  const eff = getEffectiveC(x, y);
-  x = eff.x;
-  y = eff.y;
-  const rho = Math.sqrt(x * x + y * y);
-  const N = 2 * n - 1;
-  return rho > 1.0 && y !== 0.0 && (rho * rho + 2 * Math.abs(x) < N);
-}
-
-function inLensColl(x, y, n) {
-  const eff = getEffectiveC(x, y);
-  x = eff.x;
-  y = eff.y;
-  const rho = Math.sqrt(x * x + y * y);
-  return rho > 1.0 && y !== 0.0 && (rho * rho + 2 * Math.abs(x) < n);
-}
-
-
-function chooseTailDepth(rho, tol, minM = 30, maxM = 2000) {
-  const target = -Math.log(tol * (rho - 1.0)) / Math.log(rho);
-  let M = Math.max(minM, Math.ceil(target));
-  const capped = M > maxM;
-  if (capped) M = maxM;
-  return { M, capped };
-}
-
-function firstAlphabetDigitAtOrAbove(a, m) {
-  const parity = ((m - 1) % 2 + 2) % 2;
-  let t = Math.ceil(a);
-  if (((t - parity) % 2 + 2) % 2 !== 0) t += 1;
-  return t;
-}
-
-function interiorVerdict(isLens) {
-  return isLens ? 'Interior' : 'Interior-offLens';
-}
+// The browser and exported search records share the same numerical implementation.
+import {
+  getEffectiveC, inLens, computeEnclosureGeneral, getTrapHalfWidths,
+  inverseIterationTestDetailed
+} from './src/compute/inverse_search_reference.mjs';
+import { inverseIterationTestFast, createInverseSearchContext, inverseSearchPointFast } from './src/compute/inverse_search_kernel.mjs';
+import { PIECE_COLORS } from './src/renderers/palettes.mjs';
+import { buildCertificatePayload } from './src/compute/certificate_builder.mjs';
+import { renderPrefixAttractor } from './src/renderers/attractor_prefix.mjs';
+import { renderHistogramAttractor } from './src/renderers/attractor_histogram.mjs';
+import { DEFAULT_EXPLORER_STATE, encodeExplorerState, decodeExplorerState, normalizeExplorerState } from './src/state/explorer_state.mjs';
 
 function isInteriorVerdict(verdict) {
   return verdict === 'Interior' || verdict === 'Interior-offLens';
 }
 
-function computeEnclosureGeneral(x, y, m, tol = 1e-8) {
-  const eff = getEffectiveC(x, y);
-  x = eff.x;
-  y = eff.y;
-  const rho = Math.sqrt(x * x + y * y);
-  if (rho <= 1.0 || y === 0.0) {
-    return { se: 0, ve: 0, err: true };
-  }
-  const theta = Math.atan2(y, x);
-  const m_minus_1 = m - 1;
-
-  const { M, capped } = chooseTailDepth(rho, tol);
-
-  let val_sum = 0.0;
-  for (let k = 1; k <= M; k++) {
-    val_sum += Math.pow(rho, -k) * Math.abs(Math.sin(k * theta));
-  }
-
-  const tail = Math.pow(rho, -M) / (rho - 1.0);
-  const ve = m_minus_1 * (val_sum + tail);
-  const se = m_minus_1 * Math.abs(y) / rho + ve / rho;
-
-  return {
-    se,
-    ve,
-    err: false,
-    truncationDepth: M,
-    tail,
-    tailCertifiedToTol: tail <= tol,
-    tailCapHit: capped
-  };
-}
-
-// Helper function to compute canonical trap half-widths S and V (works for both in-lens and off-lens)
-function getTrapHalfWidths(x, y, m, isLens) {
-  const eff = getEffectiveC(x, y);
-  x = eff.x;
-  y = eff.y;
-  const rho = Math.sqrt(x * x + y * y);
-  if (isLens) {
-    const S = (m * Math.abs(y)) / rho;
-    const V = Math.max(0.0, ((m - 2 * Math.abs(x)) * Math.abs(y)) / (rho * rho));
-    return { S, V };
-  } else {
-    const n_prime = (m + 1) / 2.0;
-    const kappa = n_prime > 7 ? (1 + Math.floor(-2.0 - 2.0 * Math.sqrt(n_prime) + n_prime)) : 1;
-    const S = ((m - 1) * Math.abs(y)) / rho;
-    const V = (kappa * Math.abs(y)) / (rho * rho);
-    return { S, V };
-  }
-}
-
-// Certified Inverse Search on general start coordinates (zx, zy)
-function inverseIterationTestGeneral(cx, cy, zx, zy, m, isLens, se, ve, kMax, LMax, useTrap = true, customS = null, customV = null, isDiskTrap = false) {
-  const rho = Math.sqrt(cx * cx + cy * cy);
-  const s0 = (cx * zy + cy * zx) / rho;
-  const v0 = zy;
-
-  if (Math.abs(s0) > se || Math.abs(v0) > ve) {
-    return { verdict: 'Exterior', depth: 0 };
-  }
-
-  let S, V;
-  if (useTrap) {
-    if (isDiskTrap) {
-      if (s0 * s0 + v0 * v0 < customS * customS) {
-        return { verdict: interiorVerdict(isLens), depth: 0, trapRegion: isLens ? 'lens' : 'off-lens' };
-      }
-    } else {
-      if (customS !== null && customV !== null) {
-        S = customS;
-        V = customV;
-      } else {
-        const trap = getTrapHalfWidths(cx, cy, m, isLens);
-        S = trap.S;
-        V = trap.V;
-      }
-      if (Math.abs(s0) < S && Math.abs(v0) < V) {
-        return { verdict: interiorVerdict(isLens), depth: 0, trapRegion: isLens ? 'lens' : 'off-lens' };
-      }
-    }
-  }
-
-  let W = [{ s: s0, v: v0 }];
-  for (let k = 1; k <= kMax; k++) {
-    const W_prime = [];
-    for (const node of W) {
-      const s = node.s;
-      const v = node.v;
-
-      const t1 = (rho * s - ve) / cy;
-      const t2 = (rho * s + ve) / cy;
-      const tMin = Math.min(t1, t2);
-      const tMax = Math.max(t1, t2);
-
-      const a = Math.max(-m + 1, Math.ceil(tMin));
-      const b = Math.min(m - 1, Math.floor(tMax));
-
-      if (a <= b) {
-        let tStart = firstAlphabetDigitAtOrAbove(a, m);
-        for (let t = tStart; t <= b; t += 2) {
-          const vPrime = rho * s - cy * t;
-          const sPrime = (2 * cx / rho) * vPrime - rho * v;
-
-          if (Math.abs(sPrime) <= se) {
-            if (useTrap) {
-              if (isDiskTrap) {
-                if (sPrime * sPrime + vPrime * vPrime < customS * customS) {
-                  return { verdict: interiorVerdict(isLens), depth: k, trapRegion: isLens ? 'lens' : 'off-lens' };
-                }
-              } else {
-                if (Math.abs(sPrime) < S && Math.abs(vPrime) < V) {
-                  return { verdict: interiorVerdict(isLens), depth: k, trapRegion: isLens ? 'lens' : 'off-lens' };
-                }
-              }
-            }
-            W_prime.push({ s: sPrime, v: vPrime });
-            if (W_prime.length >= LMax) {
-              return { verdict: 'Undetermined', depth: k };
-            }
-          }
-        }
-      }
-    }
-
-    if (W_prime.length === 0) {
-      return { verdict: 'Exterior', depth: k };
-    }
-    W = W_prime;
-  }
-
-  return { verdict: 'Undetermined', depth: kMax };
-}
-
-// Certified Inverse Search on parameter space (starts at 2c, returns full tree details)
-function inverseIterationTestDetailed(x, y, n, kMax = 37, LMax = 1000, tol = 1e-8) {
-  const eff = getEffectiveC(x, y);
-  x = eff.x;
-  y = eff.y;
-  const rho = Math.sqrt(x * x + y * y);
-  if (rho <= 1.0 || y === 0.0) {
-    return { verdict: 'Undetermined', depth: 0, nodesExplored: 0, tree: [], reason: 'c outside domain' };
-  }
-
-  const N = 2 * n - 1;
-  const isLens = inLens(x, y, n);
-
-  const enc = computeEnclosureGeneral(x, y, N, tol);
-  if (enc.err) {
-    return { verdict: 'Undetermined', depth: 0, nodesExplored: 0, tree: [], reason: 'Enclosure error' };
-  }
-  const { se, ve } = enc;
-
-  // Compute Trap
-  const { S, V } = getTrapHalfWidths(x, y, N, isLens);
-
-  const s0 = (4 * x * y) / rho;
-  const v0 = 2 * y;
-
-  const initialNode = { s: s0, v: v0, depth: 0, parentIdx: -1, t: 0 };
-  const tree = [[initialNode]];
-
-  if (Math.abs(s0) > se || Math.abs(v0) > ve) {
-    return { verdict: 'Exterior', depth: 0, word: [], nodesExplored: 1, tree };
-  }
-
-  if (Math.abs(s0) < S && Math.abs(v0) < V) {
-    return { verdict: interiorVerdict(isLens), depth: 0, nodesExplored: 1, tree, trapRegion: isLens ? 'lens' : 'off-lens' };
-  }
-
-  let totalNodes = 1;
-
-  for (let k = 1; k <= kMax; k++) {
-    const W_prev = tree[k - 1];
-    const W_prime = [];
-
-    for (let pIdx = 0; pIdx < W_prev.length; pIdx++) {
-      const node = W_prev[pIdx];
-      const s = node.s;
-      const v = node.v;
-
-      const t1 = (rho * s - ve) / y;
-      const t2 = (rho * s + ve) / y;
-      const tMin = Math.min(t1, t2);
-      const tMax = Math.max(t1, t2);
-
-      const a = Math.max(-N + 1, Math.ceil(tMin));
-      const b = Math.min(N - 1, Math.floor(tMax));
-
-      if (a <= b) {
-        let tStart = firstAlphabetDigitAtOrAbove(a, N);
-        for (let t = tStart; t <= b; t += 2) {
-          const vPrime = rho * s - y * t;
-          const sPrime = (2 * x / rho) * vPrime - rho * v;
-
-          if (Math.abs(sPrime) <= se) {
-            const nextNode = { s: sPrime, v: vPrime, depth: k, parentIdx: pIdx, t: t };
-            
-            if (Math.abs(sPrime) < S && Math.abs(vPrime) < V) {
-              W_prime.push(nextNode);
-              tree.push(W_prime);
-              
-              // Reconstruct winning path
-              const path = [];
-              let curr = nextNode;
-              let d = k;
-              while (curr && curr.parentIdx !== -1) {
-                path.unshift(curr.t);
-                curr = tree[d - 1][curr.parentIdx];
-                d--;
-              }
-              return { verdict: interiorVerdict(isLens), depth: k, word: path, nodesExplored: totalNodes + W_prime.length, tree, trapRegion: isLens ? 'lens' : 'off-lens' };
-            }
-            W_prime.push(nextNode);
-            if (W_prime.length >= LMax) {
-              tree.push(W_prime);
-              return { verdict: 'Undetermined', depth: k, nodesExplored: totalNodes + W_prime.length, tree };
-            }
-          }
-        }
-      }
-    }
-
-    totalNodes += W_prime.length;
-    if (W_prime.length === 0) {
-      const path = [];
-      if (k > 1 && W_prev && W_prev.length > 0) {
-        let curr = W_prev[W_prev.length - 1];
-        let d = k - 1;
-        while (curr && curr.parentIdx !== -1) {
-          path.unshift(curr.t);
-          curr = tree[d - 1][curr.parentIdx];
-          d--;
-        }
-      }
-      return { verdict: 'Exterior', depth: k, word: path, nodesExplored: totalNodes, tree };
-    }
-    tree.push(W_prime);
-  }
-
-  return { verdict: 'Undetermined', depth: kMax, nodesExplored: totalNodes, tree };
-}
-
-
-// Application State
-const state = {
-  n: 3,
-  kMax: 37,
-  LMax: 1000,
-  tol: 1e-8,
-  modulo: 3,
-  
-  // Selected c
-  cx: 0.5,
-  cy: 1.1,
-  
-  // Layer visibility
-  showCollinear: false,
-  showDifference: true,
-  showTrap: true,
-  showEnclosure: true,
-  showTree: true,
-  showPath: true,
-  showEscapeStrata: false,
-  comparisonMode: 'overlay',
-  rendererMode: 'prefix',
-  attractorDepth: 7,
-  histogramSeed: 20260227,
-  histogramSamples: 50000,
-  firstLevelPieces: true,
-  originalAttractorOpacity: 0.72,
-  survivalOverlayOpacity: 0.45,
-  palette: 'research',
-  customPalette: {
-    interior: '#059669',
-    offLens: '#2563eb',
-    undetermined: '#fbbf24',
-    exterior: '#ffffff'
-  },
-  focusedPanel: 'both',
-  
-  // Viewports centered with 1:1 aspect ratio zoom width
-  paramCenter: { x: 1.207, y: 1.207 }, // Initialized near the first quadrant center of n=3
-  paramZoom: 2.414,
-  
-  dynCenter: { x: 0.0, y: 0.0 },
-  dynZoom: 8.0
-};
+// One validated state contract drives controls, history, shared links and exports.
+const DEFAULT_STATE = DEFAULT_EXPLORER_STATE;
+const state = structuredClone(DEFAULT_STATE);
 
 const PARAM_RENDER_STEPS = [8, 4, 2, 1];
 const DYN_RENDER_STEPS = [4, 2, 1];
@@ -417,9 +98,9 @@ const EXAMPLE_PRESETS = [
   },
   {
     id: 'off_lens_witnesses_n2_to_n19',
-    title: 'Off-lens witnesses for 2 <= n <= 19',
-    n: 13,
-    parameter: { re: 0.72, im: 1.38 },
+    title: 'Off-lens search example for n=3',
+    n: 3,
+    parameter: { re: 1.419643377607, im: 0.606290729207 },
     k_max: 37,
     l_max: 1000,
     mode: 'off-lens-witness',
@@ -584,6 +265,10 @@ function saveParamImageData() {
 }
 
 // UI Elements
+const elParamReal = document.getElementById('param-real');
+const elParamImag = document.getElementById('param-imag');
+const elStatReason = document.getElementById('stat-reason');
+const elStatEffective = document.getElementById('stat-effective');
 const elAritySlider = document.getElementById('arity-slider');
 const elArityVal = document.getElementById('arity-val');
 const elKmax = document.getElementById('param-kmax');
@@ -653,26 +338,34 @@ const ctxDyn = canvasDyn.getContext('2d');
 let renderRequestId = null;
 let currentRenderStage = 0; // 0: 8x8 blocks, 1: 4x4, 2: 2x2, 3: 1x1 pixels
 let renderY = 0;
+let renderX = 0;
 
 // Progressive rendering state for Dynamical Plane
 let dynRenderRequestId = null;
 let currentDynStage = 0; // 0: 4x4 blocks, 1: 2x2, 2: 1x1 pixels
 let dynY = 0;
-let diffGrid = []; // Grid storage of verdicts for Difference Attractor
-let collGrid = []; // Grid storage of explicit inverse-survival status for E(c,n)
+let dynX = 0;
+let dynGeometry = null;
+let selectedSearchCache = null;
+let overlayCache = null;
+let lastPanelFocus = null;
+let exampleLoadGeneration = 0;
+let diffGrid = new Uint8Array(0);
+let diffDepths = new Uint16Array(0);
+let collGrid = new Uint8Array(0);
+const VERDICTS = ['Exterior', 'Interior', 'Interior-offLens', 'Undetermined'];
 let gridW = 0;
 let gridH = 0;
-let attractorRenderers = null;
-let attractorRendererLoadStarted = false;
+const attractorRenderers = { renderPrefixAttractor, renderHistogramAttractor };
 let lastAttractorMetadata = null;
 
 // Drag state for locators
-let draggingParamLocator = false;
-let draggingDynLocator = false;
-const paramDrag = { dragging: false, startX: 0, startY: 0 };
-const dynDrag = { dragging: false, startX: 0, startY: 0 };
 const undoStack = [];
 const redoStack = [];
+
+function cloneStateFromDefaults() {
+  return JSON.parse(JSON.stringify(DEFAULT_STATE));
+}
 
 function cloneState() {
   return JSON.parse(JSON.stringify(state));
@@ -698,14 +391,17 @@ function pushHistory() {
 }
 
 function withHistory(mutator, renderTarget = 'both') {
+  exampleLoadGeneration++;
   pushHistory();
   mutator();
+  Object.assign(state, normalizeExplorerState(state, DEFAULT_STATE));
   updateControlsFromState();
   renderAfterStateChange(renderTarget);
 }
 
 function undoState() {
   if (undoStack.length === 0) return;
+  exampleLoadGeneration++;
   redoStack.push(cloneState());
   applySnapshot(undoStack.pop());
   updateControlsFromState();
@@ -715,6 +411,7 @@ function undoState() {
 
 function redoState() {
   if (redoStack.length === 0) return;
+  exampleLoadGeneration++;
   undoStack.push(cloneState());
   applySnapshot(redoStack.pop());
   updateControlsFromState();
@@ -730,6 +427,7 @@ function updateHistoryButtons() {
 function renderAfterStateChange(target) {
   updateLegendColors();
   updatePanelFocus();
+  if (target === 'dyn') drawParameterLensGuides();
   if (target === 'param') {
     triggerParamRender();
   } else if (target === 'dyn') {
@@ -740,26 +438,9 @@ function renderAfterStateChange(target) {
   }
 }
 
-function loadAttractorRenderers() {
-  if (attractorRenderers || attractorRendererLoadStarted) return;
-  attractorRendererLoadStarted = true;
-  Promise.all([
-    import('./src/renderers/attractor_prefix.mjs'),
-    import('./src/renderers/attractor_histogram.mjs')
-  ])
-    .then(([prefix, histogram]) => {
-      attractorRenderers = {
-        renderPrefixAttractor: prefix.renderPrefixAttractor,
-        renderHistogramAttractor: histogram.renderHistogramAttractor
-      };
-      triggerDynRender();
-    })
-    .catch(err => {
-      console.error('Could not load attractor renderer modules:', err);
-    });
-}
-
 function updateControlsFromState() {
+  if (elParamReal && document.activeElement !== elParamReal) elParamReal.value = state.cx;
+  if (elParamImag && document.activeElement !== elParamImag) elParamImag.value = state.cy;
   if (elAritySlider) elAritySlider.value = state.n;
   if (elArityVal) elArityVal.textContent = state.n;
   if (elKmax) elKmax.value = state.kMax;
@@ -805,6 +486,7 @@ function setComparisonMode(mode) {
     state.showEscapeStrata = true;
   } else {
     state.showDifference = true;
+    state.showCollinear = true;
     state.showEscapeStrata = false;
   }
 }
@@ -812,7 +494,6 @@ function setComparisonMode(mode) {
 function togglePanelFocus(panel) {
   state.focusedPanel = state.focusedPanel === panel ? 'both' : panel;
   updatePanelFocus();
-  resizeCanvases();
 }
 
 function updatePanelFocus() {
@@ -822,44 +503,14 @@ function updatePanelFocus() {
   workspace.classList.toggle('focus-dynamical', state.focusedPanel === 'dynamical');
   if (elBtnFocusParam) elBtnFocusParam.textContent = state.focusedPanel === 'parameter' ? 'Both' : 'Focus';
   if (elBtnFocusDyn) elBtnFocusDyn.textContent = state.focusedPanel === 'dynamical' ? 'Both' : 'Focus';
-}
-
-function roundForUrl(value) {
-  return Number(value).toPrecision(10).replace(/\.?0+$/, '');
+  if (lastPanelFocus !== state.focusedPanel) {
+    lastPanelFocus = state.focusedPanel;
+    resizeCanvases();
+  }
 }
 
 function stateToSearchParams() {
-  const params = new URLSearchParams();
-  params.set('n', state.n);
-  params.set('cx', roundForUrl(state.cx));
-  params.set('cy', roundForUrl(state.cy));
-  params.set('k', state.kMax);
-  params.set('l', state.LMax);
-  params.set('q', state.modulo);
-  params.set('pcx', roundForUrl(state.paramCenter.x));
-  params.set('pcy', roundForUrl(state.paramCenter.y));
-  params.set('pz', roundForUrl(state.paramZoom));
-  params.set('dcx', roundForUrl(state.dynCenter.x));
-  params.set('dcy', roundForUrl(state.dynCenter.y));
-  params.set('dz', roundForUrl(state.dynZoom));
-  params.set('mode', state.comparisonMode);
-  params.set('renderer', state.rendererMode);
-  params.set('adepth', state.attractorDepth);
-  params.set('hseed', state.histogramSeed);
-  params.set('hsamples', state.histogramSamples);
-  params.set('pieces', state.firstLevelPieces ? '1' : '0');
-  params.set('aop', roundForUrl(state.originalAttractorOpacity));
-  params.set('palette', state.palette);
-  params.set('layers', [
-    state.showDifference,
-    state.showCollinear,
-    state.showTrap,
-    state.showEnclosure,
-    state.showTree,
-    state.showPath,
-    state.showEscapeStrata
-  ].map(Boolean).map(flag => flag ? '1' : '0').join(''));
-  return params;
+  return encodeExplorerState(state);
 }
 
 function currentShareUrl() {
@@ -869,59 +520,17 @@ function currentShareUrl() {
 }
 
 function applyStateFromHash() {
-  if (!window.location.hash || window.location.hash.length <= 1) return;
-  const params = new URLSearchParams(window.location.hash.slice(1));
-  const readNum = (key, fallback) => {
-    const value = Number(params.get(key));
-    return Number.isFinite(value) ? value : fallback;
-  };
-  state.n = Math.max(2, Math.round(readNum('n', state.n)));
-  state.cx = readNum('cx', state.cx);
-  state.cy = readNum('cy', state.cy);
-  state.kMax = Math.max(1, Math.round(readNum('k', state.kMax)));
-  state.LMax = Math.max(10, Math.round(readNum('l', state.LMax)));
-  state.modulo = Math.max(1, Math.round(readNum('q', state.modulo)));
-  state.paramCenter = {
-    x: readNum('pcx', state.paramCenter.x),
-    y: readNum('pcy', state.paramCenter.y)
-  };
-  state.paramZoom = Math.max(1e-6, readNum('pz', state.paramZoom));
-  state.dynCenter = {
-    x: readNum('dcx', state.dynCenter.x),
-    y: readNum('dcy', state.dynCenter.y)
-  };
-  state.dynZoom = Math.max(1e-6, readNum('dz', state.dynZoom));
-  const mode = params.get('mode');
-  if (mode) setComparisonMode(mode);
-  const renderer = params.get('renderer');
-  if (['prefix', 'histogram', 'survival'].includes(renderer)) {
-    state.rendererMode = renderer;
-  }
-  state.attractorDepth = Math.max(1, Math.min(12, Math.round(readNum('adepth', state.attractorDepth))));
-  state.histogramSeed = Math.max(1, Math.round(readNum('hseed', state.histogramSeed)));
-  state.histogramSamples = Math.max(1000, Math.min(1000000, Math.round(readNum('hsamples', state.histogramSamples))));
-  const pieces = params.get('pieces');
-  if (pieces === '0' || pieces === '1') state.firstLevelPieces = pieces === '1';
-  state.originalAttractorOpacity = Math.max(0, Math.min(1, readNum('aop', state.originalAttractorOpacity)));
-  const palette = params.get('palette');
-  if (palette) state.palette = palette;
-  const layers = params.get('layers');
-  if (layers && layers.length >= 7) {
-    state.showDifference = layers[0] === '1';
-    state.showCollinear = layers[1] === '1';
-    state.showTrap = layers[2] === '1';
-    state.showEnclosure = layers[3] === '1';
-    state.showTree = layers[4] === '1';
-    state.showPath = layers[5] === '1';
-    state.showEscapeStrata = layers[6] === '1';
-  }
+  Object.assign(state, decodeExplorerState(window.location.hash, DEFAULT_STATE));
 }
 
 async function copyTextToClipboard(text) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch { /* Use the selectable local fallback when permission is unavailable. */ }
   }
+  const previousFocus = document.activeElement;
   const area = document.createElement('textarea');
   area.value = text;
   area.setAttribute('readonly', '');
@@ -931,6 +540,7 @@ async function copyTextToClipboard(text) {
   area.select();
   const ok = document.execCommand('copy');
   document.body.removeChild(area);
+  previousFocus?.focus();
   if (!ok) throw new Error('Fallback copy command failed.');
 }
 
@@ -971,7 +581,10 @@ function fallbackExampleConfig(id) {
 async function loadExampleConfig(id) {
   try {
     const response = await fetch(`examples/${id}/config.json`, { cache: 'no-store' });
-    if (response.ok) return response.json();
+    if (response.ok) {
+      const config = await response.json();
+      if (config && typeof config === 'object' && !Array.isArray(config)) return config;
+    }
   } catch (err) {
     console.warn(`Example config ${id} unavailable; using fallback if present.`, err);
   }
@@ -980,6 +593,7 @@ async function loadExampleConfig(id) {
 
 function applyExampleConfig(config) {
   if (!config) return;
+  Object.assign(state, cloneStateFromDefaults());
   const selectedCase = Array.isArray(config.cases) && config.cases.length > 0 ? config.cases[0] : null;
   const parameter = config.parameter || (selectedCase ? selectedCase.parameter : null);
   if (Number.isFinite(config.n)) state.n = config.n;
@@ -987,8 +601,8 @@ function applyExampleConfig(config) {
     state.cx = parameter.re;
     state.cy = parameter.im;
   }
-  state.kMax = Math.max(1, Math.round(config.k_max || config.kMax || state.kMax));
-  state.LMax = Math.max(10, Math.round(config.l_max || config.LMax || state.LMax));
+  state.kMax = Math.max(0, Math.round(config.k_max ?? config.kMax ?? state.kMax));
+  state.LMax = Math.max(1, Math.round(config.l_max ?? config.LMax ?? state.LMax));
   const visual = config.visual_renderer || {};
   if (['prefix', 'histogram', 'survival'].includes(config.renderer_mode || visual.mode)) {
     state.rendererMode = config.renderer_mode || visual.mode;
@@ -1043,22 +657,37 @@ function htmlEscape(text) {
     .replace(/"/g, '&quot;');
 }
 
+let modalReturnFocus = null;
 function openModal(title, bodyHtml, actionsHtml = '', showTabs = false) {
   if (!elModalBackdrop) return;
+  const opening = elModalBackdrop.hidden;
+  if (opening) modalReturnFocus = document.activeElement;
   elModalTitle.textContent = title;
   elModalBody.innerHTML = bodyHtml;
   elModalActions.innerHTML = actionsHtml;
   elModalTabs.hidden = !showTabs;
   elModalBackdrop.hidden = false;
+  document.querySelector('.container').inert = true;
+  document.getElementById('footer-status').inert = true;
+  document.body.classList.add('dialog-open');
+  if (opening) elModalClose.focus({ preventScroll: true });
 }
 
 function closeModal() {
-  if (elModalBackdrop) elModalBackdrop.hidden = true;
+  if (!elModalBackdrop || elModalBackdrop.hidden) return;
+  elModalBackdrop.hidden = true;
+  document.querySelector('.container').inert = false;
+  document.getElementById('footer-status').inert = false;
+  document.body.classList.remove('dialog-open');
+  modalReturnFocus?.focus({ preventScroll: true });
+  modalReturnFocus = null;
 }
+
+
 
 const ABOUT_TABS = {
   intuition: `
-    <p>The explorer visualizes the condition that the marked point <code>2c</code>
+    <p>For the maps <code>f_t(z) = t + z/c</code>, the explorer visualizes the condition that the marked point <code>2c</code>
     belongs to the difference attractor <code>E(c, 2n - 1)</code>. This is the
     computational view behind connectedness for the collinear family.</p>
     <p>The original attractor <code>E(c,n)</code> is drawn by a visual renderer
@@ -1080,18 +709,18 @@ const ABOUT_TABS = {
   `,
   references: `
     <ol>
-      <li>Bernat Espigule, David Juher, and Joan Saldana,
+      <li>Bernat Espigule, David Juher, and Joan Saldaña,
       <em>Collinear Fractals and Bandt's Conjecture</em>,
       Fractal and Fractional 8(12), 725, 2024.
-      DOI: <code>10.3390/fractalfract8120725</code>.</li>
+      <a href="https://doi.org/10.3390/fractalfract8120725" target="_blank" rel="noopener noreferrer">Published article</a>.</li>
       <li>Bernat Espigule and David Juher,
       <em>Finite Capture and the Closure of Roots of Restricted Polynomials</em>,
       arXiv:2603.07397, 2026.
-      DOI: <code>10.48550/arXiv.2603.07397</code>.</li>
+      <a href="https://arxiv.org/abs/2603.07397" target="_blank" rel="noopener noreferrer">Preprint</a>.</li>
       <li>Bernat Espigule,
       <em>Finite capture and the closure of roots of restricted polynomials</em>,
       IHP audiovisual resource, 2026.
-      DOI: <code>10.57987/IHP.2026.T1.WS3.016</code>.</li>
+      <a href="https://doi.org/10.57987/IHP.2026.T1.WS3.016" target="_blank" rel="noopener noreferrer">IHP lecture</a>.</li>
     </ol>
   `
 };
@@ -1101,6 +730,7 @@ function openAboutModal(tab = 'intuition') {
   if (elModalTabs) {
     for (const btn of elModalTabs.querySelectorAll('.modal-tab')) {
       btn.classList.toggle('active', btn.dataset.tab === tab);
+      btn.setAttribute('aria-pressed', String(btn.dataset.tab === tab));
     }
   }
 }
@@ -1176,22 +806,40 @@ function openTour(step = 0) {
 }
 
 function saveExplorerImage() {
-  const canvases = state.focusedPanel === 'parameter'
-    ? [canvasParam]
-    : state.focusedPanel === 'dynamical'
-      ? [canvasDyn]
-      : [canvasParam, canvasDyn];
+  if (elBtnSaveImage?.disabled) return;
+  const canvases = state.focusedPanel === 'parameter' ? [canvasParam]
+    : state.focusedPanel === 'dynamical' ? [canvasDyn] : [canvasParam, canvasDyn];
   const width = canvases.reduce((sum, canvas) => sum + canvas.width, 0);
-  const height = Math.max(...canvases.map(canvas => canvas.height));
+  const plotHeight = Math.max(...canvases.map(canvas => canvas.height));
+  const header = 96;
+  const footer = 56;
   const out = document.createElement('canvas');
   out.width = width;
-  out.height = height;
+  out.height = plotHeight + header + footer;
   const ctx = out.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.fillStyle = '#162238';
+  ctx.font = '600 16px system-ui, sans-serif';
+  ctx.fillText(`Collinear Fractals · n = ${state.n}`, 12, 24, width - 24);
+  ctx.font = '12px system-ui, sans-serif';
+  const input = `${state.cx.toPrecision(9)} ${state.cy < 0 ? '−' : '+'} ${Math.abs(state.cy).toPrecision(9)}i`;
+  ctx.fillText(`Input c = ${input}`, 12, 44, width - 24);
+  ctx.fillText(`k_max = ${state.kMax} · L_max = ${state.LMax} per level · q = ${state.modulo}`, 12, 63, width - 24);
   let x = 0;
   for (const canvas of canvases) {
-    ctx.drawImage(canvas, x, 0);
+    const title = canvas === canvasParam ? 'Parameter plane' : 'Dynamical plane · difference at ½ scale';
+    ctx.font = '600 12px system-ui, sans-serif';
+    ctx.fillStyle = '#162238';
+    ctx.fillText(title, x + 12, 85, canvas.width - 24);
+    ctx.drawImage(canvas, x, header);
     x += canvas.width;
   }
+  const test = selectedSearchResult();
+  ctx.font = '11px system-ui, sans-serif';
+  ctx.fillStyle = '#516078';
+  ctx.fillText(`Selected search: ${test.verdict} · ${test.stopReason}`, 12, header + plotHeight + 21, width - 24);
+  ctx.fillText('Floating-point exploration. Export the JSON record for parameters, evidence and view metadata.', 12, header + plotHeight + 40, width - 24);
   const a = document.createElement('a');
   a.href = out.toDataURL('image/png');
   a.download = `collinear-fractals-n${state.n}-k${state.kMax}.png`;
@@ -1202,26 +850,39 @@ function saveExplorerImage() {
 
 // Resize handler
 function resizeCanvases(options = {}) {
-  const pWidth = canvasParam.parentElement.clientWidth;
-  const pHeight = canvasParam.parentElement.clientHeight;
-  canvasParam.width = pWidth;
-  canvasParam.height = pHeight;
-  
-  const dWidth = canvasDyn.parentElement.clientWidth;
-  const dHeight = canvasDyn.parentElement.clientHeight;
-  canvasDyn.width = dWidth;
-  canvasDyn.height = dHeight;
-  
+  let changed = false;
+  for (const canvas of [canvasParam, canvasDyn]) {
+    const width = Math.max(0, Math.floor(canvas.parentElement.clientWidth));
+    const height = Math.max(0, Math.floor(canvas.parentElement.clientHeight));
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+      changed = true;
+    }
+  }
   if (options.resetViewports) {
     resetParamViewportMath();
     resetDynViewportMath();
   }
-  
-  triggerParamRender();
-  triggerDynRender();
+  if (changed || options.resetViewports) {
+    triggerParamRender();
+    triggerDynRender();
+  }
 }
 
-window.addEventListener('resize', resizeCanvases);
+let resizeRequestId = null;
+function scheduleResize() {
+  if (resizeRequestId !== null) cancelAnimationFrame(resizeRequestId);
+  resizeRequestId = requestAnimationFrame(() => {
+    resizeRequestId = null;
+    resizeCanvases();
+  });
+}
+window.addEventListener('resize', scheduleResize);
+const canvasResizeObserver = new ResizeObserver(scheduleResize);
+canvasResizeObserver.observe(canvasParam.parentElement);
+canvasResizeObserver.observe(canvasDyn.parentElement);
+
 
 // Coordinate conversion helpers preserving 1:1 Aspect Ratio (No distortion)
 function paramToScreen(x, y) {
@@ -1297,21 +958,21 @@ function resetDynViewportMath() {
   const cx = eff.x;
   const cy = eff.y;
   const n = state.n;
-  const rho = Math.sqrt(cx * cx + cy * cy);
+  const rho = Math.hypot(cx, cy);
   
-  const enc = computeEnclosureGeneral(cx, cy, 2 * n - 1, state.tol);
+  const enc = computeEnclosureGeneral(state.cx, state.cy, 2 * n - 1, state.tol);
   if (!enc.err) {
     const xMaxBound = (enc.se * rho + Math.abs(cx) * enc.ve) / (2.0 * Math.abs(cy));
     const yMaxBound = enc.ve / 2.0;
     
     state.dynCenter = { x: 0.0, y: 0.0 };
     
-    const h = canvasDyn.height;
-    const w = canvasDyn.width;
+    const h = canvasDyn.height || 600;
+    const w = canvasDyn.width || 800;
     const zoomToFitW = 2.0 * xMaxBound;
     const zoomToFitH = (2.0 * yMaxBound) * (w / h);
     
-    state.dynZoom = Math.max(zoomToFitW, zoomToFitH) * 1.15; // 15% margins
+    state.dynZoom = Math.min(1e6, Math.max(zoomToFitW, zoomToFitH) * 1.15); // 15% margins
   } else {
     state.dynCenter = { x: 0.0, y: 0.0 };
     state.dynZoom = 8.0;
@@ -1319,83 +980,89 @@ function resetDynViewportMath() {
 }
 
 // Parameter Plane Rendering
+function markRendering(canvas, status) {
+  canvas.dataset.renderState = status;
+  const readout = document.getElementById(canvas === canvasParam ? 'parameter-render-status' : 'dynamical-render-status');
+  const statusText = status === 'complete' ? 'Ready' : 'Refining…';
+  if (readout && readout.textContent !== statusText) readout.textContent = statusText;
+  canvas.setAttribute('aria-busy', status === 'rendering' ? 'true' : 'false');
+  updateExportAvailability();
+}
+
+function updateExportAvailability() {
+  if (!elBtnSaveImage) return;
+  const visible = [canvasParam, canvasDyn].filter(canvas => canvas.width > 0 && canvas.height > 0);
+  const complete = visible.length > 0 && visible.every(canvas => canvas.dataset.renderState === 'complete');
+  elBtnSaveImage.disabled = !complete;
+  elBtnSaveImage.title = complete ? 'Download the completed view as PNG' : 'The image will be available when refinement finishes';
+}
+
 function triggerParamRender() {
-  if (renderRequestId) {
-    cancelAnimationFrame(renderRequestId);
-  }
+  if (renderRequestId !== null) cancelAnimationFrame(renderRequestId);
+  renderRequestId = null;
   paramSavedImageData = null;
+  if (!canvasParam.width || !canvasParam.height) return;
   currentRenderStage = 0;
   renderY = 0;
-  renderParamStage();
+  renderX = 0;
+  markRendering(canvasParam, 'rendering');
+  renderRequestId = requestAnimationFrame(renderParamStage);
 }
 
 function renderParamStage() {
   const width = canvasParam.width;
   const height = canvasParam.height;
   const blockSize = PARAM_RENDER_STEPS[currentRenderStage];
-  
   const startTime = performance.now();
-  const maxFrameTime = 16.0; // 60 FPS budget
-  
   while (renderY < height) {
-    for (let x = 0; x < width; x += blockSize) {
-      const c = screenToParam(x + blockSize / 2, renderY + blockSize / 2);
-      
+    while (renderX < width) {
+      const c = screenToParam(Math.min(width - 0.5, renderX + blockSize / 2), Math.min(height - 0.5, renderY + blockSize / 2));
       let color;
-      if (c.y === 0.0) {
-        color = '#cbd5e1'; // light axis gray
+      if (c.y === 0) {
+        color = '#cbd5e1';
       } else {
-        const test = inverseIterationTestDetailed(c.x, c.y, state.n, state.kMax, state.LMax, state.tol);
+        const test = inverseIterationTestFast(c.x, c.y, state.n, state.kMax, state.LMax, state.tol);
         if (isInteriorVerdict(test.verdict)) {
-          if (state.showEscapeStrata) {
-            color = '#ffffff';
-          } else {
-            const level = test.depth % state.modulo;
-            const rgb = test.verdict === 'Interior-offLens'
-              ? getOffLensInteriorColorForLevel(level, test.depth)
-              : getColorForLevel(level, test.depth);
-            color = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
-          }
+          color = state.showEscapeStrata ? getExteriorColorString() : rgbToCss(test.verdict === 'Interior-offLens'
+            ? getOffLensInteriorColorForLevel(test.depth % state.modulo, test.depth)
+            : getColorForLevel(test.depth % state.modulo, test.depth));
         } else if (test.verdict === 'Exterior') {
-          if (state.showEscapeStrata) {
-            color = getEscapeColorString(test.depth);
-          } else {
-            color = getExteriorColorString();
-          }
+          color = state.showEscapeStrata ? getEscapeColorString(test.depth) : getExteriorColorString();
         } else {
           color = getUndeterminedColorString();
         }
       }
-      
       ctxParam.fillStyle = color;
-      ctxParam.fillRect(x, renderY, blockSize, blockSize);
+      ctxParam.fillRect(renderX, renderY, blockSize, blockSize);
+      renderX += blockSize;
+      // Yield within a row, including expensive near-boundary searches.
+      if (performance.now() - startTime > 10) {
+        renderRequestId = requestAnimationFrame(renderParamStage);
+        return;
+      }
     }
-    
+    renderX = 0;
     renderY += blockSize;
-    
-    if (performance.now() - startTime > maxFrameTime) {
-      renderRequestId = requestAnimationFrame(renderParamStage);
-      return;
-    }
   }
-  
-  const maxAllowedStage = getMaxParamRenderStage();
-  if (currentRenderStage === maxAllowedStage) {
-    saveParamImageData();
-  }
-  
-  drawParameterLensGuides();
-  
-  if (currentRenderStage < maxAllowedStage) {
+  saveParamImageData();
+  drawParameterLensGuides(true);
+  if (currentRenderStage < getMaxParamRenderStage()) {
     currentRenderStage++;
     renderY = 0;
+    renderX = 0;
     renderRequestId = requestAnimationFrame(renderParamStage);
   } else {
     renderRequestId = null;
+    markRendering(canvasParam, 'complete');
   }
 }
 
-function drawParameterLensGuides() {
+
+
+function drawParameterLensGuides(completedStage = false) {
+  if (!canvasParam.width || !canvasParam.height) return;
+  // Restoring a coarse snapshot during refinement would erase completed rows.
+  if (!completedStage && canvasParam.dataset.renderState !== 'complete') return;
   if (paramSavedImageData) {
     ctxParam.putImageData(paramSavedImageData, 0, 0);
   }
@@ -1471,120 +1138,99 @@ function drawParameterLensGuides() {
   ctxParam.stroke();
 }
 
-// Certified Grid-based Dynamical Plane Rendering
-function triggerDynRender() {
-  if (dynRenderRequestId) {
-    cancelAnimationFrame(dynRenderRequestId);
+// Progressive finite-search dynamical-plane rendering
+function selectedSearchResult() {
+  const key = [state.cx, state.cy, state.n, state.kMax, state.LMax, state.tol].join('|');
+  if (!selectedSearchCache || selectedSearchCache.key !== key) {
+    selectedSearchCache = { key, result: inverseIterationTestDetailed(state.cx, state.cy, state.n, state.kMax, state.LMax, state.tol) };
   }
+  return selectedSearchCache.result;
+}
+
+function triggerDynRender() {
+  if (dynRenderRequestId !== null) cancelAnimationFrame(dynRenderRequestId);
+  dynRenderRequestId = null;
+  lastAttractorMetadata = null;
+  updateStatusBar(selectedSearchResult());
+  if (!canvasDyn.width || !canvasDyn.height) return;
+  const effective = getEffectiveC(state.cx, state.cy);
+  const { x: cx, y: cy } = effective;
+  dynGeometry = {
+    cx, cy, rho: Math.hypot(cx, cy),
+    encN: computeEnclosureGeneral(state.cx, state.cy, 2 * state.n - 1, state.tol),
+    encn: computeEnclosureGeneral(state.cx, state.cy, state.n, state.tol),
+    isLensN: inLens(state.cx, state.cy, state.n),
+    differenceContext: createInverseSearchContext(state.cx, state.cy, 2 * state.n - 1, inLens(state.cx, state.cy, state.n), state.tol),
+    originalContext: createInverseSearchContext(state.cx, state.cy, state.n, false, state.tol, { useTrap: false })
+  };
   currentDynStage = 0;
+  markRendering(canvasDyn, 'rendering');
   startDynStage();
 }
 
 function startDynStage() {
-  const width = canvasDyn.width;
-  const height = canvasDyn.height;
   const step = DYN_RENDER_STEPS[currentDynStage];
-  
-  gridW = Math.ceil(width / step);
-  gridH = Math.ceil(height / step);
-  
-  diffGrid = [];
-  collGrid = [];
-  for (let gx = 0; gx < gridW; gx++) {
-    diffGrid.push(new Array(gridH).fill('Exterior'));
-    collGrid.push(new Array(gridH).fill(0));
-  }
-  
+  gridW = Math.ceil(canvasDyn.width / step);
+  gridH = Math.ceil(canvasDyn.height / step);
+  const count = gridW * gridH;
+  diffGrid = new Uint8Array(count);
+  diffDepths = new Uint16Array(count);
+  collGrid = new Uint8Array(count);
   dynY = 0;
-  renderDynStage();
+  dynX = 0;
+  dynRenderRequestId = requestAnimationFrame(renderDynStage);
 }
 
 function renderDynStage() {
   const width = canvasDyn.width;
   const height = canvasDyn.height;
   const step = DYN_RENDER_STEPS[currentDynStage];
-  
-  const eff = getEffectiveC(state.cx, state.cy);
-  const cx = eff.x;
-  const cy = eff.y;
-  const n = state.n;
-  const rho = Math.sqrt(cx * cx + cy * cy);
-  
-  if (rho <= 1.0 || cy === 0.0) {
+  const { cx, cy, rho, encN, encn, isLensN } = dynGeometry;
+  if (!Number.isFinite(rho) || rho <= 1 || cy === 0 || encN.err) {
     ctxDyn.fillStyle = getExteriorColorString();
     ctxDyn.fillRect(0, 0, width, height);
     drawDynamicalGuidesAndOverlays();
+    markRendering(canvasDyn, 'complete');
+    dynRenderRequestId = null;
     return;
   }
-  
   const startTime = performance.now();
-  const maxFrameTime = 16.0; // 60 FPS budget
-  
-  // Precompute bounds for 1/2 E(c,N) (arity 2n-1)
-  const encN = computeEnclosureGeneral(cx, cy, 2 * n - 1, state.tol);
-  const seN = encN.se;
-  const veN = encN.ve;
-  const isLensN = inLens(cx, cy, n);
-  
   const useSurvivalOverlay = state.showCollinear && state.rendererMode === 'survival';
-  let sen = 0.0;
-  let ven = 0.0;
-  if (useSurvivalOverlay) {
-    const encn = computeEnclosureGeneral(cx, cy, n, state.tol);
-    sen = encn.se;
-    ven = encn.ve;
-  }
-  
   while (dynY < gridH) {
-    for (let gx = 0; gx < gridW; gx++) {
-      const sx = gx * step;
-      const sy = dynY * step;
-      
-      const w = screenToDyn(sx + step / 2, sy + step / 2);
-      
-      // 1. Difference Attractor: test z = 2w inside E(c,N) to get 1/2 E(c,N)
-      let verdictN = 'Exterior';
-      let depthN = 0;
+    while (dynX < gridW) {
+      const i = dynY * gridW + dynX;
+      const w = screenToDyn(Math.min(width - 0.5, dynX * step + step / 2), Math.min(height - 0.5, dynY * step + step / 2));
       if (state.showDifference) {
-        const res = inverseIterationTestGeneral(cx, cy, 2.0 * w.x, 2.0 * w.y, 2 * n - 1, isLensN, seN, veN, state.kMax, state.LMax);
-        verdictN = res.verdict;
-        depthN = res.depth;
+        const result = inverseSearchPointFast(dynGeometry.differenceContext, 2 * w.x, 2 * w.y, state.kMax, state.LMax);
+        diffGrid[i] = VERDICTS.indexOf(result.verdict);
+        diffDepths[i] = result.depth;
       }
-      diffGrid[gx][dynY] = { verdict: verdictN, depth: depthN };
-      
-      // 2. Optional diagnostic survival renderer for E(c,n).
-      let inColl = 0;
-      if (useSurvivalOverlay) {
-        const inLensCollVal = inLensColl(cx, cy, (n + 1) / 2);
-        const resn = inverseIterationTestGeneral(cx, cy, w.x, w.y, n, inLensCollVal, sen, ven, state.kMax, state.LMax);
-        if (isInteriorVerdict(resn.verdict)) {
-          inColl = 1;
-        }
+      if (useSurvivalOverlay && !encn.err) {
+        const result = inverseSearchPointFast(dynGeometry.originalContext, w.x, w.y, state.kMax, state.LMax);
+        collGrid[i] = result.verdict !== 'Exterior' ? 1 : 0;
       }
-      collGrid[gx][dynY] = inColl;
+      dynX++;
+      if (performance.now() - startTime > 10) {
+        dynRenderRequestId = requestAnimationFrame(renderDynStage);
+        return;
+      }
     }
-    
+    dynX = 0;
     dynY++;
-    
-    if (performance.now() - startTime > maxFrameTime) {
-      dynRenderRequestId = requestAnimationFrame(renderDynStage);
-      return;
-    }
   }
-  
   drawDynGrid();
   drawOriginalAttractorOverlay();
   drawDynamicalGuidesAndOverlays();
-  
-  const maxAllowedStage = getMaxDynRenderStage();
-                           
-  if (currentDynStage < maxAllowedStage) {
+  if (currentDynStage < getMaxDynRenderStage() && (state.showDifference || useSurvivalOverlay)) {
     currentDynStage++;
     startDynStage();
   } else {
     dynRenderRequestId = null;
+    markRendering(canvasDyn, 'complete');
   }
 }
+
+
 
 function drawDynGrid() {
   const step = DYN_RENDER_STEPS[currentDynStage];
@@ -1593,6 +1239,9 @@ function drawDynGrid() {
   const height = canvasDyn.height;
   const imgData = ctxDyn.createImageData(width, height);
   const data = imgData.data;
+  const exterior = hexToRgb(getExteriorColorString());
+  const undetermined = hexToRgb(getUndeterminedColorString());
+  const mark = hexToRgb(activePalette().branch || '#111827');
   
   for (let gy = 0; gy < gridH; gy++) {
     const syStart = gy * step;
@@ -1602,17 +1251,16 @@ function drawDynGrid() {
       const sxStart = gx * step;
       const sxEnd = Math.min(width, sxStart + step);
       
-      const node = diffGrid[gx][gy];
-      const verdict = node.verdict;
-      const depth = node.depth;
-      const isColl = useSurvivalOverlay ? collGrid[gx][gy] : 0;
+      const i = gy * gridW + gx;
+      const verdict = VERDICTS[diffGrid[i]];
+      const depth = diffDepths[i];
+      const isColl = useSurvivalOverlay ? collGrid[i] : 0;
       
       // Base color based on difference attractor 1/2 E(c,N)
-      let exterior = hexToRgb(getExteriorColorString());
       let r = exterior.r, g = exterior.g, b = exterior.b;
-      if (isInteriorVerdict(verdict)) {
+      if (state.showDifference && isInteriorVerdict(verdict)) {
         if (state.showEscapeStrata) {
-          r = 255; g = 255; b = 255;
+          r = exterior.r; g = exterior.g; b = exterior.b;
         } else {
           const level = depth % state.modulo;
           const rgb = verdict === 'Interior-offLens'
@@ -1620,21 +1268,19 @@ function drawDynGrid() {
             : getColorForLevel(level, depth);
           r = rgb.r; g = rgb.g; b = rgb.b;
         }
-      } else if (verdict === 'Exterior') {
+      } else if (state.showDifference && verdict === 'Exterior') {
         if (state.showEscapeStrata) {
           const rgb = getEscapeColor(depth);
           r = rgb.r; g = rgb.g; b = rgb.b;
         } else {
           r = exterior.r; g = exterior.g; b = exterior.b;
         }
-      } else if (verdict === 'Undetermined') {
-        const rgb = hexToRgb(getUndeterminedColorString());
-        r = rgb.r; g = rgb.g; b = rgb.b;
+      } else if (state.showDifference && verdict === 'Undetermined') {
+        r = undetermined.r; g = undetermined.g; b = undetermined.b;
       }
       
       if (isColl === 1) {
         const alpha = Math.max(0, Math.min(1, state.survivalOverlayOpacity));
-        const mark = hexToRgb(activePalette().branch || '#111827');
         r = Math.round(r * (1 - alpha) + mark.r * alpha);
         g = Math.round(g * (1 - alpha) + mark.g * alpha);
         b = Math.round(b * (1 - alpha) + mark.b * alpha);
@@ -1659,16 +1305,24 @@ function drawDynGrid() {
 function drawOriginalAttractorOverlay() {
   lastAttractorMetadata = null;
   if (!state.showCollinear || state.rendererMode === 'survival') return;
-  if (!attractorRenderers) {
-    loadAttractorRenderers();
-    return;
-  }
 
   const eff = getEffectiveC(state.cx, state.cy);
   const c = { re: eff.x, im: eff.y };
-  const rho = Math.sqrt(c.re * c.re + c.im * c.im);
-  if (rho <= 1.0 || c.im === 0.0) return;
+  const rho = Math.hypot(c.re, c.im);
+  if (!Number.isFinite(rho) || rho <= 1 || c.im === 0) return;
 
+  const cacheKey = JSON.stringify([state.cx, state.cy, state.n, state.rendererMode, state.attractorDepth,
+    state.histogramSeed, state.histogramSamples, state.firstLevelPieces, state.originalAttractorOpacity,
+    activePalette().branch, state.dynCenter, state.dynZoom, canvasDyn.width, canvasDyn.height]);
+  if (overlayCache?.key === cacheKey) {
+    ctxDyn.drawImage(overlayCache.canvas, 0, 0);
+    lastAttractorMetadata = overlayCache.metadata;
+    return;
+  }
+  const layerCanvas = document.createElement('canvas');
+  layerCanvas.width = canvasDyn.width;
+  layerCanvas.height = canvasDyn.height;
+  const layerContext = layerCanvas.getContext('2d');
   const project = (x, y) => dynToScreen(x, y);
   const pixelRadius = state.dynZoom / Math.max(1, canvasDyn.width);
   const shared = {
@@ -1681,18 +1335,20 @@ function drawOriginalAttractorOverlay() {
   };
 
   if (state.rendererMode === 'histogram') {
-    lastAttractorMetadata = attractorRenderers.renderHistogramAttractor(ctxDyn, {
+    lastAttractorMetadata = attractorRenderers.renderHistogramAttractor(layerContext, {
       ...shared,
       seed: state.histogramSeed,
       samples: state.histogramSamples
     });
   } else {
-    lastAttractorMetadata = attractorRenderers.renderPrefixAttractor(ctxDyn, {
+    lastAttractorMetadata = attractorRenderers.renderPrefixAttractor(layerContext, {
       ...shared,
       requestedDepth: state.attractorDepth,
       pixelRadius
     });
   }
+  overlayCache = { key: cacheKey, canvas: layerCanvas, metadata: lastAttractorMetadata };
+  ctxDyn.drawImage(layerCanvas, 0, 0);
 }
 
 function drawDynamicalGuidesAndOverlays() {
@@ -1703,8 +1359,8 @@ function drawDynamicalGuidesAndOverlays() {
   const cx = eff.x;
   const cy = eff.y;
   const n = state.n;
-  const rho = Math.sqrt(cx * cx + cy * cy);
-  const isLensN = inLens(cx, cy, n);
+  const rho = Math.hypot(cx, cy);
+  const isLensN = inLens(state.cx, state.cy, n);
   
   // Real and Imaginary axes
   ctxDyn.save();
@@ -1731,22 +1387,22 @@ function drawDynamicalGuidesAndOverlays() {
   ctxDyn.restore();
   
   // Draw 1/2 Enclosure
-  if (state.showEnclosure && rho > 1.0 && cy !== 0.0) {
-    const enc = computeEnclosureGeneral(cx, cy, 2 * n - 1, state.tol);
+  if (state.showEnclosure && Number.isFinite(rho) && rho > 1 && cy !== 0) {
+    const enc = computeEnclosureGeneral(state.cx, state.cy, 2 * n - 1, state.tol);
     if (!enc.err) {
       drawParallelogramScaled(enc.se, enc.ve, 'rgba(79, 70, 229, 0.02)', '#4f46e5', false);
     }
   }
   
   // Draw 1/2 Trap
-  if (state.showTrap) {
+  if (state.showTrap && rho > 1 && cy !== 0 && Number.isFinite(rho)) {
     const N = 2 * n - 1;
     const { S, V } = getTrapHalfWidths(cx, cy, N, isLensN);
     drawParallelogramScaled(S, V, 'rgba(5, 150, 105, 0.04)', '#059669', true);
   }
   
   // Run search test to draw Tree and winning path
-  const test = inverseIterationTestDetailed(cx, cy, n, state.kMax, state.LMax, state.tol);
+  const test = selectedSearchResult();
   
   updateStatusBar(test);
   
@@ -1772,7 +1428,7 @@ function drawDynamicalGuidesAndOverlays() {
   ctxDyn.fillStyle = '#dc2626'; // primary red
   ctxDyn.strokeStyle = '#ffffff';
   ctxDyn.lineWidth = 1.5;
-  ctxDyn.arc(ptC.x, ptC.y, 6.0, 0, Math.PI * 2);
+  if (Number.isFinite(ptC.x) && Number.isFinite(ptC.y)) ctxDyn.arc(ptC.x, ptC.y, 6.0, 0, Math.PI * 2);
   ctxDyn.fill();
   ctxDyn.stroke();
 }
@@ -1781,7 +1437,7 @@ function drawParallelogramScaled(S, V, fillStyle, strokeStyle, isDashed) {
   const eff = getEffectiveC(state.cx, state.cy);
   const cx = eff.x;
   const cy = eff.y;
-  const rho = Math.sqrt(cx * cx + cy * cy);
+  const rho = Math.hypot(cx, cy);
   if (cy === 0.0 || rho === 0.0) return;
   
   // Corners divided by 2
@@ -1813,7 +1469,7 @@ function canonicalToComplex(s, v) {
   const eff = getEffectiveC(state.cx, state.cy);
   const cx = eff.x;
   const cy = eff.y;
-  const rho = Math.sqrt(cx * cx + cy * cy);
+  const rho = Math.hypot(cx, cy);
   if (cy === 0.0 || rho === 0.0) return { re: 0.0, im: 0.0 };
   const u = (s * rho - cx * v) / cy;
   return { re: u, im: v };
@@ -1896,94 +1552,48 @@ function drawWinningPathScaled(tree, word, verdict) {
 }
 
 function currentCertificatePayload() {
-  const eff = getEffectiveC(state.cx, state.cy);
-  const x = eff.x;
-  const y = eff.y;
-  const n = state.n;
-  const N = 2 * n - 1;
-  const rho = Math.sqrt(x * x + y * y);
-  const lens = inLens(x, y, n);
-  const test = inverseIterationTestDetailed(x, y, n, state.kMax, state.LMax, state.tol);
-  const enc = computeEnclosureGeneral(x, y, N, state.tol);
-  const trap = getTrapHalfWidths(x, y, N, lens);
-
+  const record = buildCertificatePayload(selectedSearchResult(), {
+    n: state.n, c: { re: state.cx, im: state.cy },
+    kMax: state.kMax, LMax: state.LMax, tol: state.tol
+  });
   return {
-    schema_version: '0.2.0',
+    ...record,
     software: 'Collinear Fractals GPU Explorer',
-    software_version: '0.2.0-alpha',
-    version: '0.2.0-alpha',
+    version: record.software_version,
     generatedAt: new Date().toISOString(),
-    mode: 'finite-capture',
-    renderer: 'canvas-cpu',
-    parameter: { re: x, im: y, modulus: rho },
-    c: { re: x, im: y },
-    arity: n,
-    n,
-    differenceAlphabetIndex: N,
-    N,
-    inLens: lens,
-    verdict: test.verdict,
-    trapRegion: test.trapRegion || (lens ? 'lens' : 'off-lens'),
-    depth: test.depth,
-    word: test.word || [],
-    digits: test.word || [],
-    nodesExplored: test.nodesExplored,
+    // Keep the legacy browser field names for existing consumers.
+    parameter: record.c ? { ...record.c, modulus: Math.hypot(record.c.re, record.c.im) } : null,
+    arity: record.n,
+    differenceAlphabetIndex: record.N,
+    inLens: record.in_lens,
+    trapRegion: record.trap_region,
+    digits: record.word,
+    nodesExplored: record.nodes_explored,
     search: { kMax: state.kMax, LMax: state.LMax, tolerance: state.tol },
-    k_max: state.kMax,
-    L_max: state.LMax,
-    visual_renderer: lastAttractorMetadata ? {
-      ...lastAttractorMetadata,
-      role: 'visual-renderer',
-      renderer_mode: state.rendererMode
-    } : {
+    share_url: currentShareUrl(),
+    view: {
+      parameter_center: { re: state.paramCenter.x, im: state.paramCenter.y },
+      parameter_zoom: state.paramZoom,
+      dynamical_center: { re: state.dynCenter.x, im: state.dynCenter.y },
+      dynamical_zoom: state.dynZoom,
+      dynamical_difference_scale: 0.5,
+      original_attractor_scale: 1
+    },
+    visual_renderer: {
       role: 'visual-renderer',
       renderer_mode: state.rendererMode,
+      visible: state.showCollinear,
+      render_status: canvasDyn.dataset.renderState,
+      ...lastAttractorMetadata,
       proof_status: 'visual-approximation'
     },
-    enclosure: enc.err ? null : {
-      se: enc.se,
-      ve: enc.ve,
-      truncationDepth: enc.truncationDepth,
-      tail: enc.tail,
-      tailCertifiedToTol: enc.tailCertifiedToTol,
-      tailCapHit: enc.tailCapHit
-    },
-    trap: { S: trap.S, V: trap.V },
-    proof_status: isInteriorVerdict(test.verdict) || test.verdict === 'Exterior'
-      ? 'finite-search-certificate'
-      : 'bounded-search-undetermined',
-    limitations: 'The theorem-level proof remains in the cited paper and thesis.',
-    note: test.verdict === 'Interior-offLens'
-      ? 'Off-lens trap rule enabled; kept distinct from in-lens Interior.'
-      : 'In-lens Interior, Exterior, or Undetermined status from the selected inverse-search settings.'
+    rounding_verified: false,
+    note: 'The dynamical plane displays ½E(c,2n−1) and the original E(c,n) at their stated scales.'
   };
 }
 
 async function copyCertificateJSON() {
-  const payload = currentCertificatePayload();
-  const text = JSON.stringify(payload, null, 2);
-
-  try {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch (err) {
-    // The async Clipboard API may be unavailable for local file usage or
-    // blocked by browser permissions. Fall back to the textarea method below.
-    console.warn('Clipboard API unavailable; using textarea fallback.', err);
-  }
-
-  const area = document.createElement('textarea');
-  area.value = text;
-  area.setAttribute('readonly', '');
-  area.style.position = 'fixed';
-  area.style.left = '-9999px';
-  document.body.appendChild(area);
-  area.select();
-  const ok = document.execCommand('copy');
-  document.body.removeChild(area);
-  if (!ok) throw new Error('Fallback copy command failed.');
+  await copyTextToClipboard(JSON.stringify(currentCertificatePayload(), null, 2));
   return true;
 }
 
@@ -1993,33 +1603,51 @@ function downloadCertificateJSON() {
   const blob = new Blob([text], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const re = payload.parameter.re.toFixed(6).replace('-', 'm').replace('.', 'p');
-  const im = payload.parameter.im.toFixed(6).replace('-', 'm').replace('.', 'p');
+  const re = state.cx.toPrecision(7).replace(/[^0-9a-z]/gi, '_');
+  const im = state.cy.toPrecision(7).replace(/[^0-9a-z]/gi, '_');
   a.href = url;
   a.download = `collinear-certificate-n${payload.arity}-c${re}_${im}i.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function updateStatusBar(test) {
-  const rho = Math.sqrt(state.cx * state.cx + state.cy * state.cy);
+  const rho = Math.hypot(state.cx, state.cy);
   const isLens = inLens(state.cx, state.cy, state.n);
   
   elStatC.textContent = `${state.cx.toFixed(5)} ${state.cy >= 0 ? '+' : '-'} ${Math.abs(state.cy).toFixed(5)}i`;
   elStatRho.textContent = rho.toFixed(5);
   elStatLens.textContent = isLens ? 'Yes' : 'No';
-  elStatLens.style.color = isLens ? '#059669' : '#dc2626';
+  elStatLens.style.color = isLens ? 'var(--color-interior)' : '#dc2626';
   
   elStatVerdict.className = `verdict-tag verdict-${test.verdict}`;
   elStatVerdict.textContent = test.verdict;
-  elStatNodes.textContent = test.nodesExplored;
+  elStatNodes.textContent = (test.nodesExplored ?? 0).toLocaleString();
   elStatDepth.textContent = test.depth;
+  const reasons = {
+    'outside-domain': 'Real axis / unit circle unsupported',
+    'numerical-range': 'Numerical range exceeded',
+    'enclosure-escape': 'Marked point outside enclosure',
+    'trap-hit': 'Trap reached',
+    'tree-exhausted': 'Admissible tree exhausted',
+    'node-cap': 'Per-level node cap reached',
+    'depth-cap': 'Depth limit reached'
+  };
+  if (elStatReason) elStatReason.textContent = reasons[test.stopReason] || test.stopReason || '';
+  if (elStatEffective) {
+    const effective = getEffectiveC(state.cx, state.cy);
+    const reciprocal = Math.hypot(state.cx, state.cy) > 0 && Math.hypot(state.cx, state.cy) < 1;
+    elStatEffective.hidden = !reciprocal;
+    elStatEffective.textContent = reciprocal
+      ? `Evaluated at 1/c = ${effective.x.toPrecision(7)} ${effective.y < 0 ? '−' : '+'} ${Math.abs(effective.y).toPrecision(7)}i` : '';
+  }
+  updateControlsFromState();
   
   if (isInteriorVerdict(test.verdict) && test.word) {
     elStatWord.textContent = `[${test.word.join(', ')}]`;
-    elStatWord.style.color = test.verdict === 'Interior-offLens' ? '#2563eb' : '#059669';
+    elStatWord.style.color = test.verdict === 'Interior-offLens' ? '#2563eb' : 'var(--color-interior)';
   } else if (test.verdict === 'Exterior' && test.word && test.word.length > 0) {
     elStatWord.textContent = `[${test.word.join(', ')}]`;
     elStatWord.style.color = '#dc2626'; // distinguished red for escape word
@@ -2031,219 +1659,183 @@ function updateStatusBar(test) {
 
 // Update color boxes in Legend overlays
 function updateLegendColors() {
-  const elLocus = document.getElementById('legend-locus-color');
-  const elDiff = document.getElementById('legend-diff-color');
-  const elOffLens = document.getElementById('legend-offlens-color');
-  
-  if (state.showEscapeStrata) {
-    elLocus.style.background = '#ffffff';
-    elLocus.style.border = '1px solid #cbd5e1';
-    elDiff.style.background = '#ffffff';
-    elDiff.style.border = '1px solid #cbd5e1';
-    if (elOffLens) { elOffLens.style.background = '#ffffff'; elOffLens.style.border = '1px solid #cbd5e1'; }
-  } else {
-    const c0 = getColorForLevel(0, 0);
-    const rgbStr = rgbToCss(c0);
-    elLocus.style.background = rgbStr;
-    elLocus.style.border = '1px solid rgba(0, 0, 0, 0.1)';
-    elDiff.style.background = rgbStr;
-    elDiff.style.border = '1px solid rgba(0, 0, 0, 0.1)';
-    if (elOffLens) {
-      const off = getOffLensInteriorColorForLevel(0, 0);
-      elOffLens.style.background = rgbToCss(off);
-      elOffLens.style.border = '1px solid rgba(0, 0, 0, 0.1)';
-    }
+  const swatch = (id, color) => {
+    const element = document.getElementById(id);
+    if (element) element.style.background = color;
+    return element;
+  };
+  const interior = state.showEscapeStrata ? getExteriorColorString() : rgbToCss(getColorForLevel(0, 0));
+  swatch('legend-locus-color', interior);
+  swatch('legend-diff-color', interior);
+  swatch('legend-offlens-color', state.showEscapeStrata ? getExteriorColorString() : rgbToCss(getOffLensInteriorColorForLevel(0, 0)));
+  swatch('legend-undetermined-color', getUndeterminedColorString());
+  const exterior = swatch('legend-exterior-color', state.showEscapeStrata
+    ? `linear-gradient(90deg, ${getEscapeColorString(0)}, ${getEscapeColorString(10)})` : getExteriorColorString());
+  if (exterior) exterior.nextElementSibling.textContent = state.showEscapeStrata ? 'Escape depth (mod 11)' : 'Exterior';
+  swatch('legend-coll-color', state.firstLevelPieces && state.rendererMode !== 'survival'
+    ? `linear-gradient(90deg, ${PIECE_COLORS.slice(0, state.n).join(', ')})` : activePalette().branch);
+  for (const [selector, visible] of [
+    ['#legend-diff-color', state.showDifference],
+    ['#legend-coll-color', state.showCollinear],
+    ['.legend-trap', state.showTrap],
+    ['.legend-enclosure', state.showEnclosure]
+  ]) {
+    const element = document.querySelector(selector);
+    if (element) element.closest('.legend-item').hidden = !visible;
   }
 }
 
-// User Interaction: Drag and Drop locator or Pan on Parameter Canvas
-canvasParam.addEventListener('mousedown', (e) => {
-  const dot = paramToScreen(state.cx, state.cy);
-  const d = Math.sqrt((e.offsetX - dot.x) ** 2 + (e.offsetY - dot.y) ** 2);
-  pushHistory();
-  
-  if (d <= 12) {
-    draggingParamLocator = true;
-    paramDrag.dragging = false;
-  } else {
-    draggingParamLocator = false;
-    paramDrag.dragging = true;
-    paramDrag.startX = e.clientX;
-    paramDrag.startY = e.clientY;
-  }
-});
-
-canvasParam.addEventListener('mousemove', (e) => {
-  const dot = paramToScreen(state.cx, state.cy);
-  const d = Math.sqrt((e.offsetX - dot.x) ** 2 + (e.offsetY - dot.y) ** 2);
-  
-  if (draggingParamLocator) {
-    const coord = screenToParam(e.offsetX, e.offsetY);
+// Pointer capture keeps drags stable across canvas boundaries; the same controls work by touch.
+function bindCanvasInteractions(canvas, panel) {
+  const isParam = panel === 'param';
+  const fromScreen = isParam ? screenToParam : screenToDyn;
+  const toScreen = isParam ? paramToScreen : dynToScreen;
+  const centerKey = isParam ? 'paramCenter' : 'dynCenter';
+  const zoomKey = isParam ? 'paramZoom' : 'dynZoom';
+  const rerender = isParam ? triggerParamRender : triggerDynRender;
+  const pointers = new Map();
+  let dragLocator = false;
+  let lastPoint = null;
+  let pinch = null;
+  let lastTap = null;
+  let wheelTime = -Infinity;
+  const localPoint = e => {
+    const rect = canvas.getBoundingClientRect();
+    return { x: (e.clientX - rect.left) * canvas.width / rect.width,
+      y: (e.clientY - rect.top) * canvas.height / rect.height };
+  };
+  const selectPoint = point => {
+    const coord = fromScreen(point.x, point.y);
     state.cx = coord.x;
     state.cy = coord.y;
+    Object.assign(state, normalizeExplorerState(state, DEFAULT_STATE));
+    updateControlsFromState();
     drawParameterLensGuides();
     triggerDynRender();
-  } else if (paramDrag.dragging) {
-    const dx = e.clientX - paramDrag.startX;
-    const dy = e.clientY - paramDrag.startY;
-    paramDrag.startX = e.clientX;
-    paramDrag.startY = e.clientY;
-    
-    const w = canvasParam.width;
-    const h = canvasParam.height;
-    const vw = state.paramZoom;
-    const vh = vw * (h / w);
-    
-    state.paramCenter.x -= dx * (vw / w);
-    state.paramCenter.y += dy * (vh / h);
-    
-    triggerParamRender();
-  } else {
-    // hover cursor state
-    if (d <= 12) {
-      canvasParam.style.cursor = 'move';
-    } else {
-      canvasParam.style.cursor = 'crosshair';
+  };
+  const zoomAt = (point, factor) => {
+    const anchor = fromScreen(point.x, point.y);
+    const nextZoom = Math.max(1e-10, Math.min(1e6, state[zoomKey] * factor));
+    const ratio = nextZoom / state[zoomKey];
+    state[centerKey].x = anchor.x + (state[centerKey].x - anchor.x) * ratio;
+    state[centerKey].y = anchor.y + (state[centerKey].y - anchor.y) * ratio;
+    state[zoomKey] = nextZoom;
+    Object.assign(state, normalizeExplorerState(state, DEFAULT_STATE));
+  };
+  const pinchState = () => {
+    const [a, b] = [...pointers.values()];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, distance: Math.hypot(a.x - b.x, a.y - b.y) };
+  };
+  canvas.addEventListener('pointerdown', e => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    canvas.focus({ preventScroll: true });
+    const point = localPoint(e);
+    pointers.set(e.pointerId, point);
+    canvas.setPointerCapture(e.pointerId);
+    if (pointers.size === 1) {
+      pushHistory();
+      exampleLoadGeneration++;
+      const effective = getEffectiveC(state.cx, state.cy);
+      const dot = isParam ? toScreen(state.cx, state.cy) : toScreen(effective.x, effective.y);
+      dragLocator = Math.hypot(point.x - dot.x, point.y - dot.y) <= (e.pointerType === 'touch' ? 24 : 12);
+      lastPoint = point;
+      const now = performance.now();
+      if (e.pointerType === 'touch' && lastTap && now - lastTap.time < 300 && Math.hypot(point.x - lastTap.x, point.y - lastTap.y) < 24) {
+        selectPoint(point);
+        lastTap = null;
+      } else {
+        lastTap = { ...point, time: now };
+      }
+    } else if (pointers.size === 2) {
+      dragLocator = false;
+      pinch = pinchState();
+      lastTap = null;
     }
-  }
-});
-
-canvasParam.addEventListener('mouseup', () => {
-  draggingParamLocator = false;
-  paramDrag.dragging = false;
-});
-canvasParam.addEventListener('mouseleave', () => {
-  draggingParamLocator = false;
-  paramDrag.dragging = false;
-});
-
-canvasParam.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  pushHistory();
-  const mouse = screenToParam(e.offsetX, e.offsetY);
-  const factor = e.deltaY < 0 ? 0.85 : 1.15;
-  
-  state.paramCenter.x = mouse.x + (state.paramCenter.x - mouse.x) * factor;
-  state.paramCenter.y = mouse.y + (state.paramCenter.y - mouse.y) * factor;
-  state.paramZoom *= factor;
-  
-  triggerParamRender();
-});
-
-// User Interaction: Drag and Drop locator or Pan on Dynamical Canvas
-canvasDyn.addEventListener('mousedown', (e) => {
-  const dot = dynToScreen(state.cx, state.cy);
-  const d = Math.sqrt((e.offsetX - dot.x) ** 2 + (e.offsetY - dot.y) ** 2);
-  pushHistory();
-  
-  if (d <= 12) {
-    draggingDynLocator = true;
-    dynDrag.dragging = false;
-  } else {
-    draggingDynLocator = false;
-    dynDrag.dragging = true;
-    dynDrag.startX = e.clientX;
-    dynDrag.startY = e.clientY;
-  }
-});
-
-canvasDyn.addEventListener('mousemove', (e) => {
-  const dot = dynToScreen(state.cx, state.cy);
-  const d = Math.sqrt((e.offsetX - dot.x) ** 2 + (e.offsetY - dot.y) ** 2);
-  
-  if (draggingDynLocator) {
-    const coord = screenToDyn(e.offsetX, e.offsetY);
-    state.cx = coord.x;
-    state.cy = coord.y;
-    drawParameterLensGuides();
-    triggerDynRender();
-  } else if (dynDrag.dragging) {
-    const dx = e.clientX - dynDrag.startX;
-    const dy = e.clientY - dynDrag.startY;
-    dynDrag.startX = e.clientX;
-    dynDrag.startY = e.clientY;
-    
-    const w = canvasDyn.width;
-    const h = canvasDyn.height;
-    const vw = state.dynZoom;
-    const vh = vw * (h / w);
-    
-    state.dynCenter.x -= dx * (vw / w);
-    state.dynCenter.y += dy * (vh / h);
-    
-    triggerDynRender();
-  } else {
-    if (d <= 12) {
-      canvasDyn.style.cursor = 'move';
-    } else {
-      canvasDyn.style.cursor = 'crosshair';
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!pointers.has(e.pointerId)) return;
+    const point = localPoint(e);
+    pointers.set(e.pointerId, point);
+    if (pointers.size === 2) {
+      const next = pinchState();
+      if (pinch && next.distance > 1 && pinch.distance > 1) {
+        zoomAt(next, pinch.distance / next.distance);
+        state[centerKey].x -= (next.x - pinch.x) * state[zoomKey] / canvas.width;
+        state[centerKey].y += (next.y - pinch.y) * state[zoomKey] / canvas.width;
+        Object.assign(state, normalizeExplorerState(state, DEFAULT_STATE));
+        rerender();
+      }
+      pinch = next;
+    } else if (dragLocator) {
+      selectPoint(point);
+    } else if (lastPoint) {
+      state[centerKey].x -= (point.x - lastPoint.x) * state[zoomKey] / canvas.width;
+      state[centerKey].y += (point.y - lastPoint.y) * state[zoomKey] / canvas.width;
+      Object.assign(state, normalizeExplorerState(state, DEFAULT_STATE));
+      rerender();
     }
-  }
-});
-
-canvasDyn.addEventListener('mouseup', () => {
-  draggingDynLocator = false;
-  dynDrag.dragging = false;
-});
-canvasDyn.addEventListener('mouseleave', () => {
-  draggingDynLocator = false;
-  dynDrag.dragging = false;
-});
-
-canvasDyn.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  pushHistory();
-  const mouse = screenToDyn(e.offsetX, e.offsetY);
-  const factor = e.deltaY < 0 ? 0.85 : 1.15;
-  
-  state.dynCenter.x = mouse.x + (state.dynCenter.x - mouse.x) * factor;
-  state.dynCenter.y = mouse.y + (state.dynCenter.y - mouse.y) * factor;
-  state.dynZoom *= factor;
-  
-  triggerDynRender();
-});
-
-// Double click locator positioning
-canvasParam.addEventListener('dblclick', (e) => {
-  withHistory(() => {
-    const coord = screenToParam(e.offsetX, e.offsetY);
-    state.cx = coord.x;
-    state.cy = coord.y;
-  }, 'dyn');
-});
-
-canvasDyn.addEventListener('dblclick', (e) => {
-  withHistory(() => {
-    const coord = screenToDyn(e.offsetX, e.offsetY);
-    state.cx = coord.x;
-    state.cy = coord.y;
-  }, 'dyn');
-});
-
-// Mobile Double Tap Gesture helper
-function enableDoubleTap(canvas, getCoordFn) {
-  let lastTap = 0;
-  canvas.addEventListener('touchstart', (e) => {
-    const now = Date.now();
-    const doubleTapTimeout = 300;
-    if (now - lastTap < doubleTapTimeout) {
-      e.preventDefault();
-      const touch = e.touches[0];
-      const rect = canvas.getBoundingClientRect();
-      const sx = touch.clientX - rect.left;
-      const sy = touch.clientY - rect.top;
-      const coord = getCoordFn(sx, sy);
-      withHistory(() => {
-        state.cx = coord.x;
-        state.cy = coord.y;
-      }, 'dyn');
-    }
-    lastTap = now;
+    lastPoint = point;
+  });
+  const endPointer = e => {
+    pointers.delete(e.pointerId);
+    if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+    pinch = null;
+    lastPoint = pointers.size ? [...pointers.values()][0] : null;
+    if (!pointers.size) dragLocator = false;
+  };
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
+  canvas.addEventListener('lostpointercapture', e => { pointers.delete(e.pointerId); });
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    exampleLoadGeneration++;
+    const now = performance.now();
+    if (now - wheelTime > 250) pushHistory();
+    wheelTime = now;
+    zoomAt(localPoint(e), Math.exp(Math.max(-0.35, Math.min(0.35, e.deltaY * 0.0015))));
+    rerender();
   }, { passive: false });
+  canvas.addEventListener('dblclick', e => withHistory(() => selectPoint(localPoint(e)), 'dyn'));
+  canvas.addEventListener('keydown', e => {
+    const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
+    if (arrows[e.key]) {
+      e.preventDefault();
+      withHistory(() => {
+        const [dx, dy] = arrows[e.key];
+        const distance = state[zoomKey] * (e.shiftKey ? 0.005 : 0.08);
+        if (e.shiftKey) { state.cx += dx * distance; state.cy += dy * distance; }
+        else { state[centerKey].x += dx * distance; state[centerKey].y += dy * distance; }
+      }, e.shiftKey ? 'dyn' : panel);
+    } else if (['+', '=', '-', '_'].includes(e.key)) {
+      e.preventDefault();
+      withHistory(() => zoomAt({ x: canvas.width / 2, y: canvas.height / 2 }, ['+', '='].includes(e.key) ? 0.8 : 1.25), panel);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      withHistory(isParam ? resetParamViewportMath : resetDynViewportMath, panel);
+    }
+  });
+}
+bindCanvasInteractions(canvasParam, 'param');
+bindCanvasInteractions(canvasDyn, 'dyn');
+
+
+
+function readNumericInput(element, fallback) {
+  if (!element.value.trim()) return fallback;
+  const value = Number(element.value);
+  return Number.isFinite(value) ? value : fallback;
 }
 
-enableDoubleTap(canvasParam, screenToParam);
-enableDoubleTap(canvasDyn, screenToDyn);
+for (const input of [elParamReal, elParamImag]) {
+  if (input) input.addEventListener('change', () => {
+    withHistory(() => {
+      state.cx = readNumericInput(elParamReal, state.cx);
+      state.cy = readNumericInput(elParamImag, state.cy);
+    }, 'dyn');
+    elParamReal.value = state.cx;
+    elParamImag.value = state.cy;
+  });
+}
 
 // Event Listeners for Sidebar Controls
 elAritySlider.addEventListener('input', (e) => {
@@ -2256,13 +1848,13 @@ elAritySlider.addEventListener('input', (e) => {
 
 elKmax.addEventListener('change', (e) => {
   withHistory(() => {
-    state.kMax = parseInt(e.target.value);
+    state.kMax = readNumericInput(e.target, state.kMax);
   }, 'both');
 });
 
 elLmax.addEventListener('change', (e) => {
   withHistory(() => {
-    state.LMax = parseInt(e.target.value);
+    state.LMax = readNumericInput(e.target, state.LMax);
   }, 'both');
 });
 
@@ -2333,7 +1925,7 @@ if (elBtnCopyCertificate) {
         elBtnCopyCertificate.textContent = 'Certificate Copied';
         window.setTimeout(() => { elBtnCopyCertificate.textContent = originalText; }, 1200);
       })
-      .catch(err => console.error('Could not copy certificate JSON:', err));
+      .catch(() => openModal('Copy search record', `<p>Copy the record below.</p><pre tabindex="0">${htmlEscape(JSON.stringify(currentCertificatePayload(), null, 2))}</pre>`));
   });
 }
 
@@ -2356,8 +1948,11 @@ if (elExamplePreset) {
   elExamplePreset.addEventListener('change', async (e) => {
     const id = e.target.value;
     if (!id) return;
+    const generation = ++exampleLoadGeneration;
     const config = await loadExampleConfig(id);
+    if (generation !== exampleLoadGeneration || e.target.value !== id) return;
     withHistory(() => applyExampleConfig(config), 'both');
+    elExamplePreset.value = id;
   });
 }
 
@@ -2371,7 +1966,6 @@ if (elOriginalRendererMode) {
   elOriginalRendererMode.addEventListener('change', (e) => {
     withHistory(() => {
       state.rendererMode = e.target.value;
-      if (state.rendererMode !== 'survival') loadAttractorRenderers();
     }, 'dyn');
   });
 }
@@ -2466,6 +2060,19 @@ document.getElementById('dynamical-panel').addEventListener('dblclick', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
+  if (elModalBackdrop && !elModalBackdrop.hidden) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeModal();
+    } else if (e.key === 'Tab') {
+      const focusables = [...elModalBackdrop.querySelectorAll('button, a[href], input, select, textarea, [tabindex="0"]')]
+        .filter(element => !element.disabled && element.getClientRects().length > 0);
+      const first = focusables[0], last = focusables.at(-1);
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+    }
+    return;
+  }
   if (e.target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
     e.preventDefault();
@@ -2474,10 +2081,10 @@ document.addEventListener('keydown', (e) => {
   } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
     e.preventDefault();
     redoState();
-  } else if (e.key.toLowerCase() === 's') {
+  } else if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === 's') {
     e.preventDefault();
     saveExplorerImage();
-  } else if (e.key.toLowerCase() === 'g') {
+  } else if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'g') {
     e.preventDefault();
     openShareModal('share');
   } else if (e.key === '?') {
@@ -2489,13 +2096,30 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Initial startup call
+// Initial startup and externally navigated share states.
+const controlsDisclosure = document.getElementById('controls-disclosure');
+const mobileLayout = window.matchMedia('(max-width: 960px)');
+if (controlsDisclosure) {
+  controlsDisclosure.open = !mobileLayout.matches;
+  mobileLayout.addEventListener('change', e => {
+    if (!e.matches) controlsDisclosure.open = true;
+    scheduleResize();
+  });
+}
 const hasInitialHashState = Boolean(window.location.hash && window.location.hash.length > 1);
 applyStateFromHash();
 populateExamplePresets();
 loadExampleIndex();
 updateControlsFromState();
 updateLegendColors();
-resizeCanvases({ resetViewports: !hasInitialHashState });
 updatePanelFocus();
-if (state.rendererMode !== 'survival') loadAttractorRenderers();
+resizeCanvases({ resetViewports: !hasInitialHashState });
+triggerParamRender();
+triggerDynRender();
+window.addEventListener('hashchange', () => {
+  pushHistory();
+  exampleLoadGeneration++;
+  applyStateFromHash();
+  updateControlsFromState();
+  renderAfterStateChange('both');
+});

@@ -1,7 +1,8 @@
-# Browser QA Checklist
+# Historical Browser QA Checklist
 
-Use this checklist before internal review or release-candidate review. Results
-are recorded after a real browser session is completed.
+This preserves a prior browser session on the commit below. Its passing results
+do not apply automatically to newer revisions. For current checks, follow
+[VALIDATION.md](VALIDATION.md) and record the actual revision and browser used.
 
 ## Environment
 

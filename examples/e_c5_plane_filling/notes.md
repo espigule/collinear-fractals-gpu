@@ -4,7 +4,7 @@ This thesis-canonical example is a visual starting point for plane-filling
 behavior in the collinear family \(E(c,5)\), where \(N = 2n-1 = 9\).
 
 - Parameter: \(c = 1 + 2i\), with \(n = 5\) and \(N = 2n-1 = 9\).
-- Expected verdict: illustrative geometry.
+- Expected numerical verdict: `Undetermined` at the frontier cap with the default limits.
 - Status: illustrative-thesis-example with visual status `visual-approximation`.
 - Related thesis figure: Figure 3.2.
 - Related work: 2024 collinear-fractals/Bandt framework and the thesis

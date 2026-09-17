@@ -1,7 +1,8 @@
+import { assertAlphabetSize, assertArity, MAX_RENDER_POINTS } from './validation.mjs';
+
 export function alphabet(m) {
-  if (!Number.isInteger(m) || m < 2) {
-    throw new RangeError('alphabet size m must be an integer >= 2');
-  }
+  assertAlphabetSize(m);
+  if (m > MAX_RENDER_POINTS) throw new RangeError('alphabet allocation exceeds the render work cap');
   const digits = [];
   for (let a = -m + 1; a <= m - 1; a += 2) {
     digits.push(a);
@@ -10,8 +11,6 @@ export function alphabet(m) {
 }
 
 export function differenceAlphabetIndex(n) {
-  if (!Number.isInteger(n) || n < 2) {
-    throw new RangeError('arity n must be an integer >= 2');
-  }
+  assertArity(n);
   return 2 * n - 1;
 }

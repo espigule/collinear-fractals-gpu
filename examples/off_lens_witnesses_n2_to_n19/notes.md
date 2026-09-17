@@ -1,18 +1,20 @@
-# Off-lens witnesses for 2 <= n <= 19
+# Off-lens search example for n=3
 
-This example is a runnable placeholder for the off-lens witness family used to
-keep `Interior` distinct from `Interior-offLens`. The default viewport records
-one representative parameter for \(n = 13\), where \(N = 2n-1 = 25\).
+At $n=3$ and $c=1.419643377607+0.606290729207i$, the default search
+(`k_max = 37`, `L_max = 1000`, `tol = 1e-8`) returns `Interior-offLens` at
+depth 2 with inverse word `[4, 0]`. This parameter lies outside the strict lens.
+It is also a regression case in the JavaScript and Python packages.
 
-- Parameter: \(c = 0.72 + 1.38i\).
-- Expected verdict: exploratory off-lens witness behavior.
-- Status: exploratory until a curated witness table is added.
-- Related work: the 2026 finite-capture framework and thesis discussion of
-  off-lens witnesses for \(2 \le n \le 19\).
+Choose this preset in the browser to compare the off-lens trap with the
+in-lens example at $c=0.5+1.1i$. The digits belong to
+$A_5=\{-4,-2,0,2,4\}$ and are applied from left to right to the marked point
+$2c$ under $g_t(z)=c(z-t)$.
 
-To reproduce, open the browser explorer, select this example from the curated
-example menu, and inspect whether the selected parameter is labeled
-`Interior-offLens` rather than in-lens `Interior`.
+The directory ID is retained for existing links. Only this single numerical
+case is supplied here; this directory does not contain the complete witness
+table for every $2\leq n\leq19$ in the mathematical paper. The earlier
+$n=13$, $c=0.72+1.38i$ preset was in the lens and has been corrected.
 
-The visualization is an inspection aid. Theorem-level proofs do not rely on
-visual inspection.
+The displayed decimal parameter and floating-point word evaluation are
+reproducibility data. No interval or algebraic verification is supplied by this
+preset.

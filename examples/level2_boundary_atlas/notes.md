@@ -4,9 +4,9 @@ This example reserves a reproducible entry point for the level-2 boundary atlas
 used to inspect finite-capture layers and boundary transitions.
 
 The parameter is `n = 3`, so `N = 2n - 1 = 5`, with
-`c = 0.5 + 1.1i`. The expected status is exploratory: this entry is a clean
-metadata and share-state target for atlas development, not a theorem-level
-certificate.
+`c = 0.5 + 1.1i`. The numerical search returns `Interior` at depth zero. The atlas status is
+exploratory: this is a preset and metadata target for future atlas development,
+not a completed atlas or theorem-level certificate.
 
 To reproduce it, open the explorer, choose this example from the curated
 example list, and keep the original-attractor renderer in prefix-cylinder mode.

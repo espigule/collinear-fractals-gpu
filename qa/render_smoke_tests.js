@@ -89,7 +89,8 @@ function fakeCanvasContext() {
   assert(!explorer.includes('r = 255 - r'), 'Legacy color inversion remains in explorer.js.');
   assert(!explorer.includes('dilatedGrid'), 'Legacy dilation grid remains in explorer.js.');
   assert(!explorer.includes('3x3'), 'Legacy dilation wording remains in explorer.js.');
-  assert(explorer.includes("rendererMode: 'prefix'"), 'Prefix-cylinder mode is not the default.');
+  const { DEFAULT_EXPLORER_STATE } = await import('../src/state/explorer_state.mjs');
+  assert(DEFAULT_EXPLORER_STATE.rendererMode === 'prefix', 'Prefix-cylinder mode is not the default.');
   assert(explorer.includes("state.rendererMode === 'survival'"), 'Survival renderer is not explicit.');
 
   const examples = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'examples', 'examples.json'), 'utf8'));

@@ -1,18 +1,17 @@
 ## Summary
 
-- 
+Describe the concrete problem and resulting behavior. For mathematical changes,
+state the map convention and whether evidence is numerical or rigorously verified.
 
 ## Validation
 
-- [ ] `node --check explorer.js`
-- [ ] `node qa/explorer-prefix-smoke-test.js`
-- [ ] `cd javascript && npm test`
-- [ ] `cd python && python3 -m unittest -v test_collinear.py`
-- [ ] `python3 tools/validate_bundle.py`
-- [ ] `cd swift && swift test`
+- [ ] `npm test` (syntax, schemas, examples, reference packages and regressions)
+- [ ] `npm run test:browser` (real desktop/mobile Chromium and staged public assets)
+- [ ] `swift test --package-path swift --jobs 2`
+- [ ] Any changed native-language port checked in its runtime, or limitation recorded
+- [ ] Relevant screenshots and search/figure metadata inspected
 
 ## Release impact
 
-- [ ] No version or citation metadata changes
-- [ ] Version metadata updated consistently
-- [ ] Documentation and QA notes updated
+State any input, API, numerical-output or rendering changes. Update the changelog
+and documentation. Change version metadata only when preparing a release.

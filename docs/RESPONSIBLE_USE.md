@@ -1,35 +1,51 @@
-# Responsible Use and Certification Boundaries
+# Interpreting Numerical Results
 
-This document describes what the explorer can report, what it cannot certify,
-and what information should accompany issue reports.
+The explorer produces numerical evidence for collinear-fractal research.
+Use the exported parameter, search settings, inverse word, and software
+revision to reproduce a result.
 
-## What the explorer can do
+## Arithmetic and verdicts
 
-- Render visual approximations of \(E(c,n)\).
-- Render finite-search and certificate-status layers.
-- Export finite inverse-word and certificate metadata.
-- Reproduce curated examples and figure metadata.
+The browser, JavaScript, Python, and Swift implementations use ordinary
+floating-point arithmetic. The enclosure tail estimate bounds the omitted
+mathematical series; its `tailCertifiedToTol` flag does **not** bound rounding
+errors in the coordinates, trigonometric sums, or inverse iterates.
 
-## What the explorer does not do
+| Verdict | What the computation found |
+|---|---|
+| `Interior` | Strict entry into the in-lens trap. |
+| `Interior-offLens` | Strict entry using the separate off-lens trap rule. |
+| `Exterior` | Enclosure escape or exhaustion of the admissible inverse tree. |
+| `Undetermined` | A search limit, unsupported domain, or numerical-range limit. |
 
-- It is not a formal proof checker.
-- It does not make visual inspection into proof.
-- It does not certify every displayed pixel.
-- It does not replace the theorem-level inequalities in the papers or thesis.
+A result close to an inequality boundary needs error-controlled verification
+before it can support a proof. The mathematical hypotheses for the trap and
+enclosure must also hold. The software does not supply an interval-arithmetic
+checker for those obligations.
 
-## Meaning of verdicts
+`Undetermined` is a lack of conclusion. It is not a boundary classification,
+and surviving a finite search does not establish membership.
 
-- `Interior`: in-lens canonical trap hit.
-- `Interior-offLens`: off-lens trap hit under the enabled off-lens rule.
-- `Exterior`: enclosure escape or complete admissible-tree exhaustion.
-- `Undetermined`: depth or node cap reached.
+## Images and JSON
 
-## Visual versus certificate metadata
+Prefix and histogram renderers produce finite visual approximations. They do
+not classify every point covered by a drawn pixel. Changes to visual depth,
+seed, sample count, and opacity describe an image, independently of the
+selected-parameter search.
 
-Visual renderers have `visual-approximation` status. Certificate exports have
-finite-search status. These fields must not be merged or treated as equivalent.
+The historical JSON field `proof_status: "finite-search-certificate"` means a
+finite floating-point search record. It does not assert an independently
+verified theorem. Preserve this context when sharing or citing exported JSON.
+A JSON Schema check validates the shape of a record, not its mathematical
+conclusion.
 
-## Reporting issues
+## Reporting a reproducible issue
 
-When filing an issue, include the parameter, share URL, renderer mode, `n`,
-`k_max`, `L_max`, seed, and certificate JSON when available.
+Include the share URL, parameter convention (direct $c$ or browser reciprocal
+coordinate), `n`, search depth, frontier-width cap, tolerance, and software
+commit. Attach the search JSON when available. For a rendering issue, also
+include renderer mode, visual depth or sample count, seed, and browser version.
+Remove unrelated personal information from screenshots and console logs.
+
+See [implementation notes](IMPLEMENTATION_NOTES.md) for the coordinate and
+search contract and [validation notes](VALIDATION.md) for runnable checks.

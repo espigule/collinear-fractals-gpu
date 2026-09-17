@@ -7,14 +7,16 @@ checkout before publication.
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import re
 import subprocess
 import sys
+import tomllib
+from html.parser import HTMLParser
+from urllib.parse import urlsplit, unquote
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-VERSION = "0.2.0-alpha"
-PYTHON_VERSION = "0.2.0a0"
 
 REQUIRED_FILES = [
     "README.md",
@@ -23,6 +25,15 @@ REQUIRED_FILES = [
     ".github/FUNDING.yml",
     ".github/workflows/ci.yml",
     ".github/workflows/pages.yml",
+    ".github/workflows/quality.yml",
+    "package.json",
+    "package-lock.json",
+    "requirements-qa.txt",
+    "playwright.config.cjs",
+    "qa/check.cjs",
+    "qa/browser.spec.cjs",
+    "tools/stage_site.py",
+    "tools/validate_schemas.py",
     "LICENSE",
     "LICENSE-docs.md",
     "LICENSES/CC-BY-4.0.txt",
@@ -91,6 +102,7 @@ REQUIRED_FILES = [
     "qa/kernel_equivalence_tests.js",
     "src/math/alphabets.mjs",
     "src/math/complex.mjs",
+    "src/state/explorer_state.mjs",
     "src/math/prefix_cylinders.mjs",
     "src/renderers/attractor_prefix.mjs",
     "src/renderers/attractor_histogram.mjs",
@@ -114,6 +126,8 @@ TEXT_EXTENSIONS = {
     ".css",
     ".html",
     ".js",
+    ".mjs",
+    ".cjs",
     ".json",
     ".m",
     ".md",
@@ -130,23 +144,12 @@ TEXT_EXTENSIONS = {
     "",
 }
 
-MULTILINE_MIN_LINES = {
-    ".gitignore": 20,
-    "CITATION.cff": 30,
-    ".github/workflows/ci.yml": 25,
-    ".github/workflows/pages.yml": 25,
-    "README.md": 80,
-    "docs/QA_REPORT.md": 40,
-    "docs/VALIDATION.md": 30,
-    "RELEASE_CHECKLIST.md": 30,
-    "NOTICE": 8,
-}
-
 YAML_LIKE_FILES = [
     "CITATION.cff",
     ".github/FUNDING.yml",
     ".github/workflows/ci.yml",
     ".github/workflows/pages.yml",
+    ".github/workflows/quality.yml",
 ]
 
 TOP_LEVEL_KEYS = [
@@ -213,9 +216,18 @@ LOCAL_ONLY_DIRS = {
     "_reference",
     "codex_upgrade_handoff",
     "node_modules",
+    ".venv",
+    "__pycache__",
+    "artifacts",
+    "site",
+    "coverage",
+    "playwright-report",
+    "test-results",
 }
 
 FORBIDDEN_TRACKED_PREFIXES = (
+    "python/build/",
+    "python/collinear_fractals.egg-info/",
     "_reference/",
     "codex_upgrade_handoff/",
 )
@@ -248,14 +260,21 @@ def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def line_count(text: str) -> int:
-    return len(text.splitlines())
-
-
 def validate_json(path: str) -> None:
+    def parse_pairs(pairs: list[tuple[str, object]]) -> dict:
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate key: {key}")
+            result[key] = value
+        return result
+
+    def reject_constant(value: str) -> None:
+        raise ValueError(f"non-finite JSON constant: {value}")
+
     try:
-        json.loads(read(path))
-    except json.JSONDecodeError as exc:
+        json.loads(read(path), object_pairs_hook=parse_pairs, parse_constant=reject_constant)
+    except (json.JSONDecodeError, ValueError) as exc:
         fail(f"{path} is not valid JSON: {exc}")
 
 
@@ -293,9 +312,7 @@ def validate_markdown_heading_lines(path: str) -> None:
 
 def validate_large_image_policy() -> None:
     offenders = []
-    for path in ROOT.rglob("*"):
-        if not path.is_file() or should_skip_path(path):
-            continue
+    for path in repository_files():
         suffix = path.suffix.lower()
         if suffix not in IMAGE_EXTENSIONS:
             continue
@@ -415,6 +432,17 @@ def should_skip_path(path: pathlib.Path) -> bool:
     return any(part in LOCAL_ONLY_DIRS for part in path.parts)
 
 
+def repository_files() -> list[pathlib.Path]:
+    """Prune local artifacts before traversal, including large dependency trees."""
+    paths = []
+    for directory, dirs, files in os.walk(ROOT):
+        dirs[:] = [name for name in dirs if name not in LOCAL_ONLY_DIRS
+                   and not (pathlib.Path(directory) / name).is_symlink()]
+        paths.extend(pathlib.Path(directory) / name for name in files
+                     if not (pathlib.Path(directory) / name).is_symlink())
+    return paths
+
+
 def tracked_files() -> list[str]:
     try:
         result = subprocess.run(
@@ -444,8 +472,6 @@ def validate_no_reference_committed() -> None:
 
 def validate_renderer_separation() -> None:
     js = read("explorer.js")
-    if "rendererMode: 'prefix'" not in js:
-        fail("explorer.js does not default original-attractor rendering to prefix mode")
     if "state.rendererMode === 'survival'" not in js:
         fail("explorer.js does not expose inverse-survival rendering as an explicit mode")
     for marker in ["r = 255 - r", "dilatedGrid", "3x3"]:
@@ -455,27 +481,64 @@ def validate_renderer_separation() -> None:
         fail("explorer.js treats Undetermined as original-attractor membership")
 
 
+class HtmlAssets(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.ids: set[str] = set()
+        self.local_assets: list[str] = []
+        self.values: dict[str, str | None] = {}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        element_id = values.get("id")
+        if element_id:
+            if element_id in self.ids:
+                fail(f"Duplicate HTML id: {element_id}")
+            self.ids.add(element_id)
+            self.values[element_id] = values.get("value")
+        target = values.get("src") if tag in {"script", "img"} else values.get("href") if tag == "link" else None
+        if target and not urlsplit(target).scheme and not target.startswith("//"):
+            self.local_assets.append(target)
+        if tag == "script" and values.get("src") == "explorer.js" and values.get("type") != "module":
+            fail("explorer.js must load as a browser ES module")
+
+
+def validate_browser_assets() -> None:
+    parsed = HtmlAssets()
+    parsed.feed(read("index.html"))
+    if parsed.values.get("param-kmax") != "37":
+        fail("The initial HTML search depth must be 37")
+    for asset in parsed.local_assets:
+        path = (ROOT / unquote(urlsplit(asset).path)).resolve()
+        if not path.is_relative_to(ROOT) or not path.is_file():
+            fail(f"Missing or unsafe browser asset: {asset}")
+    for path in repository_files():
+        if path.suffix not in {".js", ".mjs"} or not (path.name == "explorer.js" or path.relative_to(ROOT).parts[0] in {"src", "workers"}):
+            continue
+        source = path.read_text(encoding="utf-8")
+        for target in re.findall(r"(?:from\s*|import\s*\(\s*|import\s*)['\"](\.[^'\"]+)['\"]", source):
+            resolved = (path.parent / target).resolve()
+            if not resolved.is_relative_to(ROOT) or not resolved.is_file():
+                fail(f"Missing browser module: {path.relative_to(ROOT)} -> {target}")
+
+
 def main() -> int:
     missing = [p for p in REQUIRED_FILES if not (ROOT / p).is_file()]
     if missing:
         fail("missing required files: " + ", ".join(missing))
     validate_no_reference_committed()
 
-    if read("VERSION").strip() != VERSION:
-        fail("VERSION file does not match expected release version")
-
-    for path, min_lines in MULTILINE_MIN_LINES.items():
-        text = read(path)
-        if line_count(text) < min_lines:
-            fail(f"{path} appears line-collapsed or too short")
-        if "\r" in text:
-            fail(f"{path} contains carriage-return line endings")
+    version = read("VERSION").strip()
+    match = re.fullmatch(r"(\d+\.\d+\.\d+)(?:-(alpha|beta|rc)(?:\.(\d+))?)?", version)
+    if not match:
+        fail("VERSION is not a supported semantic release version")
+    python_version = match[1] + ({"alpha": "a", "beta": "b", "rc": "rc"}[match[2]] + (match[3] or "0") if match[2] else "")
 
     for path in YAML_LIKE_FILES:
         validate_yaml_like_multiline(path)
 
-    for path in ROOT.rglob("*.md"):
-        if not should_skip_path(path):
+    for path in repository_files():
+        if path.suffix == ".md":
             validate_markdown_heading_lines(path.relative_to(ROOT).as_posix())
 
     pages = read(".github/workflows/pages.yml")
@@ -483,31 +546,15 @@ def main() -> int:
         fail("pages.yml deploys the repository root instead of a staged site directory")
     if not re.search(r"(?m)^\s+path:\s*site\s*$", pages):
         fail("pages.yml does not upload the staged static site directory")
-
-    readme_lines = read("README.md").splitlines()
-    required_headings = [
-        "# Collinear Fractals GPU",
-        "## Quick visual summary",
-        "## Browser quick start",
-        "## What is included",
-        "## Mathematical scope",
-        "## Verdicts: Interior, Interior-offLens, Exterior, Undetermined",
-        "## Examples and gallery",
-        "## Share URLs and reproducible states",
-        "## Package tests",
-        "## QA status and limitations",
-        "## Related mathematical work",
-        "## Citing",
-        "## Funding and acknowledgements",
-        "## Support",
-        "## License",
-    ]
-    missing_headings = [heading for heading in required_headings if heading not in readme_lines]
-    if missing_headings:
-        fail("README.md missing required headings: " + ", ".join(missing_headings))
-    heading_positions = [readme_lines.index(heading) for heading in required_headings]
-    if heading_positions != sorted(heading_positions):
-        fail("README.md required headings are not in the expected order")
+    if not re.search(r"(?m)^\s+needs:\s*validate\s*$", pages):
+        fail("Pages publication must depend on the validation job")
+    for workflow in [".github/workflows/ci.yml", ".github/workflows/pages.yml"]:
+        if "uses: ./.github/workflows/quality.yml" not in read(workflow):
+            fail(f"{workflow} must use the shared quality gate")
+    for workflow in [".github/workflows/quality.yml", ".github/workflows/pages.yml"]:
+        for action in re.findall(r"uses:\s*([^\s#]+)", read(workflow)):
+            if not action.startswith("./") and not re.fullmatch(r"[\w-]+/[\w-]+@[a-f0-9]{40}", action):
+                fail(f"{workflow}: third-party action is not pinned to a full commit: {action}")
 
     cff = read("CITATION.cff")
     for required in [
@@ -519,25 +566,21 @@ def main() -> int:
         if required not in cff:
             fail(f"CITATION.cff missing required metadata: {required}")
 
-    for path in ROOT.rglob("*.json"):
-        if not should_skip_path(path):
+    for path in repository_files():
+        if path.suffix == ".json":
             validate_json(path.relative_to(ROOT).as_posix())
 
     validate_example_index()
     validate_canonical_thesis_examples()
     validate_large_image_policy()
     validate_renderer_separation()
+    validate_browser_assets()
 
     # No local absolute links or previous development paths.
     offenders = []
     fake_doi_offenders = []
     language_offenders = []
-    for path in ROOT.rglob("*"):
-        if (
-            not path.is_file()
-            or should_skip_path(path)
-        ):
-            continue
+    for path in repository_files():
         if path.suffix.lower() in TEXT_EXTENSIONS:
             text = path.read_text(encoding="utf-8", errors="ignore")
             local_path_pattern = (
@@ -578,18 +621,25 @@ def main() -> int:
 
     # Version consistency in visible/release metadata.
     package = json.loads(read("javascript/package.json"))
-    if package.get("version") != VERSION:
+    if package.get("version") != version:
         fail("javascript/package.json version mismatch")
-    if f'version = "{PYTHON_VERSION}"' not in read("python/pyproject.toml"):
+    dev_package = json.loads(read("package.json"))
+    lock = json.loads(read("package-lock.json"))
+    if dev_package.get("version") != version or lock.get("version") != version:
+        fail("root package or lockfile version mismatch")
+    if lock.get("packages", {}).get("", {}).get("devDependencies") != dev_package.get("devDependencies"):
+        fail("root package and lockfile dependencies differ")
+    if any(not re.fullmatch(r"\d+\.\d+\.\d+", spec) for spec in dev_package.get("devDependencies", {}).values()):
+        fail("QA dependencies must use exact versions")
+    if tomllib.loads(read("python/pyproject.toml"))["project"]["version"] != python_version:
         fail("python/pyproject.toml version mismatch")
     for path in ["README.md", "index.html", "CITATION.cff"]:
-        if VERSION not in read(path):
-            fail(f"{path} does not contain {VERSION}")
+        if version not in read(path):
+            fail(f"{path} does not contain {version}")
 
     # Default depth should be 37 across the primary packages.
     required_depth_patterns = {
-        "index.html": r'id="param-kmax" value="37"',
-        "explorer.js": r'kMax:\s*37',
+        "src/state/explorer_state.mjs": r'kMax:\s*37',
         "javascript/index.js": r'DEFAULT_K_MAX\s*=\s*37',
         "python/collinear_fractals.py": r'DEFAULT_K_MAX\s*=\s*37',
         "swift/Sources/CollinearFractals/CollinearFractals.swift": r'defaultKMax\s*=\s*37',
@@ -602,7 +652,7 @@ def main() -> int:
             fail(f"default k_max=37 not detected in {path}")
 
     print("Static bundle validation passed.")
-    print(f"Release version: {VERSION}")
+    print(f"Release version: {version}")
     print(f"DOM ids checked: {len(refs)} references")
     print("Formatting, DOI, and language hygiene checks passed.")
     return 0

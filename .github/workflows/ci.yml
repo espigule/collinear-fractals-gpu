@@ -1,4 +1,3 @@
-# Multiline workflow YAML; formatting is checked by tools/validate_bundle.py.
 name: CI
 
 on:
@@ -15,63 +14,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
-    name: Validate release bundle
-    runs-on: macos-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: JavaScript syntax check
-        run: node --check explorer.js
-
-      - name: Browser-engine smoke test
-        run: node qa/explorer-prefix-smoke-test.js
-
-      - name: Renderer smoke tests
-        run: node qa/render_smoke_tests.js
-
-      - name: Kernel equivalence tests
-        run: node qa/kernel_equivalence_tests.js
-
-      - name: Metadata benchmark smoke test
-        run: node tools/bench/render_metadata_bench.js
-
-      - name: JavaScript package tests
-        working-directory: javascript
-        run: npm test
-
-      - name: Python package tests
-        working-directory: python
-        run: python -m unittest -v test_collinear.py
-
-      - name: Static bundle validation
-        run: python tools/validate_bundle.py
-
-      - name: Artifact ignore policy
-        run: |
-          git check-ignore collinear-fractals-gpu_v0.2.0-alpha_source.zip
-          git check-ignore artifacts/example.txt
-          git check-ignore dist/out.tar.gz
-          git check-ignore coverage/index.html
-          git check-ignore certificates/generated/foo.json
-          git check-ignore certificates/scratch/foo.json
-          git check-ignore paper_figures/output/example.png
-          ! git check-ignore examples/e_c4_overlap/config.json
-          ! git check-ignore examples/trap_enclosure_n3/certificate_interior.json
-          ! git check-ignore certificates/verified/example.json
-
-      - name: Swift package tests
-        working-directory: swift
-        run: swift test
+    uses: ./.github/workflows/quality.yml

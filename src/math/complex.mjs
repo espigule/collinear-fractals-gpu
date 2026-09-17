@@ -1,3 +1,5 @@
+import { assertComplex } from './validation.mjs';
+
 export function complex(re, im) {
   return { re, im };
 }
@@ -22,9 +24,15 @@ export function mul(a, b) {
 }
 
 export function inv(z) {
-  const d = abs2(z);
-  if (d === 0) throw new RangeError('cannot invert zero');
-  return { re: z.re / d, im: -z.im / d };
+  assertComplex(z);
+  const magnitude = Math.max(Math.abs(z.re), Math.abs(z.im));
+  if (magnitude === 0) throw new RangeError('cannot invert zero');
+  // Scaling avoids squaring very large or small components. The reciprocal
+  // may still overflow when its true magnitude exceeds the Number range.
+  const re = z.re / magnitude;
+  const im = z.im / magnitude;
+  const denominator = re * re + im * im;
+  return { re: (re / denominator) / magnitude, im: (-im / denominator) / magnitude };
 }
 
 export function div(a, b) {

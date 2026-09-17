@@ -1,16 +1,22 @@
-# Trap/enclosure Interior and Exterior examples
+# Trap/enclosure Search Records for n=3
 
-This example records two small finite-search cases for \(n = 3\), where
-\(N = 2n-1 = 5\).
+This example records three floating-point searches for $n=3$, with difference
+alphabet $A_5=\{-4,-2,0,2,4\}$.
 
-- Interior parameter: \(c = 0.5 + 1.1i\).
-- Exterior parameter: \(c = 3.0 + 3.0i\).
-- Expected verdicts: `Interior` and `Exterior`.
-- Status: certified by the current finite-search export.
-- Related work: 2026 canonical trap and canonical enclosure construction.
+| Parameter | Result | Depth | Inverse word | Record |
+|---|---|---:|---|---|
+| $0.5+1.1i$ | `Interior` | 0 | `[]` | `certificate_interior.json` |
+| $3+3i$ | `Exterior` | 0 | `[]` | `certificate_exterior.json` |
+| $0.7+1.4i$ | `Interior` | 1 | `[2]` | `certificate_interior_word.json` |
 
-To reproduce, run the browser explorer or the JavaScript/Python package tests
-with `k_max = 37` and `L_max = 1000`.
+All use `k_max = 37`, `L_max = 1000`, and `tol = 1e-8`. The first two
+illustrate the initial trap and enclosure tests. The third applies one inverse
+branch $g_2(z)=c(z-2)$ to the marked point $2c$ before entering the trap.
 
-The certificate JSON files are compact reproducibility artifacts. Theorem-level
-proofs do not rely on visual inspection.
+The default preset selects the first case; enter the other listed parameters
+to reproduce them. From the repository root, run
+`node examples/verify_search_records.mjs` to replay every curated search record.
+
+The JSON uses the shared browser certificate builder and the declared schema.
+It records finite floating-point calculations, not interval-verified proofs.
+The historical `certificate` filename is preserved for compatibility.

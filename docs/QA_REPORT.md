@@ -2,6 +2,11 @@
 
 Date: 2026-05-28
 
+This is the preserved report for the original release, not validation of the
+current checkout. Its runtime availability and passing checks describe that
+QA session only. Use [VALIDATION.md](VALIDATION.md) and the CI result for the
+commit being reviewed for current evidence.
+
 ## Scope checked
 
 - Repository structure and release metadata.

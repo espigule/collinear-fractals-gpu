@@ -46,7 +46,7 @@
     },
     {
       "id": "off_lens_witnesses_n2_to_n19",
-      "title": "Off-lens witnesses for 2 <= n <= 19",
+      "title": "Off-lens search example for n=3",
       "example": "examples/off_lens_witnesses_n2_to_n19",
       "asset": null,
       "status": "metadata-only"

@@ -1,62 +1,84 @@
-# Validation Notes
+# Validation
 
-Run the core validation suite from the repository root:
+Run checks on the exact revision that will be reviewed or deployed. Historical
+QA reports describe their recorded commits only.
 
-```bash
-node --check explorer.js
-node qa/explorer-prefix-smoke-test.js
-node qa/render_smoke_tests.js
-node qa/kernel_equivalence_tests.js
-node tools/bench/render_metadata_bench.js
-cd javascript && npm test
-cd ../python && python3 -m unittest test_collinear.py
-cd ../swift && swift test
-cd .. && python3 tools/validate_bundle.py
-```
+## Setup
 
-The automated tests cover:
-
-- canonical coordinates;
-- lens membership;
-- corrected enclosure truncation and tail metadata;
-- alphabet parity for both even and odd alphabets;
-- in-lens `Interior`;
-- `Exterior`;
-- off-lens `Interior-offLens`;
-- deterministic prefix-cylinder and seeded-histogram visual-renderer metadata;
-- reference-equivalent finite-search kernel behavior for representative
-  small and larger arities;
-- default `k_max = 37` consistency;
-- absence of local filesystem links;
-- browser DOM-reference consistency;
-- formatting hygiene for key Markdown, YAML, CFF, and gitignore files;
-- absence of fake archival DOI placeholders and overclaiming release language.
-- Pages staging policy, including rejection of root deployment;
-- representative generated artifact ignore rules;
-- metadata-only benchmark output without generated render dumps;
-- curated example index and metadata presence;
-- JSON validity for schemas, examples, gallery, and figure metadata;
-- large generated image policy outside curated example/gallery paths.
-
-The Wolfram Language, MATLAB, and Maple implementations are included as reference ports with matching formulas and defaults. They were not executed in this environment.
-
-
-Additional static checks used in the QA pass:
+Use Node.js 22 or later and Python 3.11 or later. Browser rendering has no
+application build or runtime-package installation step. The following
+dependencies are development tools for automated QA:
 
 ```bash
-# DOM-id consistency and local asset existence were checked with a small Python script.
-# JavaScript package publish contents were inspected with:
-cd javascript && npm pack --dry-run
+npm ci
+python3 -m pip install -r requirements-qa.txt
+npx playwright install chromium
 ```
 
-Manual checks still recommended before tagging:
+On a fresh Linux CI image, `npx playwright install --with-deps chromium`
+installs the browser's operating-system dependencies as well.
 
-- open `index.html` in Chrome, Safari, or Firefox;
-- verify that the default state renders and reports `Interior`;
-- verify that original-attractor prefix and histogram modes render cleanly;
-- verify that survival/status rendering is available only as an explicit
-  renderer mode;
-- drag the parameter locator and exercise copy/download of certificate JSON;
-- exercise Share View, Copy Embed, Save Image, presets, undo/redo, panel focus,
-  palette controls, and About/Cite and Support dialogs;
-- run the Wolfram Language, MATLAB, and Maple reference files in their native runtimes if those runtimes are available.
+## Standard commands
+
+From the repository root:
+
+```bash
+npm test
+npm run test:browser
+npm run site:stage
+```
+
+`npm run test:all` runs the first two commands together. If Python is available
+only as `python3`, select it with `PYTHON=python3 npm test`.
+
+| Command | Coverage |
+|---|---|
+| `npm test` | JavaScript syntax, static publication checks, JSON Schemas and data invariants, JavaScript/Python packages, browser-engine and renderer/kernel regressions, benchmark metadata. |
+| `npm run test:browser` | Real Chromium interactions through Playwright. |
+| `npm run site:stage` | Builds the allowlisted static Pages artifact in `site/`. |
+| `swift test --package-path swift --jobs 2` | Swift package tests, when Swift is installed. |
+
+The Wolfram Language, MATLAB, and Maple ports need native runtime execution
+before runtime-validation claims can be made for them. Inspect their package
+READMEs for examples. Record a missing runtime as “not run”.
+
+## Numerical coverage
+
+The regression suite targets meaningful failure modes:
+
+- consistent $f_t(z)=t+z/c$ coordinates in prefix and histogram rendering;
+- finite-value, domain, arity, and search-limit validation;
+- parity-preserving digit intervals for both alphabet parities;
+- enclosure truncation, complete tails at the cap, and overflow handling;
+- all four verdicts and explicit termination reasons;
+- depth-zero searches and conservative frontier-cap handling;
+- reference/fast-kernel consistency and executable package comparisons;
+- deterministic sampling and bounded renderer workloads;
+- share-state parsing and reproducible settings.
+
+Schema validation checks configured arity, difference-alphabet size, matching
+parameters and share links, certificate shape, and valid inverse digits. It
+verifies data structure and consistency, not the proof behind a search result.
+Performance measurements are environment-dependent; a benchmark does not
+establish a universal speed guarantee.
+
+## Manual review
+
+Automation complements a visual review of the final Pages artifact:
+
+1. Open the served explorer on desktop and a narrow viewport. Check labels,
+   focus visibility, dialogs, and both canvases.
+2. Compare the $E(c,4)$ and $E(c,5)$ presets in prefix, histogram, and survival
+   modes. A picture can be useful while its selected search is `Undetermined`.
+3. Move the parameter locator and confirm the displayed parameter, search
+   result, and exported JSON agree. Check a reciprocal input and a real input.
+4. Reload a shared URL, exercise undo/redo, and confirm layers and limits return.
+5. Export an image and search JSON. Reproduce a simple interior, exterior, and
+   off-lens case in a reference package.
+6. Check Safari and Firefox when available; Chromium automation does not
+   establish cross-browser compatibility.
+
+Record the revision, runtime/browser versions, commands and exit statuses,
+material observations, and remaining limitations. Keep generated screenshots,
+traces, and local runtime output outside the source history unless selected as
+curated review evidence.

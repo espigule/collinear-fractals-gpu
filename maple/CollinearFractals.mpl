@@ -3,17 +3,35 @@ CollinearFractals := module()
     export get_canonical_coordinates, in_lens, choose_tail_depth, compute_enclosure,
            get_trap_half_widths, first_alphabet_digit_at_or_above, inverse_iteration_test;
 
+    # Numerical reference results are not exact or outward-rounded certificates.
+    local validate_parameter, validate_order;
+
+    validate_parameter := proc(c)
+        if has(c, {infinity, undefined}) or not type(evalf(Re(c)), numeric)
+           or not type(evalf(Im(c)), numeric) then
+            error "c must be a finite numeric parameter";
+        end if;
+    end proc;
+
+    validate_order := proc(n::integer)
+        if n < 2 or n > 4503599627370495 then
+            error "n must be an integer from 2 to 4503599627370495";
+        end if;
+    end proc;
+
     get_canonical_coordinates := proc(u::complex, c::complex)
         local rho, lv, ls;
+        validate_parameter(u); validate_parameter(c);
         rho := abs(c);
         if rho = 0 then error "c must be nonzero"; end if;
         lv := Im(u);
-        ls := (Re(c)*Im(u) + Im(c)*Re(u)) / rho;
+        ls := (Re(c)/rho)*Im(u) + (Im(c)/rho)*Re(u);
         return [ls, lv];
     end proc;
 
     in_lens := proc(c::complex, n::integer)
         local rho, N;
+        validate_parameter(c); validate_order(n);
         rho := abs(c);
         N := 2*n - 1;
         return evalb(rho > 1.0 and Im(c) <> 0.0 and (rho*rho + 2.0*abs(Re(c)) < N));
@@ -21,17 +39,22 @@ CollinearFractals := module()
 
     choose_tail_depth := proc(rho::float, tol::float := 1e-8, min_m::integer := 30, max_m::integer := 2000)
         local target, M, capped;
+        validate_parameter(rho); validate_parameter(tol);
+        if min_m < 0 or max_m < min_m then error "require 0 <= min_m <= max_m"; end if;
         if rho <= 1.0 then error "rho must be greater than 1"; end if;
         if tol <= 0.0 then error "tol must be positive"; end if;
-        target := -log(tol*(rho - 1.0))/log(rho);
+        target := -(log(tol) + log(rho - 1.0))/log(rho);
         M := max(min_m, ceil(target));
         capped := evalb(M > max_m);
         if capped then M := max_m; end if;
+        while M < max_m and rho^(-M)/(rho - 1.0) > tol do M := M + 1; end do;
+        capped := evalb(rho^(-M)/(rho - 1.0) > tol);
         return [M, capped];
     end proc;
 
     compute_enclosure := proc(c::complex, n::integer, tol::float := 1e-8)
         local rho, theta, N_minus_1, depth, M, capped, val_sum, tail, ve, se, k;
+        validate_parameter(c); validate_order(n);
         rho := abs(c);
         if rho <= 1.0 or Im(c) = 0.0 then
             error "c must satisfy |c| > 1 and Im(c) != 0.";
@@ -49,7 +72,7 @@ CollinearFractals := module()
 
         tail := (rho^(-M))/(rho - 1.0);
         ve := N_minus_1*(val_sum + tail);
-        se := N_minus_1*abs(Im(c))/rho + ve/rho;
+        se := N_minus_1*(abs(Im(c))/rho) + ve/rho;
 
         return table(["se"=se, "ve"=ve, "truncation_depth"=M,
                       "tail"=tail, "tail_certified_to_tol"=evalb(tail <= tol),
@@ -58,10 +81,12 @@ CollinearFractals := module()
 
     get_trap_half_widths := proc(c::complex, n::integer)
         local rho, N, n_prime, kappa;
+        validate_parameter(c); validate_order(n);
         rho := abs(c); N := 2*n - 1;
+        if rho <= 1.0 or Im(c) = 0.0 then error "c must satisfy |c| > 1 and Im(c) != 0"; end if;
         if in_lens(c, n) then
-            return table(["S"=(N*abs(Im(c)))/rho,
-                          "V"=max(0.0, ((N - 2.0*abs(Re(c)))*abs(Im(c)))/(rho*rho)),
+            return table(["S"=N*(abs(Im(c))/rho),
+                          "V"=max(0.0, ((N - 2.0*abs(Re(c)))/rho)*(abs(Im(c))/rho)),
                           "region"="lens"]);
         else
             n_prime := (N + 1)/2.0;
@@ -70,14 +95,17 @@ CollinearFractals := module()
             else
                 kappa := 1;
             end if;
-            return table(["S"=((N - 1)*abs(Im(c)))/rho,
-                          "V"=(kappa*abs(Im(c)))/(rho*rho),
+            return table(["S"=(N - 1)*(abs(Im(c))/rho),
+                          "V"=(kappa/rho)*(abs(Im(c))/rho),
                           "region"="off-lens"]);
         end if;
     end proc;
 
     first_alphabet_digit_at_or_above := proc(a, m::integer)
         local parity, t;
+        # Parity-compatible ceiling, not clipped to the finite alphabet.
+        validate_parameter(a);
+        if Im(a) <> 0 or m < 1 then error "a must be real and m positive"; end if;
         parity := irem(m - 1, 2);
         t := ceil(a);
         if irem(t - parity, 2) <> 0 then t := t + 1; end if;
@@ -88,10 +116,14 @@ CollinearFractals := module()
         local rho, N, is_lens, enc, se, ve, trap, S, V, trap_region, s0, v0, W,
               total_nodes, k, W_prime, node, s, v, word, t1, t2, t_min, t_max,
               a, b, t_start, t, v_prime, s_prime, next_word, idx, verdict;
+        validate_parameter(c); validate_order(n); validate_parameter(tol);
+        if k_max < 0 or l_max < 1 or tol <= 0 then
+            error "require k_max >= 0, l_max >= 1, and tol > 0";
+        end if;
         rho := abs(c);
         if rho <= 1.0 or Im(c) = 0.0 then
             return table(["verdict"="Undetermined", "depth"=0, "nodes_explored"=0,
-                          "reason"="c outside domain (|c| > 1 and Im(c) != 0)"]);
+                          "reason"="c outside domain (|c| > 1 and Im(c) != 0)", "stop_reason"="outside-domain"]);
         end if;
 
         N := 2*n - 1;
@@ -110,16 +142,16 @@ CollinearFractals := module()
         S := trap["S"]; V := trap["V"]; trap_region := trap["region"];
         verdict := proc(flag) if flag then return "Interior"; else return "Interior-offLens"; end if; end proc;
 
-        s0 := (4.0*Re(c)*Im(c))/rho;
+        s0 := (4.0*(Re(c)/rho))*Im(c);
         v0 := 2.0*Im(c);
 
         if abs(s0) > se or abs(v0) > ve then
-            return table(["verdict"="Exterior", "depth"=0, "nodes_explored"=1]);
+            return table(["verdict"="Exterior", "depth"=0, "nodes_explored"=1, "stop_reason"="enclosure-escape"]);
         end if;
 
         if abs(s0) < S and abs(v0) < V then
             return table(["verdict"=verdict(is_lens), "depth"=0, "nodes_explored"=1,
-                          "trap_region"=trap_region]);
+                          "trap_region"=trap_region, "stop_reason"="trap-hit"]);
         end if;
 
         W := [[s0, v0, []]];
@@ -140,19 +172,19 @@ CollinearFractals := module()
                     t_start := first_alphabet_digit_at_or_above(a, N);
                     for t from t_start by 2 to b do
                         v_prime := rho*s - Im(c)*t;
-                        s_prime := (2.0*Re(c)/rho)*v_prime - rho*v;
+                        s_prime := (2.0*(Re(c)/rho))*v_prime - rho*v;
                         if abs(s_prime) <= se then
                             next_word := [op(word), t];
                             if abs(s_prime) < S and abs(v_prime) < V then
                                 return table(["verdict"=verdict(is_lens), "depth"=k,
                                               "word"=next_word,
                                               "nodes_explored"=(total_nodes + nops(W_prime) + 1),
-                                              "trap_region"=trap_region]);
+                                              "trap_region"=trap_region, "stop_reason"="trap-hit"]);
                             end if;
                             W_prime := [op(W_prime), [s_prime, v_prime, next_word]];
                             if nops(W_prime) >= l_max then
                                 return table(["verdict"="Undetermined", "depth"=k,
-                                              "nodes_explored"=(total_nodes + nops(W_prime))]);
+                                              "nodes_explored"=(total_nodes + nops(W_prime)), "stop_reason"="node-cap"]);
                             end if;
                         end if;
                     end do;
@@ -161,11 +193,11 @@ CollinearFractals := module()
 
             total_nodes := total_nodes + nops(W_prime);
             if nops(W_prime) = 0 then
-                return table(["verdict"="Exterior", "depth"=k, "nodes_explored"=total_nodes]);
+                return table(["verdict"="Exterior", "depth"=k, "nodes_explored"=total_nodes, "stop_reason"="tree-exhausted"]);
             end if;
             W := W_prime;
         end do;
 
-        return table(["verdict"="Undetermined", "depth"=k_max, "nodes_explored"=total_nodes]);
+        return table(["verdict"="Undetermined", "depth"=k_max, "nodes_explored"=total_nodes, "stop_reason"="depth-cap"]);
     end proc;
 end module;
