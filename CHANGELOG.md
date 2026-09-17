@@ -17,6 +17,24 @@
 
 ### Browser and performance
 
+- Added a hybrid rendering pipeline: bounded WebGL 2 previews for parameter
+  and dynamical inverse-search images, followed by double-precision refinement
+  in background workers. Direct prefix and histogram attractor drawing remains
+  a separate visual renderer.
+- Added Automatic, GPU preview, and CPU precision preferences to Controls,
+  history, and shared views. Actual backend and arithmetic metadata are recorded
+  separately from the requested preference; selected-parameter search records
+  continue to use the full numerical settings.
+- Added bounded worker scheduling and cancellation of superseded panel jobs.
+  Unavailable WebGL, preview precision guards, and context loss fall back to CPU
+  refinement; worker failure retains a progressive main-thread fallback.
+- Label GPU-only images as previews, prevent PNG export until the visible panels
+  finish rendering, and include backend, preview-limit, and refinement metadata
+  in JSON exports.
+- Restored a canvas-first workspace with a collapsible controls drawer,
+  Cartesian and polar parameter input, direct set comparisons, quick view and
+  zoom controls, fullscreen, and a persistent selected-search readout. Rₙ
+  rendering reports finite-search survival separately from the Mₙ search record.
 - Reuse typed-array frontiers for verdict-only pixel searches while retaining
   the detailed reference search for selected-parameter trees and inverse words.
 - Share validated numerical helpers and histogram sampling across entry points.

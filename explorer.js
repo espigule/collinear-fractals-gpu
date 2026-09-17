@@ -20,6 +20,8 @@ import { attractorBounds } from './src/math/attractor_bounds.mjs';
 import { decodeExplorerLocation } from './src/state/legacy_state.mjs';
 import { classifyParameterView } from './src/compute/parameter_views.mjs';
 import { createExplorerChrome } from './src/ui/explorer_chrome.mjs';
+import { createHybridRenderer } from './src/renderers/hybrid_renderer.mjs';
+import { rasterResultCode, RASTER_CODES } from './src/compute/raster_jobs.mjs';
 
 function isInteriorVerdict(verdict) {
   return verdict === 'Interior' || verdict === 'Interior-offLens';
@@ -265,10 +267,20 @@ function getUndeterminedColorString() {
   return activePalette().undetermined || '#fbbf24';
 }
 
-// Param clean image data saving
-let paramSavedImageData = null;
-function saveParamImageData() {
-  paramSavedImageData = ctxParam.getImageData(0, 0, canvasParam.width, canvasParam.height);
+// Keep a clean canvas behind the guides without reading GPU pixels into JS.
+let parameterRasterSnapshot = null;
+function saveParameterRaster() {
+  if (!parameterRasterSnapshot) parameterRasterSnapshot = document.createElement('canvas');
+  parameterRasterSnapshot.width = canvasParam.width;
+  parameterRasterSnapshot.height = canvasParam.height;
+  parameterRasterSnapshot.getContext('2d').drawImage(canvasParam, 0, 0);
+}
+function clearParameterRaster() {
+  if (parameterRasterSnapshot) {
+    parameterRasterSnapshot.width = 0;
+    parameterRasterSnapshot.height = 0;
+    parameterRasterSnapshot = null;
+  }
 }
 
 // UI Elements
@@ -287,6 +299,8 @@ const elModuloVal = document.getElementById('modulo-val');
 const elExamplePreset = document.getElementById('example-preset');
 const elComparisonMode = document.getElementById('comparison-mode');
 const elOriginalRendererMode = document.getElementById('original-renderer-mode');
+const elRenderBackend = document.getElementById('render-backend');
+const elRenderBackendStatus = document.getElementById('render-backend-status');
 const elAttractorDepth = document.getElementById('attractor-depth');
 const elHistogramSeed = document.getElementById('histogram-seed');
 const elHistogramSamples = document.getElementById('histogram-samples');
@@ -367,6 +381,86 @@ let gridW = 0;
 let gridH = 0;
 const attractorRenderers = { renderPrefixAttractor, renderHistogramAttractor };
 let lastAttractorMetadata = null;
+const renderingInfo = { parameter: null, dynamical: null };
+const hybridRenderer = createHybridRenderer({ onStatus: updateRenderingInfo });
+
+function updateRenderingInfo(kind, metadata) {
+  renderingInfo[kind] = metadata;
+  const canvas = kind === 'parameter' ? canvasParam : canvasDyn;
+  canvas.dataset.renderBackend = metadata.active_backend;
+  canvas.dataset.renderPhase = metadata.phase;
+  const visible = Object.entries(renderingInfo).filter(([panel, info]) => info &&
+    (panel === 'parameter' ? canvasParam : canvasDyn).width > 0);
+  const labels = { webgl2: 'GPU preview', 'cpu-worker': 'CPU workers', 'cpu-main-thread': 'CPU fallback', 'cpu-geometry': 'CPU geometry', initializing: 'Starting' };
+  if (elRenderBackendStatus) {
+    const status = visible.map(([panel, info]) =>
+      `${panel === 'parameter' ? 'Parameter' : 'Dynamical'}: ${labels[info.active_backend] || info.active_backend}${info.phase === 'refining' ? ' · refining' : ''}`
+    ).join('. ');
+    const reason = [...new Set(visible.map(([, info]) => info.fallback_reason).filter(Boolean))].join('; ');
+    elRenderBackendStatus.textContent = `${status}${reason ? `. ${reason.length > 240 ? `${reason.slice(0, 237)}…` : reason}` : ''}`;
+    elRenderBackendStatus.title = reason;
+  }
+  // Context loss can start refinement after a GPU-only frame was exportable.
+  // Revoke that completion immediately, before the first worker tile arrives.
+  if (metadata.phase === 'initializing' || metadata.phase === 'refining') markRendering(canvas, 'rendering');
+}
+
+function rasterJob(kind) {
+  const canvas = kind === 'parameter' ? canvasParam : canvasDyn;
+  return {
+    kind, width: canvas.width, height: canvas.height,
+    center: { ...(kind === 'parameter' ? state.paramCenter : state.dynCenter) },
+    spanX: kind === 'parameter' ? state.paramZoom : state.dynZoom,
+    n: state.n, cx: state.cx, cy: state.cy, kMax: state.kMax, LMax: state.LMax, tol: state.tol,
+    parameterMode: state.parameterMode, showDifference: state.showDifference,
+    showOriginalSurvival: state.showCollinear && state.rendererMode === 'survival',
+    showEscapeStrata: state.showEscapeStrata, survivalOpacity: state.survivalOverlayOpacity,
+    backend: state.backend
+  };
+}
+
+function rasterColors() {
+  const table = new Uint8Array(9 * 101 * 4);
+  const exterior = hexToRgb(getExteriorColorString());
+  const unknown = hexToRgb(getUndeterminedColorString());
+  for (let code = 0; code < 9; code++) {
+    for (let depth = 0; depth <= 100; depth++) {
+      let rgb = unknown;
+      if (code === 0) rgb = state.showEscapeStrata ? getEscapeColor(depth) : exterior;
+      else if (code === 1) rgb = state.showEscapeStrata ? exterior : getColorForLevel(depth % state.modulo, depth);
+      else if (code === 2) rgb = state.showEscapeStrata ? exterior : getOffLensInteriorColorForLevel(depth % state.modulo, depth);
+      else if (code === 5) rgb = { r: 203, g: 213, b: 225 };
+      table.set([rgb.r, rgb.g, rgb.b, 255], (code * 101 + depth) * 4);
+    }
+  }
+  const branch = hexToRgb(activePalette().branch || '#111827');
+  return { table, branch: [branch.r, branch.g, branch.b], exterior: [exterior.r, exterior.g, exterior.b], survivalOpacity: state.survivalOverlayOpacity };
+}
+
+function startHybridPanel(kind) {
+  const canvas = kind === 'parameter' ? canvasParam : canvasDyn;
+  const context = kind === 'parameter' ? ctxParam : ctxDyn;
+  hybridRenderer.render(rasterJob(kind), rasterColors(), {
+    onFrame({ canvas: frame, complete, metadata }) {
+      updateRenderingInfo(kind, metadata);
+      context.drawImage(frame, 0, 0);
+      if (kind === 'parameter') {
+        // Save only the clean completed raster; guides must never erase new tiles.
+        if (complete) saveParameterRaster();
+        else clearParameterRaster();
+        drawParameterLensGuides(true);
+      } else {
+        drawOriginalAttractorOverlay();
+        drawDynamicalGuidesAndOverlays();
+      }
+      markRendering(canvas, complete ? 'complete' : 'rendering');
+    },
+    onFallback(metadata) {
+      if (kind === 'parameter') triggerParamRender({ skipHybrid: true, metadata });
+      else triggerDynRender({ skipHybrid: true, metadata });
+    }
+  });
+}
 
 // Drag state for locators
 const undoStack = [];
@@ -460,6 +554,7 @@ function updateControlsFromState() {
   if (elModuloVal) elModuloVal.textContent = state.modulo;
   if (elComparisonMode) elComparisonMode.value = state.comparisonMode || 'overlay';
   if (elOriginalRendererMode) elOriginalRendererMode.value = state.rendererMode || 'prefix';
+  if (elRenderBackend) elRenderBackend.value = state.backend;
   if (elAttractorDepth) elAttractorDepth.value = state.attractorDepth;
   if (elHistogramSeed) elHistogramSeed.value = state.histogramSeed;
   if (elHistogramSamples) elHistogramSamples.value = state.histogramSamples;
@@ -720,9 +815,12 @@ const ABOUT_TABS = {
     <p>The original attractor <code>E(c,n)</code> is drawn by a visual renderer
     by default. Prefix-cylinder and seeded-histogram views are separate from
     finite-search status.</p>
-    <p>The Canvas renderer is progressive and interruptible. The selected
-    search record always uses the full chosen <code>k_max</code> and
-    <code>L_max</code>, independent of preview resolution.</p>
+    <p>Automatic rendering starts with a bounded WebGL 2 GPU preview, then
+    refines the image in double precision using background workers. CPU rendering
+    takes over when acceleration is unavailable or the view needs more precision.
+    The selected search record always uses the full chosen <code>k_max</code> and
+    <code>L_max</code>, independently of the preview. GPU-only images are explicitly
+    marked as previews; neither renderer supplies an interval certificate.</p>
     <p>Choose <strong>Mₙ</strong> for the connectedness search, <strong>Rₙ</strong>
     for the restricted-digit search, or <strong>Compare</strong> to overlay them.
     Teal Rₙ pixels have survived a finite search; they are not certified members.
@@ -865,7 +963,7 @@ function saveExplorerImage() {
   const width = canvases.reduce((sum, canvas) => sum + canvas.width, 0);
   const plotHeight = Math.max(...canvases.map(canvas => canvas.height));
   const header = 96;
-  const footer = 56;
+  const footer = 74;
   const out = document.createElement('canvas');
   out.width = width;
   out.height = plotHeight + header + footer;
@@ -878,10 +976,14 @@ function saveExplorerImage() {
   ctx.font = '12px system-ui, sans-serif';
   const input = `${state.cx.toPrecision(9)} ${state.cy < 0 ? '−' : '+'} ${Math.abs(state.cy).toPrecision(9)}i`;
   ctx.fillText(`Input c = ${input}`, 12, 44, width - 24);
-  ctx.fillText(`k_max = ${state.kMax} · L_max = ${state.LMax} per level · q = ${state.modulo}`, 12, 63, width - 24);
+  ctx.fillText(`Requested search: k_max = ${state.kMax} · L_max = ${state.LMax} per level · q = ${state.modulo}`, 12, 63, width - 24);
   let x = 0;
   for (const canvas of canvases) {
-    const title = canvas === canvasParam ? 'Parameter plane' : 'Dynamical plane · difference at ½ scale';
+    const parameterLabel = { mn: 'Mₙ', rn: 'Rₙ', compare: 'Mₙ and Rₙ' }[state.parameterMode];
+    const dynamicalLabel = state.showDifference
+      ? (state.showCollinear ? 'E(c,n) and ½E(c,2n−1)' : '½E(c,2n−1)')
+      : state.showCollinear ? 'E(c,n)' : 'Guides';
+    const title = canvas === canvasParam ? `Parameter plane · ${parameterLabel}` : `Dynamical plane · ${dynamicalLabel}`;
     ctx.font = '600 12px system-ui, sans-serif';
     ctx.fillStyle = '#162238';
     ctx.fillText(title, x + 12, 85, canvas.width - 24);
@@ -891,8 +993,12 @@ function saveExplorerImage() {
   const test = selectedSearchResult();
   ctx.font = '11px system-ui, sans-serif';
   ctx.fillStyle = '#516078';
-  ctx.fillText(`Selected search: ${test.verdict} · ${test.stopReason}`, 12, header + plotHeight + 21, width - 24);
-  ctx.fillText('Floating-point exploration. Export the JSON record for parameters, evidence and view metadata.', 12, header + plotHeight + 40, width - 24);
+  ctx.fillText(`Selected Mₙ search: ${test.verdict} · ${test.stopReason}`, 12, header + plotHeight + 21, width - 24);
+  const gpuLimits = canvases.map(canvas => renderingInfo[canvas === canvasParam ? 'parameter' : 'dynamical'])
+    .filter(info => info?.active_backend === 'webgl2').map(info => info.gpu.effective);
+  ctx.fillText(gpuLimits.length ? `GPU PREVIEW · float32 · depth ≤ ${Math.max(...gpuLimits.map(limits => limits.depth))}, frontier ≤ ${Math.max(...gpuLimits.map(limits => limits.frontier))}, work ≤ ${Math.max(...gpuLimits.map(limits => limits.work))} per search.`
+    : 'Double-precision rendering · finite searches and visual approximations.', 12, header + plotHeight + 40, width - 24);
+  ctx.fillText('Export the JSON record for parameters, evidence, rendering limits and view metadata.', 12, header + plotHeight + 59, width - 24);
   const a = document.createElement('a');
   a.href = out.toDataURL('image/png');
   a.download = `collinear-fractals-n${state.n}-k${state.kMax}.png`;
@@ -1027,8 +1133,13 @@ function resetDynViewportMath() {
 // Parameter Plane Rendering
 function markRendering(canvas, status) {
   canvas.dataset.renderState = status;
+  const kind = canvas === canvasParam ? 'parameter' : 'dynamical';
+  const info = renderingInfo[kind];
+  if (status === 'complete' && info && info.active_backend !== 'webgl2' && info.phase !== 'complete') {
+    updateRenderingInfo(kind, { ...info, phase: 'complete' });
+  }
   const readout = document.getElementById(canvas === canvasParam ? 'parameter-render-status' : 'dynamical-render-status');
-  const statusText = status === 'complete' ? 'Ready' : 'Refining…';
+  const statusText = status === 'complete' ? (info?.active_backend === 'webgl2' ? 'GPU preview' : 'Ready') : 'Refining…';
   if (readout && readout.textContent !== statusText) readout.textContent = statusText;
   canvas.setAttribute('aria-busy', status === 'rendering' ? 'true' : 'false');
   updateExportAvailability();
@@ -1042,19 +1153,23 @@ function updateExportAvailability() {
   elBtnSaveImage.title = complete ? 'Download the completed view as PNG' : 'The image will be available when refinement finishes';
 }
 
-function triggerParamRender() {
+function triggerParamRender({ skipHybrid = false, metadata = null } = {}) {
+  hybridRenderer.cancel('parameter');
   if (renderRequestId !== null) cancelAnimationFrame(renderRequestId);
   renderRequestId = null;
-  paramSavedImageData = null;
+  clearParameterRaster();
   if (!canvasParam.width || !canvasParam.height) return;
   currentRenderStage = 0;
   renderY = 0;
   renderX = 0;
   markRendering(canvasParam, 'rendering');
+  if (!skipHybrid) { startHybridPanel('parameter'); return; }
+  updateRenderingInfo('parameter', { ...metadata, requested_backend: state.backend, active_backend: 'cpu-main-thread', phase: 'refining', arithmetic: 'binary64' });
   renderRequestId = requestAnimationFrame(renderParamStage);
 }
 
 function parameterSearchColor(test) {
+  if (test.stopReason === 'outside-domain') return '#cbd5e1';
   if (test.displayReason === 'finite-survival') return '#328a94';
   if (isInteriorVerdict(test.verdict)) {
     return state.showEscapeStrata ? getExteriorColorString() : rgbToCss(test.verdict === 'Interior-offLens'
@@ -1083,7 +1198,8 @@ function renderParamStage() {
           const test = classifyParameterView(c.x, c.y, state.n, state.kMax, state.LMax, state.tol, state.parameterMode);
           // Teal is a finite-survival candidate, including in comparison mode.
           // Incomplete R_n searches stay amber; they are never silently included.
-          color = state.parameterMode === 'rn' ? parameterSearchColor(test)
+          color = test.stopReason === 'outside-domain' ? '#cbd5e1'
+            : state.parameterMode === 'rn' ? parameterSearchColor(test)
             : test.rn.displayReason === 'finite-survival' ? '#328a94'
             : test.rn.verdict !== 'Exterior' ? getUndeterminedColorString() : parameterSearchColor(test.mn);
         }
@@ -1100,7 +1216,7 @@ function renderParamStage() {
     renderX = 0;
     renderY += blockSize;
   }
-  saveParamImageData();
+  saveParameterRaster();
   drawParameterLensGuides(true);
   if (currentRenderStage < getMaxParamRenderStage()) {
     currentRenderStage++;
@@ -1119,8 +1235,8 @@ function drawParameterLensGuides(completedStage = false) {
   if (!canvasParam.width || !canvasParam.height) return;
   // Restoring a coarse snapshot during refinement would erase completed rows.
   if (!completedStage && canvasParam.dataset.renderState !== 'complete') return;
-  if (paramSavedImageData) {
-    ctxParam.putImageData(paramSavedImageData, 0, 0);
+  if (parameterRasterSnapshot) {
+    ctxParam.drawImage(parameterRasterSnapshot, 0, 0);
   }
   
   if (state.parameterMode === 'rn') {
@@ -1212,7 +1328,8 @@ function selectedSearchResult() {
   return selectedSearchCache.result;
 }
 
-function triggerDynRender() {
+function triggerDynRender({ skipHybrid = false, metadata = null } = {}) {
+  hybridRenderer.cancel('dynamical');
   if (dynRenderRequestId !== null) cancelAnimationFrame(dynRenderRequestId);
   dynRenderRequestId = null;
   lastAttractorMetadata = null;
@@ -1230,7 +1347,19 @@ function triggerDynRender() {
   };
   currentDynStage = 0;
   markRendering(canvasDyn, 'rendering');
+  if (!Number.isFinite(dynGeometry.rho) || dynGeometry.rho <= 1 || cy === 0 || dynGeometry.encN.err) {
+    updateRenderingInfo('dynamical', { requested_backend: state.backend, active_backend: 'cpu-geometry', phase: 'refining', arithmetic: 'binary64', renderer: 'outside-search-domain' });
+    dynRenderRequestId = requestAnimationFrame(() => {
+      ctxDyn.fillStyle = getExteriorColorString();
+      ctxDyn.fillRect(0, 0, canvasDyn.width, canvasDyn.height);
+      drawDynamicalGuidesAndOverlays();
+      dynRenderRequestId = null;
+      markRendering(canvasDyn, 'complete');
+    });
+    return;
+  }
   if (!state.showDifference && !(state.showCollinear && state.rendererMode === 'survival')) {
+    updateRenderingInfo('dynamical', { requested_backend: state.backend, active_backend: 'cpu-geometry', phase: 'refining', arithmetic: 'binary64', renderer: state.rendererMode });
     // Direct attractor renderers do not need an empty inverse-search raster.
     dynRenderRequestId = requestAnimationFrame(() => {
       ctxDyn.fillStyle = getExteriorColorString();
@@ -1242,6 +1371,8 @@ function triggerDynRender() {
     });
     return;
   }
+  if (!skipHybrid) { startHybridPanel('dynamical'); return; }
+  updateRenderingInfo('dynamical', { ...metadata, requested_backend: state.backend, active_backend: 'cpu-main-thread', phase: 'refining', arithmetic: 'binary64' });
   startDynStage();
 }
 
@@ -1284,7 +1415,7 @@ function renderDynStage() {
       }
       if (useSurvivalOverlay && !encn.err) {
         const result = inverseSearchPointFast(dynGeometry.originalContext, w.x, w.y, state.kMax, state.LMax);
-        collGrid[i] = result.verdict !== 'Exterior' ? 1 : 0;
+        collGrid[i] = rasterResultCode(result);
       }
       dynX++;
       if (performance.now() - startTime > 10) {
@@ -1356,11 +1487,14 @@ function drawDynGrid() {
         r = undetermined.r; g = undetermined.g; b = undetermined.b;
       }
       
-      if (isColl === 1) {
+      if (isColl === RASTER_CODES.INTERIOR || isColl === RASTER_CODES.OFF_LENS ||
+          isColl === RASTER_CODES.DEPTH_CAP || isColl === RASTER_CODES.NODE_CAP || isColl === RASTER_CODES.WORK_CAP) {
         const alpha = Math.max(0, Math.min(1, state.survivalOverlayOpacity));
         r = Math.round(r * (1 - alpha) + mark.r * alpha);
         g = Math.round(g * (1 - alpha) + mark.g * alpha);
         b = Math.round(b * (1 - alpha) + mark.b * alpha);
+      } else if (isColl === RASTER_CODES.NUMERICAL_RANGE || isColl === RASTER_CODES.PRECISION) {
+        r = undetermined.r; g = undetermined.g; b = undetermined.b;
       }
       
       // Write pixels
@@ -1656,6 +1790,7 @@ function currentCertificatePayload() {
     search: { kMax: state.kMax, LMax: state.LMax, tolerance: state.tol },
     share_url: currentShareUrl(),
     view: {
+      focused_panel: state.focusedPanel,
       parameter_center: { re: state.paramCenter.x, im: state.paramCenter.y },
       parameter_zoom: state.paramZoom,
       dynamical_center: { re: state.dynCenter.x, im: state.dynCenter.y },
@@ -1666,10 +1801,17 @@ function currentCertificatePayload() {
     visual_renderer: {
       role: 'visual-renderer',
       renderer_mode: state.rendererMode,
-      visible: state.showCollinear,
-      render_status: canvasDyn.dataset.renderState,
+      visible: state.showCollinear && canvasDyn.width > 0 && canvasDyn.height > 0,
+      render_status: canvasDyn.width > 0 && canvasDyn.height > 0 ? canvasDyn.dataset.renderState : 'hidden',
       ...lastAttractorMetadata,
       proof_status: 'visual-approximation'
+    },
+    rendering: {
+      requested_backend: state.backend,
+      parameter: canvasParam.width > 0 && canvasParam.height > 0 ? renderingInfo.parameter : null,
+      dynamical: canvasDyn.width > 0 && canvasDyn.height > 0 ? renderingInfo.dynamical : null,
+      selected_record_arithmetic: 'binary64',
+      selected_record_uses_full_requested_limits: true
     },
     rounding_verified: false,
     note: 'The dynamical plane displays ½E(c,2n−1) and the original E(c,n) at their stated scales.'
@@ -2004,6 +2146,10 @@ elLmax.addEventListener('change', (e) => {
   }, 'both');
 });
 
+elRenderBackend?.addEventListener('change', event => {
+  withHistory(() => { state.backend = event.target.value; }, 'both');
+});
+
 // Modulo & Palette inputs
 elModulo.addEventListener('input', (e) => {
   withHistory(() => {
@@ -2283,4 +2429,7 @@ window.addEventListener('hashchange', () => {
   applyStateFromHash();
   updateControlsFromState();
   renderAfterStateChange('both');
+});
+window.addEventListener('pagehide', event => {
+  if (!event.persisted) hybridRenderer.dispose();
 });

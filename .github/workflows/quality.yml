@@ -45,6 +45,9 @@ jobs:
       - name: Desktop and mobile browser regressions
         run: npm run test:browser
 
+      - name: WebGL shader and CPU fallback regressions
+        run: npm run test:gpu
+
       - name: Preserve browser failure evidence
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

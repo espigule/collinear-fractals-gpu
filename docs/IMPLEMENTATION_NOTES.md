@@ -127,10 +127,28 @@ at the chosen depth or width cap, with trap entry disabled. It is a numerical
 outer-approximation diagnostic. It does not reinterpret survival as a proven
 membership result.
 
-A verdict-only scalar kernel reuses typed-array frontiers for pixel rendering.
-The detailed reference search retains the inverse tree and word for the
-selected parameter. Cross-kernel tests compare numerical results; they do not
-add interval guarantees. The browser remains a Canvas/CPU application.
+A verdict-only scalar kernel reuses typed-array frontiers for binary64 pixel
+rendering. The default hybrid backend first uses a bounded WebGL 2 float32
+preview when supported, then refines the raster in CPU workers at the requested
+depth, frontier cap, tolerance, and image size. Explicit `gpu` mode finishes
+with the bounded preview; `cpu` mode uses binary64 computation directly.
+Unsupported GPU views fall back to CPU rendering, and unavailable or failed
+workers fall back to the progressive main-thread renderer.
+
+The GPU preview has separate depth, frontier, work, resolution, and precision
+limits. Hitting one of these limits does not license branch dropping followed
+by an escape verdict. The runtime records the actual backend and effective
+preview settings separately from the portable requested backend. Its error
+allowances are engineering guards, not interval certification. See
+[rendering architecture](RENDERING_ARCHITECTURE.md) for the source-level limits
+and fallback contract.
+
+The visible canvases and direct prefix/histogram overlays use Canvas 2D.
+Their full $E(c,n)$ coordinates do not change with backend selection. The
+detailed reference search retains the inverse tree and word for the selected
+parameter and always uses binary64 arithmetic with the full requested search
+limits. Cross-kernel tests compare numerical results; they do not add interval
+guarantees.
 
 ## Search JSON and schemas
 
@@ -139,6 +157,13 @@ A `finite-search-certificate` is a floating-point search record. It records
 arity, input/effective parameter, depth and width limits, tolerance, verdict,
 stop reason, word, node count, and arithmetic provenance. Visual settings are
 separate metadata and do not determine the selected-parameter verdict.
+
+The browser's `rendering` metadata records `requested_backend`, the visible
+panels' actual rendering status, `selected_record_arithmetic: "binary64"`, and
+`selected_record_uses_full_requested_limits: true`. GPU image metadata can
+therefore describe a bounded float32 preview while the accompanying selected
+record describes a different, full-budget binary64 computation. Hidden panels
+have `null` rendering metadata rather than stale status from a previous view.
 
 `c` stores the effective parameter for replay in the language packages;
 `input_parameter` retains the original browser coordinates.

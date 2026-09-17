@@ -178,7 +178,7 @@ export function importLegacyExplorerState(input, defaults = DEFAULT_EXPLORER_STA
 
 /**
  * Resolve current hash links and archived links with explicit precedence:
- * 1. Any current-only hash key (pm, k, pz, layers, ...) selects current decoding.
+ * 1. Any current-only hash key (backend, pm, k, pz, layers, ...) selects current decoding.
  * 2. A legacy-specific hash key selects legacy decoding of the whole hash.
  * 3. An n/cx/cy-only hash stays current unless the query has legacy=1 or
  *    from=legacy-collinear, supplied by the archived-route redirect.
