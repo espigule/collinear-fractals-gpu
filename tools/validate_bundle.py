@@ -174,6 +174,7 @@ TOP_LEVEL_KEYS = [
 ]
 
 DYNAMIC_DOM_IDS = {
+    "legend-rn-survival",
     "modal-copy-primary",
     "tour-next",
     "tour-prev",

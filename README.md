@@ -1,8 +1,8 @@
-# Collinear Fractals GPU
+# Collinear Fractals Explorer
 
 **Explore collinear self-similar sets, connectedness loci, and finite capture.**
 
-[Open the explorer](https://espigule.github.io/collinear-fractals-gpu/) ·
+[Open the explorer](https://complextrees.com/collinear-fractals-gpu/) ·
 [Examples](examples/README.md) · [Mathematical conventions](docs/IMPLEMENTATION_NOTES.md) ·
 [Validation](docs/VALIDATION.md) · [Citation metadata](CITATION.cff)
 
@@ -21,17 +21,28 @@ hypotheses of the corresponding theorem.
 
 ## Quick visual summary
 
-Use the left panel to explore parameter space and select $c$. The right panel
-shows the original attractor $E(c,n)$, the difference-attractor search, the
-canonical trap and enclosure, and the inverse-search tree.
+The workspace opens in **Split** view at $n=4$,
+$c=(3+i\sqrt{11})/2$: the parameter plane is linked to the original
+attractor $E(c,4)$, colored by its first-level pieces. Focus either plane or
+use fullscreen; quick arity, zoom, fit, and scene controls stay beside the plots.
+The **Controls** drawer contains examples, Cartesian and polar parameter
+entry, search limits, renderers, layers, palettes, and exports.
+
+Switch the dynamical scene between $E(c,n)$, the half-scale difference
+$\tfrac12E(c,2n-1)$, and their overlay. The parameter plane offers
+$\mathcal M_n$, the marked-point set $R_n=\{c:c\in E(c,n)\}$, and a comparison.
+The $R_n$ preview distinguishes finite survival from unfinished searches;
+neither asserts membership. Search details identify which set each result concerns.
 
 The default prefix renderer draws finite approximations of the original
 attractor. A seeded histogram offers a second visual preview; the survival
-renderer shows points still admissible after a finite inverse search. The selected-parameter search uses its
-own depth and frontier-width limits, independently of visual rendering depth.
+renderer shows points still admissible after a finite inverse search. The
+selected-parameter search uses its own depth and frontier-width limits,
+independently of visual rendering depth.
 
-The browser includes share links, image export, search JSON export, example
-presets, undo/redo, layer and palette controls, and comparison modes.
+Share links, captioned image export, search JSON, and undo/redo retain the
+reproducible research workflow. The drawer becomes a modal on narrow screens;
+canvas navigation, dialogs, and controls support keyboard operation.
 
 ## Browser quick start
 
@@ -50,6 +61,7 @@ as a local file is not the supported workflow.
 A useful first example is `n = 3`, `c = 0.5 + 1.1i`. Its marked point is already
 inside the trap and the search returns `Interior` at depth zero. Compare with
 `c = 3 + 3i`, which returns `Exterior` from the initial enclosure test.
+For a one-step capture word, use `n = 3`, `c = 0.7 + 1.4i` and inspect `[2]`.
 
 **Parameter convention:** the browser interprets a nonzero input $p$ inside
 the unit disk as the reciprocal coordinate, using $c=1/p$. Outside the unit
@@ -110,6 +122,11 @@ does not independently verify those theorems or their full certificate corpus.
 
 ## Verdicts: Interior, Interior-offLens, Exterior, Undetermined
 
+These are the selected $\mathcal M_n$ search labels. The optional $R_n$
+marked-point search uses enclosure pruning without a trap; surviving its full
+depth budget remains `Undetermined`. Its label is distinct from the countable
+restricted-polynomial root set denoted $\mathcal R_n$ in the finite-capture paper.
+
 | Verdict | Meaning of the numerical search result |
 |---|---|
 | `Interior` | Strict trap entry for an in-lens parameter. |
@@ -148,8 +165,8 @@ only lists planned jobs.
 
 ## Share URLs and reproducible states
 
-Share View records the selected parameter, viewports, search limits, palette,
-comparison mode, layers, renderer, visual depth, histogram seed/sample count,
+Share records the selected parameter, viewports, search limits, palette,
+parameter-set and scene modes, layers, renderer, visual depth, histogram seed/sample count,
 piece coloring, and opacity in the URL fragment. A share link restores the
 view; a search JSON export records the numerical result.
 
@@ -160,6 +177,19 @@ same implementation; it does not make the sampled picture exact.
 
 Presets load from `examples/examples.json`, with a built-in fallback for the
 same public list.
+
+Legacy links can import the original parameter, selected sets, center, and
+vertical view span. An explicit `legacy=1` query flag distinguishes abbreviated
+old links from current links; a recognized hash takes precedence over query
+state. Old shader, thickness, and queue settings retain their meaning only in
+the archived explorer and are not silently applied to the current search.
+
+The maintained deployment belongs to this project's Pages build at
+`/collinear-fractals-gpu/`. The public routing plan keeps `/collinear/` as a
+compatibility redirect that preserves query and hash while identifying legacy
+state, and preserves the original HTML at `/collinear/legacy-2026-09/`.
+See [the comparison and public-explorer decision](docs/EXPLORER_COMPARISON_2026-09.md)
+for the implementation and archive boundaries.
 
 ## Package tests
 
@@ -224,7 +254,11 @@ interval-arithmetic proof. See [numerical interpretation](docs/RESPONSIBLE_USE.m
 ## Citing
 
 Use [CITATION.cff](CITATION.cff) for software metadata and cite the relevant
-mathematical paper separately. Include the exact version or commit used:
+mathematical paper separately. Include the exact version or commit used.
+
+**About & cite → References** copies a software citation or BibTeX entry,
+including the full source commit when the deployed build manifest is available.
+The original release citation is:
 
 > Bernat Espigule, *Collinear Fractals GPU: companion software for collinear
 > fractals, finite capture, and restricted polynomial roots*, version

@@ -15,7 +15,11 @@ import { PIECE_COLORS } from './src/renderers/palettes.mjs';
 import { buildCertificatePayload } from './src/compute/certificate_builder.mjs';
 import { renderPrefixAttractor } from './src/renderers/attractor_prefix.mjs';
 import { renderHistogramAttractor } from './src/renderers/attractor_histogram.mjs';
-import { DEFAULT_EXPLORER_STATE, encodeExplorerState, decodeExplorerState, normalizeExplorerState } from './src/state/explorer_state.mjs';
+import { DEFAULT_EXPLORER_STATE, encodeExplorerState, normalizeExplorerState } from './src/state/explorer_state.mjs';
+import { attractorBounds } from './src/math/attractor_bounds.mjs';
+import { decodeExplorerLocation } from './src/state/legacy_state.mjs';
+import { classifyParameterView } from './src/compute/parameter_views.mjs';
+import { createExplorerChrome } from './src/ui/explorer_chrome.mjs';
 
 function isInteriorVerdict(verdict) {
   return verdict === 'Interior' || verdict === 'Interior-offLens';
@@ -24,6 +28,9 @@ function isInteriorVerdict(verdict) {
 // One validated state contract drives controls, history, shared links and exports.
 const DEFAULT_STATE = DEFAULT_EXPLORER_STATE;
 const state = structuredClone(DEFAULT_STATE);
+let chrome = null;
+let legacyImport = null;
+let deploymentInfo = null;
 
 const PARAM_RENDER_STEPS = [8, 4, 2, 1];
 const DYN_RENDER_STEPS = [4, 2, 1];
@@ -267,6 +274,8 @@ function saveParamImageData() {
 // UI Elements
 const elParamReal = document.getElementById('param-real');
 const elParamImag = document.getElementById('param-imag');
+const elParamModulus = document.getElementById('param-modulus');
+const elParamArgument = document.getElementById('param-argument');
 const elStatReason = document.getElementById('stat-reason');
 const elStatEffective = document.getElementById('stat-effective');
 const elAritySlider = document.getElementById('arity-slider');
@@ -441,6 +450,8 @@ function renderAfterStateChange(target) {
 function updateControlsFromState() {
   if (elParamReal) elParamReal.value = state.cx;
   if (elParamImag) elParamImag.value = state.cy;
+  if (elParamModulus) elParamModulus.value = Math.hypot(state.cx, state.cy);
+  if (elParamArgument) elParamArgument.value = Math.atan2(state.cy, state.cx) * 180 / Math.PI;
   if (elAritySlider) elAritySlider.value = state.n;
   if (elArityVal) elArityVal.textContent = state.n;
   if (elKmax) elKmax.value = state.kMax;
@@ -467,6 +478,7 @@ function updateControlsFromState() {
   if (elShowTree) elShowTree.checked = state.showTree;
   if (elShowPath) elShowPath.checked = state.showPath;
   if (elShowEscapeStrata) elShowEscapeStrata.checked = state.showEscapeStrata;
+  chrome?.sync();
   updateHistoryButtons();
 }
 
@@ -515,12 +527,26 @@ function stateToSearchParams() {
 
 function currentShareUrl() {
   const url = new URL(window.location.href);
+  // Imported legacy settings are translated once; new links carry only current state.
+  url.search = '';
   url.hash = stateToSearchParams().toString();
   return url.toString();
 }
 
 function applyStateFromHash() {
-  Object.assign(state, decodeExplorerState(window.location.hash, DEFAULT_STATE));
+  const location = { search: window.location.search, hash: window.location.hash };
+  const first = decodeExplorerLocation(location, DEFAULT_STATE);
+  Object.assign(state, first.state);
+  // The legacy camera stores vertical span. Measure after its focus/layout is applied.
+  updatePanelFocus();
+  const aspect = canvas => {
+    const { clientWidth: width, clientHeight: height } = canvas.parentElement;
+    return width > 0 && height > 0 ? width / height : undefined;
+  };
+  legacyImport = decodeExplorerLocation(location, DEFAULT_STATE, {
+    parameterAspect: aspect(canvasParam), dynamicalAspect: aspect(canvasDyn)
+  });
+  Object.assign(state, legacyImport.state);
 }
 
 async function copyTextToClipboard(text) {
@@ -679,6 +705,7 @@ function closeModal() {
   document.querySelector('.container').inert = false;
   document.getElementById('footer-status').inert = false;
   document.body.classList.remove('dialog-open');
+  chrome?.sync();
   modalReturnFocus?.focus({ preventScroll: true });
   modalReturnFocus = null;
 }
@@ -692,10 +719,14 @@ const ABOUT_TABS = {
     computational view behind connectedness for the collinear family.</p>
     <p>The original attractor <code>E(c,n)</code> is drawn by a visual renderer
     by default. Prefix-cylinder and seeded-histogram views are separate from
-    finite-search certificate status.</p>
+    finite-search status.</p>
     <p>The Canvas renderer is progressive and interruptible. The selected
-    certificate payload always uses the full chosen <code>k_max</code> and
+    search record always uses the full chosen <code>k_max</code> and
     <code>L_max</code>, independent of preview resolution.</p>
+    <p>Choose <strong>Mₙ</strong> for the connectedness search, <strong>Rₙ</strong>
+    for the restricted-digit search, or <strong>Compare</strong> to overlay them.
+    Teal Rₙ pixels have survived a finite search; they are not certified members.
+    The result bar and exported inverse word refer to Mₙ.</p>
   `,
   framework: `
     <p>The 2024 result uses rectangle-covering and lens-local regular-closedness
@@ -726,11 +757,33 @@ const ABOUT_TABS = {
 };
 
 function openAboutModal(tab = 'intuition') {
-  openModal('About + Cite', ABOUT_TABS[tab] || ABOUT_TABS.intuition, '', true);
+  const build = deploymentInfo?.source_commit
+    ? `<p class="build-info">Public build <code>${htmlEscape(deploymentInfo.source_commit.slice(0, 12))}</code> · ${htmlEscape(deploymentInfo.version)}. <a href="deployment.json" target="_blank" rel="noopener">Build and asset record</a>.</p>` : '';
+  const migration = legacyImport?.importedLegacy
+    ? `<p>This view was imported from the earlier explorer.${legacyImport.warnings.length
+      ? ` ${legacyImport.warnings.map(htmlEscape).join(' ')}` : ' Its parameter and camera framing have been preserved.'}</p>` : '';
+  const archive = '<p><a href="https://complextrees.com/collinear/legacy-2026-09/" target="_blank" rel="noopener">Open the archived WebGL explorer</a> for the historical interface and shader experiments.</p>';
+  const actions = tab === 'references'
+    ? '<button class="btn" id="btn-copy-software-citation">Copy software citation</button><button class="btn btn-secondary" id="btn-copy-bibtex">Copy BibTeX</button>' : '';
+  openModal('About & cite', (ABOUT_TABS[tab] || ABOUT_TABS.intuition) + migration + archive + build, actions, true);
   if (elModalTabs) {
     for (const btn of elModalTabs.querySelectorAll('.modal-tab')) {
       btn.classList.toggle('active', btn.dataset.tab === tab);
       btn.setAttribute('aria-pressed', String(btn.dataset.tab === tab));
+    }
+  }
+  if (tab === 'references') {
+    const revision = deploymentInfo?.source_commit;
+    const version = deploymentInfo?.version || '0.2.0-alpha';
+    const sourceUrl = `https://github.com/espigule/collinear-fractals-gpu${revision ? `/tree/${revision}` : ''}`;
+    const citation = `Bernat Espigule. Collinear Fractals GPU: companion software for collinear fractals, finite capture, and restricted polynomial roots. Version ${version}${revision ? `, commit ${revision}` : ''}. ${sourceUrl}`;
+    const bibtex = `@software{espigule_collinear_fractals,\n  author = {Bernat Espigule},\n  title = {Collinear Fractals GPU: companion software for collinear fractals, finite capture, and restricted polynomial roots},\n  version = {${version}},\n  url = {${sourceUrl}}${revision ? `,\n  note = {Source commit ${revision}}` : ''}\n}`;
+    for (const [id, value] of [['btn-copy-software-citation', citation], ['btn-copy-bibtex', bibtex]]) {
+      const button = document.getElementById(id);
+      button.addEventListener('click', () => {
+        copyTextToClipboard(value).then(() => { button.textContent = 'Copied'; })
+          .catch(() => { chrome?.announce('Copy was unavailable. Citation metadata is available in CITATION.cff in the source repository.'); });
+      });
     }
   }
 }
@@ -752,11 +805,11 @@ function openSupportModal() {
 
 function openShareModal(kind = 'share') {
   const url = currentShareUrl();
-  const embed = `<iframe src="${htmlEscape(url)}" width="100%" height="720" loading="lazy" title="Collinear Fractals GPU Explorer"></iframe>`;
+  const embed = `<iframe src="${htmlEscape(url)}" width="100%" height="720" loading="lazy" allow="fullscreen" title="Collinear Fractals Explorer"></iframe>`;
   const value = kind === 'embed' ? embed : url;
   openModal(
     kind === 'embed' ? 'Embed Code' : 'Share Current View',
-    `<p>The URL records the current parameter, viewports, renderer mode, visual depth, rendering layers, palette, and search limits.</p><pre>${htmlEscape(value)}</pre>`,
+    `<p>The URL records the parameter, mathematical views, viewports, rendering layers, palette, and search limits.</p><pre tabindex="0">${htmlEscape(value)}</pre>`,
     `<button class="btn" id="modal-copy-primary">Copy</button>`
   );
   const copyButton = document.getElementById('modal-copy-primary');
@@ -776,15 +829,15 @@ const TOUR_STEPS = [
   },
   {
     title: 'Dynamical plane',
-    body: 'The right canvas shows the difference attractor, optional original-attractor renderer, canonical trap, enclosure, and finite inverse-search path.'
+    body: 'The right canvas starts with the original attractor E(c,n). Use E, ½D, and Overlay to compare the original and half-difference attractors. Controls contains rendering choices and optional trap, enclosure, and inverse-search paths.'
   },
   {
     title: 'Search limits',
-    body: 'k_max and L_max control the selected finite search and certificate JSON. Preview rendering remains progressive and refines to one pixel.'
+    body: 'The depth and node limits control the selected M_n search and its JSON record. A limit produces Undetermined, not a membership claim. Parameter previews refine progressively; teal R_n pixels only indicate finite survival.'
   },
   {
     title: 'Reproducibility',
-    body: 'Use Share View, Copy Embed, and Copy Certificate JSON to reproduce a state or attach finite-search data to an example.'
+    body: 'Use Share to reproduce the complete view, export a completed PNG from More, and copy a search record from Controls. About & cite provides references, software citations, and the public build identity.'
   }
 ];
 
@@ -950,32 +1003,24 @@ function resetParamViewportMath() {
   const zoomToFitW = 2.0 * Rx;
   const zoomToFitH = (2.0 * Ry) * (w / h);
   
-  state.paramZoom = Math.max(zoomToFitW, zoomToFitH) * 1.05; // 5% margin
+  // Short panels need room beneath the floating camera controls for the marker.
+  state.paramZoom = Math.max(zoomToFitW, zoomToFitH) * (h < 400 ? 1.25 : 1.08);
 }
 
 function resetDynViewportMath() {
   const eff = getEffectiveC(state.cx, state.cy);
-  const cx = eff.x;
-  const cy = eff.y;
-  const n = state.n;
-  const rho = Math.hypot(cx, cy);
-  
-  const enc = computeEnclosureGeneral(state.cx, state.cy, 2 * n - 1, state.tol);
-  if (!enc.err) {
-    const xMaxBound = (enc.se * rho + Math.abs(cx) * enc.ve) / (2.0 * Math.abs(cy));
-    const yMaxBound = enc.ve / 2.0;
-    
+  try {
+    const bounds = attractorBounds({ re: eff.x, im: eff.y }, state.n);
     state.dynCenter = { x: 0.0, y: 0.0 };
-    
     const h = canvasDyn.height || 600;
     const w = canvasDyn.width || 800;
-    const zoomToFitW = 2.0 * xMaxBound;
-    const zoomToFitH = (2.0 * yMaxBound) * (w / h);
-    
-    state.dynZoom = Math.min(1e6, Math.max(zoomToFitW, zoomToFitH) * 1.15); // 15% margins
-  } else {
+    const fittedZoom = Math.max(2 * bounds.xMax, 2 * bounds.yMax * w / h) * 1.15;
+    state.dynZoom = Math.min(1e6, fittedZoom);
+    if (fittedZoom > 1e6) chrome?.announce('The attractor exceeds the maximum camera span. Fit shows the widest available view.');
+  } catch {
     state.dynCenter = { x: 0.0, y: 0.0 };
     state.dynZoom = 8.0;
+    chrome?.announce('A finite automatic fit is unavailable for this parameter. Use the camera controls to explore it.');
   }
 }
 
@@ -1009,6 +1054,17 @@ function triggerParamRender() {
   renderRequestId = requestAnimationFrame(renderParamStage);
 }
 
+function parameterSearchColor(test) {
+  if (test.displayReason === 'finite-survival') return '#328a94';
+  if (isInteriorVerdict(test.verdict)) {
+    return state.showEscapeStrata ? getExteriorColorString() : rgbToCss(test.verdict === 'Interior-offLens'
+      ? getOffLensInteriorColorForLevel(test.depth % state.modulo, test.depth)
+      : getColorForLevel(test.depth % state.modulo, test.depth));
+  }
+  if (test.verdict === 'Exterior') return state.showEscapeStrata ? getEscapeColorString(test.depth) : getExteriorColorString();
+  return getUndeterminedColorString();
+}
+
 function renderParamStage() {
   const width = canvasParam.width;
   const height = canvasParam.height;
@@ -1021,15 +1077,15 @@ function renderParamStage() {
       if (c.y === 0) {
         color = '#cbd5e1';
       } else {
-        const test = inverseIterationTestFast(c.x, c.y, state.n, state.kMax, state.LMax, state.tol);
-        if (isInteriorVerdict(test.verdict)) {
-          color = state.showEscapeStrata ? getExteriorColorString() : rgbToCss(test.verdict === 'Interior-offLens'
-            ? getOffLensInteriorColorForLevel(test.depth % state.modulo, test.depth)
-            : getColorForLevel(test.depth % state.modulo, test.depth));
-        } else if (test.verdict === 'Exterior') {
-          color = state.showEscapeStrata ? getEscapeColorString(test.depth) : getExteriorColorString();
+        if (state.parameterMode === 'mn') {
+          color = parameterSearchColor(inverseIterationTestFast(c.x, c.y, state.n, state.kMax, state.LMax, state.tol));
         } else {
-          color = getUndeterminedColorString();
+          const test = classifyParameterView(c.x, c.y, state.n, state.kMax, state.LMax, state.tol, state.parameterMode);
+          // Teal is a finite-survival candidate, including in comparison mode.
+          // Incomplete R_n searches stay amber; they are never silently included.
+          color = state.parameterMode === 'rn' ? parameterSearchColor(test)
+            : test.rn.displayReason === 'finite-survival' ? '#328a94'
+            : test.rn.verdict !== 'Exterior' ? getUndeterminedColorString() : parameterSearchColor(test.mn);
         }
       }
       ctxParam.fillStyle = color;
@@ -1067,7 +1123,16 @@ function drawParameterLensGuides(completedStage = false) {
     ctxParam.putImageData(paramSavedImageData, 0, 0);
   }
   
-  if (state.showEscapeStrata) {
+  if (state.parameterMode === 'rn') {
+    ctxParam.save();
+    ctxParam.strokeStyle = 'rgba(0, 0, 0, 0.14)';
+    ctxParam.setLineDash([3, 5]);
+    const origin = paramToScreen(0, 0);
+    ctxParam.beginPath();
+    ctxParam.arc(origin.x, origin.y, canvasParam.width / state.paramZoom, 0, 2 * Math.PI);
+    ctxParam.stroke();
+    ctxParam.restore();
+  } else if (state.showEscapeStrata) {
     // Escape mode: do not show the lens, just add the circle at |c|=1+\sqrt{n-1}
     ctxParam.save();
     ctxParam.strokeStyle = 'rgba(0, 0, 0, 0.18)';
@@ -1165,6 +1230,18 @@ function triggerDynRender() {
   };
   currentDynStage = 0;
   markRendering(canvasDyn, 'rendering');
+  if (!state.showDifference && !(state.showCollinear && state.rendererMode === 'survival')) {
+    // Direct attractor renderers do not need an empty inverse-search raster.
+    dynRenderRequestId = requestAnimationFrame(() => {
+      ctxDyn.fillStyle = getExteriorColorString();
+      ctxDyn.fillRect(0, 0, canvasDyn.width, canvasDyn.height);
+      drawOriginalAttractorOverlay();
+      drawDynamicalGuidesAndOverlays();
+      dynRenderRequestId = null;
+      markRendering(canvasDyn, 'complete');
+    });
+    return;
+  }
   startDynStage();
 }
 
@@ -1558,6 +1635,13 @@ function currentCertificatePayload() {
   });
   return {
     ...record,
+    parameter_view: {
+      mode: state.parameterMode,
+      definition: state.parameterMode === 'mn' ? '2c in E(c,2n-1)' : 'R_n: c in E(c,n); M_n: 2c in E(c,2n-1)',
+      search_record_set: 'M_n',
+      rn: state.parameterMode === 'mn' ? null : classifyParameterView(state.cx, state.cy, state.n, state.kMax, state.LMax, state.tol, 'rn').rn
+    },
+    deployment: deploymentInfo ? { source_commit: deploymentInfo.source_commit, version: deploymentInfo.version } : null,
     software: 'Collinear Fractals GPU Explorer',
     version: record.software_version,
     generatedAt: new Date().toISOString(),
@@ -1626,6 +1710,14 @@ function updateStatusBar(test) {
   elStatVerdict.textContent = test.verdict;
   elStatNodes.textContent = (test.nodesExplored ?? 0).toLocaleString();
   elStatDepth.textContent = test.depth;
+  const viewDetail = document.getElementById('stat-view-detail');
+  if (viewDetail) {
+    viewDetail.hidden = state.parameterMode === 'mn';
+    if (!viewDetail.hidden) {
+      const rn = classifyParameterView(state.cx, state.cy, state.n, state.kMax, state.LMax, state.tol, 'rn');
+      viewDetail.textContent = `Rₙ: ${rn.displayReason === 'finite-survival' ? 'survives the finite search; membership unresolved' : `${rn.verdict} (${rn.stopReason})`}. The JSON record above describes Mₙ.`;
+    }
+  }
   const reasons = {
     'outside-domain': 'Real axis / unit circle unsupported',
     'numerical-range': 'Numerical range exceeded',
@@ -1684,6 +1776,24 @@ function updateLegendColors() {
     const element = document.querySelector(selector);
     if (element) element.closest('.legend-item').hidden = !visible;
   }
+  const rnOnly = state.parameterMode === 'rn';
+  const locus = document.getElementById('legend-locus-color');
+  if (locus) {
+    locus.style.background = rnOnly ? '#328a94' : interior;
+    locus.nextElementSibling.textContent = rnOnly ? 'Rₙ finite-depth survivors' : 'Mₙ in-lens capture (depth mod q)';
+  }
+  for (const selector of ['#legend-offlens-color', '.legend-lens']) {
+    document.querySelector(selector)?.closest('.legend-item')?.toggleAttribute('hidden', rnOnly);
+  }
+  let rnLegend = document.getElementById('legend-rn-survival');
+  if (!rnLegend) {
+    rnLegend = document.createElement('div');
+    rnLegend.id = 'legend-rn-survival';
+    rnLegend.className = 'legend-item';
+    rnLegend.innerHTML = '<span class="legend-color" style="background:#328a94" aria-hidden="true"></span><span>Rₙ finite-depth survivors</span>';
+    document.getElementById('parameter-view-note')?.before(rnLegend);
+  }
+  rnLegend.hidden = state.parameterMode !== 'compare';
 }
 
 // Pointer capture keeps drags stable across canvas boundaries; the same controls work by touch.
@@ -1827,6 +1937,41 @@ function readNumericInput(element, fallback) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+chrome = createExplorerChrome({
+  state,
+  changeArity: value => withHistory(() => {
+    state.n = Math.max(2, Math.min(100, Math.round(value)));
+    resetParamViewportMath();
+    resetDynViewportMath();
+  }, 'both'),
+  changeView: view => withHistory(() => { state.focusedPanel = view; }, 'both'),
+  changeScene: mode => withHistory(() => setComparisonMode(mode), 'dyn'),
+  changeParameterMode: mode => {
+    withHistory(() => { state.parameterMode = mode; }, 'param');
+    updateStatusBar(selectedSearchResult());
+  },
+  zoom: (panel, factor) => withHistory(() => {
+    const key = panel === 'param' ? 'paramZoom' : 'dynZoom';
+    state[key] *= factor;
+  }, panel)
+});
+
+for (const input of [elParamModulus, elParamArgument]) {
+  input?.addEventListener('change', () => {
+    withHistory(() => {
+      const radius = Math.max(0, Math.min(1e6, readNumericInput(elParamModulus, Math.hypot(state.cx, state.cy))));
+      const degrees = Math.max(-180, Math.min(180, readNumericInput(elParamArgument, Math.atan2(state.cy, state.cx) * 180 / Math.PI)));
+      const radians = degrees * Math.PI / 180;
+      state.cx = radius * Math.cos(radians);
+      state.cy = radius * Math.sin(radians);
+      // Exact cardinal directions avoid turning a real-axis input into a tiny
+      // imaginary parameter merely through trigonometric rounding.
+      if (degrees === 0 || Math.abs(degrees) === 180) state.cy = 0;
+      if (Math.abs(degrees) === 90) state.cx = 0;
+    }, 'dyn');
+  });
+}
+
 for (const input of [elParamReal, elParamImag]) {
   if (input) input.addEventListener('change', () => {
     withHistory(() => {
@@ -1923,7 +2068,7 @@ if (elBtnCopyCertificate) {
     const originalText = elBtnCopyCertificate.textContent;
     copyCertificateJSON()
       .then(() => {
-        elBtnCopyCertificate.textContent = 'Certificate Copied';
+        elBtnCopyCertificate.textContent = 'Search record copied';
         window.setTimeout(() => { elBtnCopyCertificate.textContent = originalText; }, 1200);
       })
       .catch(() => openModal('Copy search record', `<p>Copy the record below.</p><pre tabindex="0">${htmlEscape(JSON.stringify(currentCertificatePayload(), null, 2))}</pre>`));
@@ -2074,6 +2219,7 @@ document.addEventListener('keydown', (e) => {
     }
     return;
   }
+  if (chrome?.handleKeydown(e)) return;
   if (e.target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
     e.preventDefault();
@@ -2099,17 +2245,19 @@ document.addEventListener('keydown', (e) => {
 
 // Initial startup and externally navigated share states.
 const controlsDisclosure = document.getElementById('controls-disclosure');
-const mobileLayout = window.matchMedia('(max-width: 960px)');
-if (controlsDisclosure) {
-  controlsDisclosure.open = !mobileLayout.matches;
-  mobileLayout.addEventListener('change', e => {
-    if (!e.matches) controlsDisclosure.open = true;
-    scheduleResize();
-  });
-}
-const hasInitialHashState = Boolean(window.location.hash && window.location.hash.length > 1);
+if (controlsDisclosure) controlsDisclosure.open = true;
 applyStateFromHash();
+const hasInitialHashState = legacyImport?.source !== 'default';
+if (!hasInitialHashState) {
+  applyExampleConfig(fallbackExampleConfig('e_c4_overlap'));
+  setComparisonMode('collinear');
+  state.showTrap = false;
+  state.showEnclosure = false;
+  state.showTree = false;
+  state.showPath = false;
+}
 populateExamplePresets();
+if (!hasInitialHashState && elExamplePreset) elExamplePreset.value = 'e_c4_overlap';
 loadExampleIndex();
 updateControlsFromState();
 updateLegendColors();
@@ -2117,6 +2265,18 @@ updatePanelFocus();
 resizeCanvases({ resetViewports: !hasInitialHashState });
 triggerParamRender();
 triggerDynRender();
+if (legacyImport?.importedLegacy) {
+  chrome.announce(legacyImport.warnings.length
+    ? 'Imported the legacy parameter and view. Older shader settings stay in the archived explorer; see About.'
+    : 'Imported the legacy parameter and view. New share links use this explorer.');
+}
+fetch('deployment.json', { cache: 'no-store' }).then(response => response.ok ? response.json() : null)
+  .then(info => {
+    if (info && info.schema_version === 1 && typeof info.source_commit === 'string' && /^[0-9a-f]{40}$/.test(info.source_commit)) {
+      deploymentInfo = info;
+      document.documentElement.dataset.sourceCommit = info.source_commit;
+    }
+  }).catch(() => { /* The explorer also runs from a source checkout without a deployment record. */ });
 window.addEventListener('hashchange', () => {
   pushHistory();
   exampleLoadGeneration++;

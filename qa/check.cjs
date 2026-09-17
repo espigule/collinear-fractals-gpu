@@ -37,4 +37,6 @@ for (const file of readdirSync(__dirname).filter(name => /(?:test|tests)\.(?:js|
   run(`Regression: ${file}`, process.execPath, [path.join(__dirname, file)]);
 }
 run('Renderer metadata benchmark', process.execPath, ['tools/bench/render_metadata_bench.js']);
+run('Deployment integrity regressions', python, ['tools/test_stage_site.py']);
+run('Public staging and deployment manifest integrity', python, ['tools/stage_site.py']);
 console.log('\nAll non-browser checks passed.');
