@@ -97,6 +97,7 @@ test('deep zooms, scientific notation and all view settings roundtrip losslessly
     dynZoom: 1.0000000000000003e-9,
     tol: 1e-15,
     rendererMode: 'histogram',
+    parameterMode: 'compare',
     comparisonMode: 'collinear',
     firstLevelPieces: false,
     attractorDepth: 12,
@@ -138,7 +139,7 @@ test('ordinary historical links still decode with their original field names', (
 });
 
 test('enum, layer, boolean and color validation rejects unsupported values', () => {
-  const invalidModes = decodeExplorerState('#mode=constructor&renderer=webgl&palette=__proto__&focus=all&pieces=false', defaults);
+  const invalidModes = decodeExplorerState('#mode=constructor&pm=constructor&renderer=webgl&palette=__proto__&focus=all&pieces=false', defaults);
   assert.deepEqual(invalidModes, defaults);
   for (const layers of ['', '111111', '11111111', '1x11111', 'abcdefg', '1111111\n']) {
     assert.deepEqual(decodeExplorerState(new URLSearchParams({ layers }), defaults), defaults);
@@ -155,6 +156,18 @@ test('enum, layer, boolean and color validation rejects unsupported values', () 
   assert.deepEqual(colors.customPalette, { ...defaults.customPalette, interior: '#aabbcc' });
   assert.deepEqual(decodeExplorerState(new URLSearchParams({ ci: '#abcdef\n' }), defaults), defaults);
   assert.deepEqual(decodeExplorerState('#pieces=0', defaults), { ...defaults, firstLevelPieces: false });
+});
+
+test('parameter-mode links default to Mn and preserve each supported mode', () => {
+  assert.equal(decodeExplorerState('#n=4&cx=1.5&cy=1.658312395').parameterMode, 'mn');
+  for (const parameterMode of ['mn', 'rn', 'compare']) {
+    const state = { ...defaults, parameterMode };
+    const params = encodeExplorerState(state);
+    assert.equal(params.get('pm'), parameterMode);
+    assert.deepEqual(decodeExplorerState(params), state);
+  }
+  assert.equal(decodeExplorerState('#pm=Rn').parameterMode, 'mn');
+  assert.equal(decodeExplorerState('#n=5', { ...defaults, parameterMode: 'rn' }).parameterMode, 'rn');
 });
 
 test('normalization is nonmutating, copies nested data and validates defaults', () => {

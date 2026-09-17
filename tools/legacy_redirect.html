@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Collinear Fractals Explorer</title>
+  <meta name="description" content="Continue to the current Collinear Fractals Explorer, or open the preserved September 2026 WebGL edition.">
+  <link rel="canonical" href="https://complextrees.com/collinear-fractals-gpu/">
+  <style>
+    :root { color-scheme: light dark; font: 1rem/1.6 system-ui, sans-serif; }
+    body { max-width: 38rem; margin: 12vh auto; padding: 0 1.5rem; }
+    h1 { font-size: clamp(1.5rem, 4vw, 2rem); line-height: 1.2; }
+    a { text-underline-offset: .18em; }
+    a:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Collinear Fractals Explorer</h1>
+  <p>The explorer has moved. Your shared parameter and view will travel with you.</p>
+  <p><a id="explorer-destination" href="https://complextrees.com/collinear-fractals-gpu/">Continue to the current explorer</a></p>
+  <p><a id="archive-destination" href="https://complextrees.com/collinear/legacy-2026-09/">Open the September 2026 WebGL edition</a> for the historical interface and shader settings.</p>
+  <noscript><p>Automatic forwarding needs JavaScript. You can still open either edition using the links above.</p></noscript>
+  <script>
+    (() => {
+      'use strict';
+      // These destinations are fixed: URL parameters never choose a host or path.
+      const currentBase = 'https://complextrees.com/collinear-fractals-gpu/';
+      const archiveBase = 'https://complextrees.com/collinear/legacy-2026-09/';
+      const originalSearch = window.location.search;
+      const originalHash = window.location.hash;
+      const query = new URLSearchParams(originalSearch);
+      const hash = new URLSearchParams(originalHash.replace(/^#/, ''));
+      // Verified against the archived DEFAULT_PARAMS and loadParamsFromHash().
+      // Names are matched exactly; a tracking value containing "n=4" is not state.
+      const legacyKeys = [
+        'n', 'cx', 'cy', 'panels', 'zoom', 'centerX', 'centerY',
+        'mmin1', 'mmax1', 'mmin2', 'mmax2', 'queue',
+        'thicknessRE', 'thicknessME', 'pShift', 'gShift', 'res',
+        'realBandEnabled', 'realBandHeight', 'useCustomColors', 'bgColor',
+        'color1', 'color2', 'color3', 'color4', 'color5', 'color6', 'color7', 'color8',
+        'darkenBoundaryHits', 'showStructureColoring', 'useTrapOnly', 'useParaTrapOnly',
+        'autoPerf', 'autoQueue', 'autoResolution', 'animate', 'controls',
+        'heightRE', 'heightME', 'depth', 'skipRE', 'skipME', 'useRectTrap'
+      ];
+      const hasLegacyState = legacyKeys.some(key => query.has(key) || hash.has(key));
+      let search = originalSearch;
+      if (hasLegacyState && query.get('legacy') !== '1') {
+        // Preserve the original bytes, including ordering, duplicate parameters,
+        // + signs and percent-escape case. Only add the migration marker.
+        // An existing conflicting marker must follow the explicit legacy=1 so
+        // URLSearchParams.get() on the destination sees the intended value.
+        search = query.has('legacy')
+          ? '?legacy=1' + (originalSearch ? '&' + originalSearch.slice(1) : '')
+          : originalSearch + (originalSearch ? '&' : '?') + 'legacy=1';
+      }
+      const destination = currentBase + search + originalHash;
+      document.getElementById('explorer-destination').href = destination;
+      document.getElementById('archive-destination').href = archiveBase + originalSearch + originalHash;
+      // replace() avoids trapping Back navigation on the forwarding page.
+      // The links remain usable if navigation is blocked by the environment.
+      try { window.location.replace(destination); } catch { /* Keep the fallback links. */ }
+    })();
+  </script>
+</body>
+</html>

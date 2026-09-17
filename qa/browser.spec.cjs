@@ -3,6 +3,7 @@
 const { test: base, expect } = require('playwright/test');
 const { readFile } = require('node:fs/promises');
 const { spawnSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
 
 // Tests exercise the staged deployment in a real browser. No application globals
 // or mocked Canvas/Worker APIs are used. Any script error or failed local asset
@@ -32,6 +33,19 @@ const test = base.extend({
 
 async function reveal(page, selector) {
   const control = page.locator(selector);
+  const drawer = page.locator('#sidebar-panel');
+  const insideDrawer = await control.locator('xpath=ancestor::*[@id="sidebar-panel"]').count();
+  if (insideDrawer && !await drawer.isVisible()) {
+    await page.locator('#btn-toggle-controls').click();
+    await expect(drawer).toBeVisible();
+  } else if (!insideDrawer && await drawer.isVisible()) {
+    await page.locator('#btn-close-controls').click();
+    await expect(drawer).not.toBeVisible();
+  }
+  const more = page.locator('#toolbar-more');
+  if (!await control.locator('xpath=ancestor::*[@id="toolbar-more"]').count() && await more.getAttribute('open') !== null) {
+    await more.locator(':scope > summary').click();
+  }
   const ancestors = await control.locator('xpath=ancestor::details').all();
   for (const details of ancestors) {
     if (await details.getAttribute('open') === null) {
@@ -50,6 +64,16 @@ async function fillNumber(page, selector, value) {
 
 async function select(page, selector, value) {
   await (await reveal(page, selector)).selectOption(value);
+}
+
+async function expectInsideViewport(page, selector) {
+  const box = await page.locator(selector).boundingBox();
+  expect(box, `${selector} has visible layout bounds`).not.toBeNull();
+  const viewport = page.viewportSize();
+  expect(box.x, `${selector} left edge`).toBeGreaterThanOrEqual(-1);
+  expect(box.y, `${selector} top edge`).toBeGreaterThanOrEqual(-1);
+  expect(box.x + box.width, `${selector} right edge`).toBeLessThanOrEqual(viewport.width + 1);
+  expect(box.y + box.height, `${selector} bottom edge`).toBeLessThanOrEqual(viewport.height + 1);
 }
 
 async function open(page, hash = '') {
@@ -81,9 +105,364 @@ async function readRecord(page) {
   return data;
 }
 
+// Independent projection from the fixture's declared world span. This helper
+// reads the actual displayed Canvas, without importing the renderer or using
+// application geometry as its expected answer. Patches avoid axes and markers.
+async function dynamicalPatch(page, point, worldSpan = 12) {
+  return page.locator('#dynamical-canvas').evaluate((canvas, { point, worldSpan }) => {
+    const scale = canvas.width / worldSpan;
+    const x = Math.round(canvas.width / 2 + point.x * scale);
+    const y = Math.round(canvas.height / 2 - point.y * scale);
+    const radius = Math.max(2, Math.floor(0.1 * scale));
+    if (x - radius < 0 || y - radius < 0 || x + radius >= canvas.width || y + radius >= canvas.height) {
+      throw new Error('Geometry fixture lies outside the visible canvas');
+    }
+    const side = 2 * radius + 1;
+    const data = canvas.getContext('2d').getImageData(x - radius, y - radius, side, side).data;
+    let marked = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      // White is the declared exterior. Ignore faint grid/axis antialiasing.
+      if (Math.min(data[i], data[i + 1], data[i + 2]) < 220 && data[i + 3] > 250) marked++;
+    }
+    return { marked, total: side * side, coverage: marked / (side * side) };
+  }, { point, worldSpan });
+}
+
+test('served deployment manifest identifies the checkout and fingerprints public assets', async ({ request }) => {
+  const response = await request.get('/deployment.json');
+  expect(response.ok()).toBe(true);
+  const manifest = await response.json();
+  expect(manifest.schema_version).toBe(1);
+  expect(manifest.canonical_url).toBe('https://complextrees.com/collinear-fractals-gpu/');
+  expect(manifest.source_commit).toMatch(/^[0-9a-f]{40}$/);
+  expect(typeof manifest.source_dirty).toBe('boolean');
+  const revision = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd: require('node:path').resolve(__dirname, '..'), encoding: 'utf8',
+  });
+  expect(revision.status).toBe(0);
+  expect(manifest.source_commit).toBe(revision.stdout.trim());
+  const files = Object.keys(manifest.asset_sha256);
+  expect(files).toEqual([...files].sort());
+  expect(files).not.toContain('deployment.json');
+  expect(files.some(name => /^(?:qa|node_modules|artifacts|python|tools|\.git)\//.test(name))).toBe(false);
+  for (const path of [
+    'index.html', 'index.css', 'explorer.js', 'VERSION',
+    'src/renderers/attractor_prefix.mjs', 'src/renderers/attractor_histogram.mjs',
+    'src/compute/inverse_search_kernel.mjs', 'src/state/explorer_state.mjs',
+  ]) {
+    const asset = await request.get(`/${path}`);
+    expect(asset.ok(), path).toBe(true);
+    const bytes = await asset.body();
+    expect(createHash('sha256').update(bytes).digest('hex'), path).toBe(manifest.asset_sha256[path]);
+    if (path === 'VERSION') expect(bytes.toString('utf8').trim()).toBe(manifest.version);
+  }
+});
+
+for (const renderer of ['prefix', 'histogram', 'survival']) {
+  test(`${renderer} renders full E(c,4) geometry for c=2i in the actual canvas`, async ({ page }, testInfo) => {
+    // Even and odd radix -4 expansions give E(2i,4)=[-4,4]×[-2,2]
+    // exactly. An erroneous extra division by c has x bounds [-1,1], so
+    // the patches at x=±3 distinguish the two scales without a screenshot oracle.
+    const hash = new URLSearchParams({
+      n: '4', cx: '0', cy: '2', dcx: '0', dcy: '0', dz: '12', focus: 'dynamical',
+      mode: 'collinear', layers: '0100000', renderer, adepth: '7',
+      hseed: '20260917', hsamples: '200000', pieces: '0', aop: '1', sop: '1', k: '12',
+    });
+    await page.goto(`/#${hash}`);
+    const canvas = page.locator('#dynamical-canvas');
+    await expect(canvas).toBeVisible();
+    await expect(page.locator('#parameter-panel')).not.toBeVisible();
+    await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+    await expect(page.locator('#original-renderer-mode')).toHaveValue(renderer);
+    await expect(page.locator('#show-collinear-attractor')).toBeChecked();
+    await expect(page.locator('#show-difference-attractor')).not.toBeChecked();
+    for (const point of [{ x: 3, y: 0.7 }, { x: -3, y: 0.7 }]) {
+      const pixels = await dynamicalPatch(page, point);
+      expect(pixels.coverage, `${renderer}: original-scale interior near (${point.x},${point.y})`).toBeGreaterThan(0.05);
+    }
+    for (const point of [{ x: 4.25, y: 0.7 }, { x: -4.25, y: 0.7 }, { x: 0.7, y: 2.25 }]) {
+      const pixels = await dynamicalPatch(page, point);
+      expect(pixels.coverage, `${renderer}: outside the exact rectangle at (${point.x},${point.y})`).toBeLessThan(0.01);
+    }
+    await page.screenshot({ path: testInfo.outputPath(`full-E-${renderer}.png`) });
+  });
+}
+
+test('immersive workspace has an accessible drawer, view switch and synchronized quick arity', async ({ page, isMobile }) => {
+  await open(page);
+  const initialArity = Number(await page.locator('#quick-arity').inputValue());
+  const editedArity = initialArity + 2;
+  const drawer = page.locator('#sidebar-panel');
+  const toggle = page.locator('#btn-toggle-controls');
+  await expect(drawer).not.toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  for (const selector of ['#btn-toggle-controls', '#btn-arity-increase', '#btn-share', '#btn-fullscreen']) {
+    await expectInsideViewport(page, selector);
+  }
+  const stage = await page.locator('#workspace').boundingBox();
+  expect(stage.width).toBeGreaterThanOrEqual(page.viewportSize().width - 2);
+  expect(stage.height).toBeGreaterThan(page.viewportSize().height * 0.8);
+  if (!isMobile) {
+    const chrome = await page.evaluate(() =>
+      document.querySelector('#explorer-toolbar').getBoundingClientRect().height
+      + document.querySelector('#footer-status').getBoundingClientRect().height);
+    expect(chrome, 'Desktop controls reserve at most 96px outside the plots').toBeLessThanOrEqual(96);
+  }
+  await toggle.focus();
+  await toggle.press('Enter');
+  await expect(drawer).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await (await reveal(page, '#param-real')).focus();
+  await page.keyboard.press('Escape');
+  await expect(drawer).not.toBeVisible();
+  await expect(toggle).toBeFocused();
+
+  await page.locator('#btn-view-dyn').click();
+  await expect(page.locator('#parameter-panel')).not.toBeVisible();
+  await expect(page.locator('#dynamical-panel')).toBeVisible();
+  await expect(page.locator('#btn-view-dyn')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#btn-view-param').click();
+  await expect(page.locator('#dynamical-panel')).not.toBeVisible();
+  await expect(page.locator('#parameter-panel')).toBeVisible();
+  await page.locator('#btn-view-split').click();
+  await expect(page.locator('#parameter-panel')).toBeVisible();
+  await expect(page.locator('#dynamical-panel')).toBeVisible();
+  await expect(page.locator('#btn-view-split')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.locator('#btn-arity-increase').click();
+  await expect(page.locator('#quick-arity')).toHaveValue(String(initialArity + 1));
+  await expect(page.locator('#arity-slider')).toHaveValue(String(initialArity + 1));
+  await page.locator('#btn-arity-decrease').click();
+  await expect(page.locator('#quick-arity')).toHaveValue(String(initialArity));
+  await fillNumber(page, '#quick-arity', editedArity);
+  await expect(page.locator('#arity-slider')).toHaveValue(String(editedArity));
+  await (await reveal(page, '#btn-undo')).click();
+  await expect(page.locator('#quick-arity')).toHaveValue(String(initialArity));
+  await expect(page.locator('#arity-slider')).toHaveValue(String(initialArity));
+  await (await reveal(page, '#btn-redo')).click();
+  await expect(page.locator('#quick-arity')).toHaveValue(String(editedArity));
+  const hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
+  expect(hash.get('n')).toBe(String(editedArity));
+  expect(hash.get('focus')).toBe('both');
+});
+
+test('scene chips, zoom and fit update the rendered view and shared state', async ({ page }) => {
+  await open(page, '#n=4&cx=0&cy=2&dcx=0&dcy=0&dz=12&layers=1000000');
+  await page.locator('#btn-view-dyn').click();
+  await page.locator('#btn-layer-collinear').click();
+  await expect(page.locator('#show-collinear-attractor')).toBeChecked();
+  await expect(page.locator('#show-difference-attractor')).not.toBeChecked();
+  await expect(page.locator('#btn-layer-collinear')).toHaveAttribute('aria-pressed', 'true');
+  let hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
+  expect(hash.get('mode')).toBe('collinear');
+  expect(hash.get('layers')).toBe('0100000');
+
+  await page.locator('#btn-zoom-in-dyn').click();
+  hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
+  expect(Number(hash.get('dz'))).toBeLessThan(12);
+  await page.locator('#btn-zoom-out-dyn').click();
+  hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
+  expect(Number(hash.get('dz'))).toBeCloseTo(12, 10);
+  await page.locator('#btn-reset-dyn').click();
+  hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
+  expect(Number(hash.get('dz'))).toBeGreaterThan(8);
+  expect(Number(hash.get('dcx'))).toBe(0);
+  expect(Number(hash.get('dcy'))).toBe(0);
+  await expect(page.locator('#dynamical-canvas')).toHaveAttribute('data-render-state', 'complete');
+
+  await page.locator('#btn-layer-overlay').click();
+  await expect(page.locator('#show-collinear-attractor')).toBeChecked();
+  await expect(page.locator('#show-difference-attractor')).toBeChecked();
+  await page.locator('#btn-layer-difference').click();
+  await expect(page.locator('#show-collinear-attractor')).not.toBeChecked();
+  await expect(page.locator('#show-difference-attractor')).toBeChecked();
+  await expect(page.locator('#btn-layer-difference')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.locator('#btn-view-param').click();
+  await page.locator('#btn-locus-rn').click();
+  await expect(page.locator('#btn-locus-rn')).toHaveAttribute('aria-pressed', 'true');
+  hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
+  expect(hash.get('pm')).toBe('rn');
+  await page.locator('#btn-locus-compare').click();
+  await expect(page.locator('#btn-locus-compare')).toHaveAttribute('aria-pressed', 'true');
+  hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
+  expect(hash.get('pm')).toBe('compare');
+  await page.locator('#btn-locus-mn').click();
+  await expect(page.locator('#btn-locus-mn')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#parameter-canvas')).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+});
+
+test('M_n, R_n and comparison pixels stay distinct while JSON retains the M_n record', async ({ page }) => {
+  // This magnified classification fixture needs only a narrow neighborhood.
+  // Preserve horizontal scale and the independent probes while bounding the
+  // number of expensive search pixels on slower CI machines. Full viewport
+  // layout coverage remains in the startup, drawer and resize regressions.
+  await page.setViewportSize({ width: page.viewportSize().width, height: 520 });
+  await open(page, '#n=2&cx=1.2&cy=.9&k=12&l=1000&pm=mn&focus=parameter&pcx=1.2&pcy=.9&pz=.02&layers=0000000');
+  const canvas = page.locator('#parameter-canvas');
+  let witness;
+  for (const mode of ['mn', 'rn', 'compare']) {
+    await (await reveal(page, `#btn-locus-${mode}`)).click();
+    await expect(page.locator(`#btn-locus-${mode}`)).toHaveAttribute('aria-pressed', 'true');
+    await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+    await expect(page.locator('#stat-verdict')).toHaveText('Interior-offLens');
+    // The independent n=2 witness has an off-lens M_n trap hit but is outside
+    // R_n. Probe its small stable neighborhood at c=1.202+.901i, away from the
+    // selected-point marker at the viewport center (span .02, center 1.2+.9i).
+    const coverage = await canvas.evaluate(element => {
+      const x = Math.round(element.width * 0.6);
+      const y = Math.round(element.height / 2 - element.width * 0.05);
+      const data = element.getContext('2d').getImageData(x - 4, y - 4, 9, 9).data;
+      let marked = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (Math.min(data[i], data[i + 1], data[i + 2]) < 220) marked++;
+      }
+      return marked / 81;
+    });
+    if (mode === 'rn') expect(coverage, 'R_n exterior is white').toBeLessThan(0.01);
+    else expect(coverage, `${mode} shows the M_n off-lens result`).toBeGreaterThan(0.9);
+    const record = await readRecord(page);
+    expect(record.n).toBe(2);
+    expect(record.N).toBe(3);
+    expect(record.input_parameter).toEqual({ re: 1.2, im: 0.9 });
+    expect(record.verdict).toBe('Interior-offLens');
+    expect(record.proof_status).toBe('exploratory');
+    expect(record.parameter_view.mode).toBe(mode);
+    expect(record.parameter_view.search_record_set).toBe('M_n');
+    if (mode === 'mn') {
+      witness = record.word;
+      expect(record.parameter_view.rn).toBeNull();
+    } else {
+      expect(record.word).toEqual(witness);
+      expect(record.parameter_view.rn.verdict).toBe('Exterior');
+      expect(record.parameter_view.rn.usesTrap).toBe(false);
+      await expect(page.locator('#stat-view-detail')).toContainText('Rₙ: Exterior');
+    }
+    const hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
+    expect(hash.get('pm')).toBe(mode);
+  }
+});
+
+test('polar edits roundtrip through Cartesian controls and preserve exact real-axis input', async ({ page }) => {
+  await open(page, '#n=3&cx=1&cy=1&k=12&layers=0100000');
+  expect(Number(await page.locator('#param-modulus').inputValue())).toBeCloseTo(Math.sqrt(2), 12);
+  expect(Number(await page.locator('#param-argument').inputValue())).toBeCloseTo(45, 12);
+  await fillNumber(page, '#param-modulus', 2);
+  expect(Number(await page.locator('#param-real').inputValue())).toBeCloseTo(Math.sqrt(2), 12);
+  expect(Number(await page.locator('#param-imag').inputValue())).toBeCloseTo(Math.sqrt(2), 12);
+  await fillNumber(page, '#param-argument', 90);
+  await expect(page.locator('#param-real')).toHaveValue('0');
+  await expect(page.locator('#param-imag')).toHaveValue('2');
+  await fillNumber(page, '#param-argument', 0);
+  await expect(page.locator('#param-real')).toHaveValue('2');
+  await expect(page.locator('#param-imag')).toHaveValue('0');
+  const realAxis = await readRecord(page);
+  expect(realAxis.input_parameter).toEqual({ re: 2, im: 0 });
+  expect(realAxis.verdict).toBe('Undetermined');
+  expect(realAxis.stop_reason).toBe('outside-domain');
+
+  await fillNumber(page, '#param-real', -1.25);
+  await fillNumber(page, '#param-imag', 0.75);
+  const modulus = Math.hypot(-1.25, 0.75);
+  const angle = Math.atan2(0.75, -1.25) * 180 / Math.PI;
+  expect(Number(await page.locator('#param-modulus').inputValue())).toBeCloseTo(modulus, 12);
+  expect(Number(await page.locator('#param-argument').inputValue())).toBeCloseTo(angle, 12);
+  const url = await shareUrl(page);
+  const hash = new URLSearchParams(new URL(url).hash.slice(1));
+  expect(Number(hash.get('cx'))).toBe(-1.25);
+  expect(Number(hash.get('cy'))).toBe(0.75);
+  await page.goto('/');
+  await page.goto(url);
+  await expect(page.locator('#param-real')).toHaveValue('-1.25');
+  await expect(page.locator('#param-imag')).toHaveValue('0.75');
+  expect(Number(await page.locator('#param-modulus').inputValue())).toBeCloseTo(modulus, 12);
+  expect(Number(await page.locator('#param-argument').inputValue())).toBeCloseTo(angle, 12);
+});
+
+for (const fixture of [
+  { name: 'c=2i rectangle', re: 0, im: 2, xMax: 4, yMax: 2 },
+  // Independently evaluated with 80-digit decimal arithmetic from the exact
+  // parameter (3+i√11)/2: 3 sum |Re/Im(c^-j)|, with 300 series terms.
+  { name: 'E4 overlap example', re: 1.5, im: 1.6583123951777, xMax: 4.344021327993613, yMax: 1.853746339874843 },
+]) {
+  test(`Fit contains the full original-attractor bounds for the ${fixture.name}`, async ({ page }) => {
+    const hash = new URLSearchParams({
+      n: '4', cx: String(fixture.re), cy: String(fixture.im), focus: 'dynamical',
+      dcx: '6', dcy: '-4', dz: '2', layers: '0100000', mode: 'collinear', renderer: 'prefix',
+    });
+    await page.goto(`/#${hash}`);
+    await page.locator('#btn-reset-dyn').click();
+    const canvas = page.locator('#dynamical-canvas');
+    await expect(canvas).toHaveAttribute('data-render-state', 'complete');
+    const aspect = await canvas.evaluate(element => element.width / element.height);
+    const fitted = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
+    const width = Number(fitted.get('dz'));
+    expect(Number(fitted.get('dcx'))).toBe(0);
+    expect(Number(fitted.get('dcy'))).toBe(0);
+    expect(width / 2).toBeGreaterThan(fixture.xMax);
+    expect(width / aspect / 2).toBeGreaterThan(fixture.yMax);
+    const tightWidth = Math.max(2 * fixture.xMax, 2 * fixture.yMax * aspect);
+    expect(width / tightWidth, 'Fit retains useful plot occupancy with its 15% margin').toBeCloseTo(1.15, 6);
+    if (fixture.re === 0) {
+      expect((await dynamicalPatch(page, { x: 3, y: 0.7 }, width)).coverage).toBeGreaterThan(0.05);
+      expect((await dynamicalPatch(page, { x: 4.25, y: 0.7 }, width)).coverage).toBeLessThan(0.01);
+    }
+  });
+}
+
+test('a rejected fullscreen request leaves the scene controls usable', async ({ page }) => {
+  await page.addInitScript(() => {
+    HTMLElement.prototype.requestFullscreen = async () => {
+      throw new DOMException('Fullscreen denied by this embedding context', 'NotAllowedError');
+    };
+  });
+  await open(page);
+  await page.locator('#btn-fullscreen').click();
+  expect(await page.evaluate(() => document.fullscreenElement)).toBeNull();
+  await page.locator('#btn-view-dyn').click();
+  await expect(page.locator('#dynamical-panel')).toBeVisible();
+  await expect(page.locator('#parameter-panel')).not.toBeVisible();
+  await page.locator('#btn-view-split').click();
+  await expect(page.locator('#parameter-panel')).toBeVisible();
+  await expect(page.locator('#dynamical-panel')).toBeVisible();
+});
+
+test('legacy links preserve their selected sets and vertical camera span through modern sharing', async ({ page }) => {
+  await page.goto('/?legacy=1#n=4&cx=0&cy=2&panels=0100&zoom=.4&centerX=0&centerY=0');
+  const canvas = page.locator('#dynamical-canvas');
+  await expect(page.locator('#parameter-panel')).not.toBeVisible();
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  await expect(page.locator('#arity-slider')).toHaveValue('4');
+  await expect(page.locator('#param-real')).toHaveValue('0');
+  await expect(page.locator('#param-imag')).toHaveValue('2');
+  await expect(page.locator('#show-collinear-attractor')).toBeChecked();
+  await expect(page.locator('#show-difference-attractor')).not.toBeChecked();
+  const aspect = await canvas.evaluate(element => element.width / element.height);
+  const url = await shareUrl(page);
+  const hash = new URLSearchParams(new URL(url).hash.slice(1));
+  expect(hash.get('focus')).toBe('dynamical');
+  expect(hash.get('mode')).toBe('collinear');
+  expect(Number(hash.get('dcx'))).toBe(0);
+  expect(Number(hash.get('dcy'))).toBe(0);
+  // The old camera used height=2/zoom. New dz is a horizontal width and
+  // therefore must use the actual aspect AFTER the imported single-panel focus.
+  expect(Number(hash.get('dz')) / aspect).toBeCloseTo(5, 8);
+  await page.goto('/');
+  await page.goto(url);
+  await expect(page.locator('#parameter-panel')).not.toBeVisible();
+  await expect(page.locator('#param-real')).toHaveValue('0');
+  await expect(page.locator('#param-imag')).toHaveValue('2');
+  expect(await shareUrl(page)).toBe(url);
+});
+
 test('startup finishes both scientific panels with real pixel content', async ({ page, isMobile }, testInfo) => {
   await open(page);
-  await expect(page.locator('#stat-verdict')).toHaveText('Interior');
+  await expect(page.locator('#stat-verdict')).toHaveText('Undetermined');
+  await expect(page.locator('#arity-slider')).toHaveValue('4');
+  await expect(page.locator('#param-real')).toHaveValue('1.5');
+  await expect(page.locator('#param-imag')).toHaveValue('1.6583123951777');
+  await expect(page.locator('#show-collinear-attractor')).toBeChecked();
+  await expect(page.locator('#show-difference-attractor')).not.toBeChecked();
   for (const id of ['parameter-canvas', 'dynamical-canvas']) {
     const canvas = page.locator(`#${id}`);
     await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
@@ -117,6 +496,40 @@ test('startup finishes both scientific panels with real pixel content', async ({
   const bytes = await readFile(await png.path());
   expect(png.suggestedFilename()).toMatch(/\.png$/);
   expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+
+  await expectInsideViewport(page, '#toolbar-more .toolbar-menu');
+  await page.screenshot({ path: testInfo.outputPath('more-actions.png') });
+  await page.locator('#toolbar-more > summary').click();
+  await reveal(page, '#stat-reason');
+  await expectInsideViewport(page, '#result-details .result-card');
+  await page.screenshot({ path: testInfo.outputPath('search-details.png') });
+  await page.locator('#result-details > summary').click();
+
+  const manifest = await (await page.request.get('/deployment.json')).json();
+  await expect(page.locator('html')).toHaveAttribute('data-source-commit', manifest.source_commit);
+  const about = await reveal(page, '#btn-about');
+  await about.click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.locator('#modal-body')).toContainText(manifest.source_commit.slice(0, 12));
+  await expect(page.locator('#modal-body a[href="deployment.json"]')).toBeVisible();
+  const copied = [];
+  await page.exposeFunction('recordCitationCopy', text => { copied.push(text); });
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', {
+    configurable: true, value: { writeText: text => window.recordCitationCopy(text) },
+  }));
+  await page.locator('#modal-tabs [data-tab="references"]').click();
+  await page.locator('#btn-copy-software-citation').click();
+  await expect(page.locator('#btn-copy-software-citation')).toHaveText('Copied');
+  expect(copied[0]).toContain('Bernat Espigule');
+  expect(copied[0]).toContain(manifest.source_commit);
+  await page.locator('#btn-copy-bibtex').click();
+  await expect(page.locator('#btn-copy-bibtex')).toHaveText('Copied');
+  expect(copied[1]).toMatch(/^@software\{/);
+  expect(copied[1]).toContain(`version = {${manifest.version}}`);
+  expect(copied[1]).toContain(`/tree/${manifest.source_commit}`);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect(about).toBeFocused();
 });
 
 test('partial and malformed share hashes preserve defaults and enforce bounds', async ({ page }) => {

@@ -23,6 +23,7 @@ export const DEFAULT_EXPLORER_STATE = Object.freeze({
   showTree: true,
   showPath: true,
   showEscapeStrata: false,
+  parameterMode: 'mn',
   comparisonMode: 'overlay',
   rendererMode: 'prefix',
   attractorDepth: 7,
@@ -69,6 +70,7 @@ const CENTER_FIELDS = [
 ];
 
 const ENUM_FIELDS = [
+  ['parameterMode', 'pm', ['mn', 'rn', 'compare']],
   ['comparisonMode', 'mode', ['overlay', 'difference', 'collinear', 'escape']],
   ['rendererMode', 'renderer', ['prefix', 'histogram', 'survival']],
   ['palette', 'palette', ['research', 'print', 'contrast', 'custom']],

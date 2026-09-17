@@ -4,35 +4,49 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light">
-  <title>Collinear Fractals GPU Explorer</title>
+  <title>Collinear Fractals · Explore</title>
   <meta name="description" content="Explore collinear fractals and connectedness loci in linked parameter and dynamical planes. Reproducible views, finite inverse search, and search-record export.">
   <link rel="stylesheet" href="index.css">
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to the plots</a>
-  <noscript><p class="noscript-notice">This interactive explorer requires JavaScript. Mathematical background and reference implementations are available in the <a href="https://github.com/espigule/collinear-fractals-gpu">project repository</a>.</p></noscript>
-
+  <noscript><p class="noscript-notice">This explorer requires JavaScript. See the <a href="https://github.com/espigule/collinear-fractals-gpu">project documentation</a> for mathematical background and reference implementations.</p></noscript>
   <div class="container">
-    <aside class="controls" id="sidebar-panel" aria-label="Explorer controls">
-      <div class="sidebar-header">
-        <p class="eyebrow">Interactive research companion</p>
-        <h1>Collinear Fractals <span>GPU Explorer</span></h1>
-        <p class="subtitle">Connectedness loci, finite capture, and restricted polynomial roots.</p>
-        <div class="project-meta"><span>B. Espigule · 2026</span><span class="version-tag">v0.2.0-alpha</span></div>
-        <a href="https://github.com/espigule/collinear-fractals-gpu" target="_blank" rel="noopener noreferrer" class="repo-link">
-          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.23c-3.34.72-4.04-1.42-4.04-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.08 1.85 1.24 1.85 1.24 1.07 1.83 2.81 1.3 3.5 1 .11-.78.42-1.31.76-1.61-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.17 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.87.12 3.17.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.62-5.49 5.92.43.37.82 1.1.82 2.22v3.3c0 .32.22.69.83.57A12 12 0 0 0 24 12C24 5.37 18.63 0 12 0Z"/></svg>
-          Source &amp; documentation <span aria-hidden="true">↗</span>
-        </a>
+    <header class="explorer-toolbar" id="explorer-toolbar">
+      <div class="app-brand"><h1>Collinear Fractals</h1><span>Explore</span></div>
+      <div class="view-switch" role="group" aria-label="Workspace view">
+        <button type="button" id="btn-view-param" data-view="parameter" aria-pressed="false" title="Show the parameter plane"><span class="math">M</span><sub>n</sub></button>
+        <button type="button" id="btn-view-dyn" data-view="dynamical" aria-pressed="false" title="Show the dynamical plane">Attractors</button>
+        <button type="button" id="btn-view-split" data-view="both" aria-pressed="true" title="Show both linked planes">Split</button>
       </div>
-
-      <details class="controls-disclosure" id="controls-disclosure" open>
-        <summary><span>Explorer controls</span><span class="section-note">Parameter, layers &amp; export</span></summary>
-        <div class="controls-body">
-          <div class="button-grid quick-help">
-            <button type="button" class="btn btn-secondary" id="btn-tour" title="Open a short guided tour">Quick tour</button>
+      <div class="quick-arity" role="group" aria-label="Number of maps">
+        <label for="quick-arity"><span class="math">n</span></label>
+        <button type="button" id="btn-arity-decrease" aria-label="Decrease the number of maps" title="Decrease n">−</button>
+        <input type="number" id="quick-arity" min="2" max="100" step="1" value="3" inputmode="numeric" aria-label="Number of maps n">
+        <button type="button" id="btn-arity-increase" aria-label="Increase the number of maps" title="Increase n">+</button>
+      </div>
+      <div class="toolbar-actions">
+        <button type="button" class="toolbar-btn" id="btn-share" title="Share the current view" aria-label="Share view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M5 13v7h14v-7"/></svg><span class="action-text">Share</span></button>
+        <details class="toolbar-more" id="toolbar-more">
+          <summary title="More actions" aria-label="More actions"><span aria-hidden="true">•••</span></summary>
+          <div class="toolbar-menu" role="group" aria-label="More explorer actions">
+            <button type="button" class="btn btn-secondary" id="btn-undo" title="Undo the last view or setting change">Undo</button>
+            <button type="button" class="btn btn-secondary" id="btn-redo" title="Redo the last undone change">Redo</button>
+            <button type="button" class="btn btn-secondary" id="btn-save-image" title="Download a PNG image of the current panels">Save image</button>
             <button type="button" class="btn btn-secondary" id="btn-about" title="Open mathematical context and citations">About &amp; cite</button>
           </div>
+        </details>
+        <button type="button" class="toolbar-btn" id="btn-fullscreen" title="Enter fullscreen" aria-label="Enter fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg><span class="action-text">Fullscreen</span></button>
+        <button type="button" class="toolbar-btn controls-toggle" id="btn-toggle-controls" aria-controls="sidebar-panel" aria-expanded="false" title="Open explorer controls"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6m6 4v6"/></svg><span>Controls</span></button>
+      </div>
+    </header>
 
+    <div class="controls-backdrop" id="controls-backdrop" aria-hidden="true" hidden></div>
+    <aside class="controls" id="sidebar-panel" aria-label="Explorer controls" hidden>
+      <div class="drawer-header"><div><h2>Controls</h2><p>Parameter, display &amp; search</p></div><button type="button" id="btn-close-controls" class="drawer-close" aria-label="Close controls">×</button></div>
+      <details class="controls-disclosure" id="controls-disclosure" open>
+        <summary>Explorer controls</summary>
+        <div class="controls-body">
           <div class="control-group">
             <label for="example-preset">Example</label>
             <select id="example-preset"><option value="">Select an example</option></select>
@@ -57,6 +71,10 @@
                 <label for="param-imag">Im(<span class="math">c</span>)</label>
                 <input type="number" id="param-imag" value="1.1" step="any" inputmode="decimal" aria-describedby="parameter-domain">
               </div>
+            </div>
+            <div class="field-grid polar-fields">
+              <div class="field"><label for="param-modulus">|<span class="math">c</span>|</label><input type="number" id="param-modulus" value="1.2083045973594573" min="0" max="1000000" step="any" inputmode="decimal" aria-describedby="parameter-domain"></div>
+              <div class="field"><label for="param-argument">arg(<span class="math">c</span>) · degrees</label><input type="number" id="param-argument" value="65.55604521958347" min="-180" max="180" step="any" inputmode="decimal" aria-describedby="parameter-domain"></div>
             </div>
             <p class="control-help" id="parameter-domain">Direct mode: |<span class="math">c</span>| &gt; 1, Im(<span class="math">c</span>) ≠ 0. For 0 &lt; |<span class="math">c</span>| &lt; 1, calculations use 1/<span class="math">c</span>.</p>
             <p class="effective-parameter" id="stat-effective" hidden></p>
@@ -170,21 +188,17 @@
             </div>
           </details>
 
-          <div class="action-group" aria-label="View and export actions">
-            <div class="button-grid">
-              <button type="button" class="btn btn-secondary" id="btn-undo" title="Undo the last view or setting change">Undo</button>
-              <button type="button" class="btn btn-secondary" id="btn-redo" title="Redo the last undone change">Redo</button>
-              <button type="button" class="btn btn-secondary" id="btn-share" title="Create a share URL for the current state">Share view</button>
-              <button type="button" class="btn btn-secondary" id="btn-embed" title="Copy an iframe embed for the current state">Copy embed</button>
-            </div>
-            <button type="button" class="btn btn-secondary" id="btn-save-image" title="Download a PNG image of the current panels">Save image</button>
-            <div class="button-grid">
-              <button type="button" class="btn btn-secondary" id="btn-reset-param" title="Reset the parameter-plane view">Reset parameter</button>
-              <button type="button" class="btn btn-secondary" id="btn-reset-dyn" title="Reset the dynamical-plane view">Reset dynamical</button>
-            </div>
+          <div class="action-group" aria-label="Export and project actions">
             <button type="button" class="btn" id="btn-copy-certificate" title="Copy the selected finite-search record as JSON">Copy search JSON</button>
             <button type="button" class="btn btn-secondary" id="btn-download-certificate" title="Download the selected finite-search record as JSON">Download search JSON</button>
+            <button type="button" class="btn btn-secondary" id="btn-embed" title="Copy an iframe embed for the current state">Copy embed</button>
+            <button type="button" class="btn btn-secondary" id="btn-tour" title="Open a short guided tour">Quick tour</button>
             <button type="button" class="btn btn-text" id="btn-support" title="Open support and funding information">Support this project</button>
+          </div>
+          <div class="drawer-project">
+            <p>Companion software for collinear fractals, finite capture, and restricted polynomial roots.</p>
+            <p>B. Espigule · 2026 <span class="version-tag">v0.2.0-alpha</span></p>
+<a href="https://github.com/espigule/collinear-fractals-gpu">project repository</a>
           </div>
         </div>
       </details>
@@ -193,56 +207,94 @@
     <main class="workspace" id="workspace" tabindex="-1" aria-label="Linked fractal plots">
       <section class="canvas-panel" id="parameter-panel" aria-labelledby="parameter-title">
         <div class="panel-header">
-          <div><p class="panel-kicker">Connectedness locus</p><h2 class="panel-title" id="parameter-title">Parameter plane <span class="plane-coordinate">c</span></h2></div>
-          <div class="panel-actions"><span class="render-status" id="parameter-render-status" role="status">Refining…</span><button type="button" class="panel-btn" id="btn-focus-param" title="Focus the parameter panel">Focus</button></div>
+          <div class="panel-identity"><h2 class="panel-title" id="parameter-title"><span id="parameter-plane-title">Parameter plane</span> <span class="plane-coordinate">c</span></h2><span class="render-status" id="parameter-render-status" role="status">Refining…</span></div>
+          <div class="panel-actions" role="group" aria-label="Parameter view navigation">
+            <button type="button" class="panel-btn zoom-btn" id="btn-zoom-out-param" title="Zoom out in the parameter plane" aria-label="Zoom out in the parameter plane">−</button>
+            <button type="button" class="panel-btn zoom-btn" id="btn-zoom-in-param" title="Zoom in on the parameter plane" aria-label="Zoom in on the parameter plane">+</button>
+            <button type="button" class="panel-btn" id="btn-reset-param" title="Fit the parameter plane">Fit</button>
+            <button type="button" class="panel-btn" id="btn-focus-param" title="Focus the parameter panel">Focus</button>
+          </div>
         </div>
-        <p class="interaction-hint" id="parameter-hint">Drag to pan or move the marker. Scroll or pinch to zoom. Double-click or double-tap to select <span class="math">c</span>.<span class="keyboard-hint">Keys: arrows pan · Shift + arrows move <span class="math">c</span> · +/− zoom · Home resets.</span></p>
+        <div class="panel-mode-switch" role="group" aria-label="Parameter set">
+          <button type="button" id="btn-locus-mn" data-parameter-mode="mn" aria-pressed="true" title="Connectedness locus M_n"><span class="math">M</span><sub>n</sub></button>
+          <button type="button" id="btn-locus-rn" data-parameter-mode="rn" aria-pressed="false" title="Marked-point set R_n"><span class="math">R</span><sub>n</sub></button>
+          <button type="button" id="btn-locus-compare" data-parameter-mode="compare" aria-pressed="false" title="Compare the parameter sets">Compare</button>
+        </div>
         <div class="canvas-container">
-          <canvas id="parameter-canvas" tabindex="0" aria-label="Parameter-plane plot of the connectedness locus" aria-describedby="parameter-hint">Use the selected parameter fields and example menu to explore a point. The search result appears below the plots.</canvas>
+          <canvas id="parameter-canvas" tabindex="0" aria-label="Parameter-plane plot" aria-describedby="parameter-hint">Choose a parameter set and use the selected parameter fields to explore a point. The current search result appears in the bottom strip.</canvas>
         </div>
-        <div class="legend-panel" id="legend-parameter" aria-label="Parameter-plane legend">
-          <div class="legend-item"><span class="legend-color legend-lens" aria-hidden="true"></span><span>Parameter lens <span class="math">X</span><sub>n</sub></span></div>
+        <details class="navigation-help">
+          <summary>Navigation</summary>
+          <div class="navigation-card"><p class="interaction-hint" id="parameter-hint">Drag to pan or move the marker. Scroll or pinch to zoom. Double-click or double-tap to select <span class="math">c</span>.<span class="keyboard-hint">Keys: arrows pan · Shift + arrows move <span class="math">c</span> · +/− zoom · Home resets.</span></p></div>
+        </details>
+        <details class="legend-panel" id="legend-parameter">
+          <summary>Legend</summary>
+          <div class="legend-card" aria-label="Parameter-plane legend">
+<div class="legend-item"><span class="legend-color legend-lens" aria-hidden="true"></span><span>Parameter lens <span class="math">X</span><sub>n</sub></span></div>
           <div class="legend-item"><span class="legend-color" id="legend-locus-color" aria-hidden="true"></span><span>In-lens capture (depth mod <span class="math">q</span>)</span></div>
           <div class="legend-item"><span class="legend-color" id="legend-offlens-color" aria-hidden="true"></span><span>Off-lens trap hit</span></div>
           <div class="legend-item"><span class="legend-color" id="legend-undetermined-color" aria-hidden="true"></span><span>Undetermined</span></div>
           <div class="legend-item"><span class="legend-color" id="legend-exterior-color" aria-hidden="true"></span><span>Exterior</span></div>
-        </div>
+            <p class="legend-note" id="parameter-view-note" hidden></p>
+          </div>
+        </details>
       </section>
 
       <section class="canvas-panel" id="dynamical-panel" aria-labelledby="dynamical-title">
         <div class="panel-header">
-          <div><p class="panel-kicker">Selected parameter</p><h2 class="panel-title" id="dynamical-title">Dynamical plane <span class="plane-coordinate">z</span></h2></div>
-          <div class="panel-actions"><span class="render-status" id="dynamical-render-status" role="status">Refining…</span><button type="button" class="panel-btn" id="btn-focus-dyn" title="Focus the dynamical panel">Focus</button></div>
+          <div class="panel-identity"><h2 class="panel-title" id="dynamical-title">Dynamical plane <span class="plane-coordinate">z</span></h2><span class="render-status" id="dynamical-render-status" role="status">Refining…</span></div>
+          <div class="panel-actions" role="group" aria-label="Dynamical view navigation">
+            <button type="button" class="panel-btn zoom-btn" id="btn-zoom-out-dyn" title="Zoom out in the dynamical plane" aria-label="Zoom out in the dynamical plane">−</button>
+            <button type="button" class="panel-btn zoom-btn" id="btn-zoom-in-dyn" title="Zoom in on the dynamical plane" aria-label="Zoom in on the dynamical plane">+</button>
+            <button type="button" class="panel-btn" id="btn-reset-dyn" title="Fit the dynamical plane">Fit</button>
+            <button type="button" class="panel-btn" id="btn-focus-dyn" title="Focus the dynamical panel">Focus</button>
+          </div>
         </div>
-        <p class="interaction-hint" id="dynamical-hint">Drag to pan or move the marker. Scroll or pinch to zoom. Double-click or double-tap to select <span class="math">c</span>.<span class="keyboard-hint">Keys: arrows pan · Shift + arrows move <span class="math">c</span> · +/− zoom · Home resets.</span></p>
+        <div class="panel-mode-switch" role="group" aria-label="Dynamical sets">
+          <button type="button" id="btn-layer-collinear" data-mode="collinear" aria-pressed="false" title="Show the collinear attractor E(c,n)"><span class="math">E</span>(<span class="math">c</span>,<span class="math">n</span>)</button>
+          <button type="button" id="btn-layer-difference" data-mode="difference" aria-pressed="true" title="Show the half-scaled difference attractor, N = 2n − 1">½ <span class="math">E</span>(<span class="math">c</span>,<span class="math">N</span>)</button>
+          <button type="button" id="btn-layer-overlay" data-mode="overlay" aria-pressed="false" title="Overlay the two attractors">Overlay</button>
+        </div>
         <div class="canvas-container">
-          <canvas id="dynamical-canvas" tabindex="0" aria-label="Dynamical-plane plot of the selected collinear and difference attractors" aria-describedby="dynamical-hint">Change the dynamical view and layers in Explorer controls. The difference attractor is displayed at half scale.</canvas>
+          <canvas id="dynamical-canvas" tabindex="0" aria-label="Dynamical-plane plot of the selected attractors" aria-describedby="dynamical-hint">Choose E(c,n), the half-scaled difference attractor, or their overlay. Additional display settings are in Controls.</canvas>
         </div>
-        <div class="legend-panel" id="legend-dynamical" aria-label="Dynamical-plane legend">
-          <div class="legend-item"><span class="legend-color" id="legend-diff-color" aria-hidden="true"></span><span>Difference ½ <span class="math">E</span>(<span class="math">c</span>, <span class="math">N</span>)</span></div>
+        <details class="navigation-help">
+          <summary>Navigation</summary>
+          <div class="navigation-card"><p class="interaction-hint" id="dynamical-hint">Drag to pan or move the marker. Scroll or pinch to zoom. Double-click or double-tap to select <span class="math">c</span>.<span class="keyboard-hint">Keys: arrows pan · Shift + arrows move <span class="math">c</span> · +/− zoom · Home resets.</span></p></div>
+        </details>
+        <details class="legend-panel" id="legend-dynamical">
+          <summary>Legend</summary>
+          <div class="legend-card" aria-label="Dynamical-plane legend">
+<div class="legend-item"><span class="legend-color" id="legend-diff-color" aria-hidden="true"></span><span>Difference ½ <span class="math">E</span>(<span class="math">c</span>, <span class="math">N</span>)</span></div>
           <div class="legend-item"><span class="legend-color" id="legend-coll-color" aria-hidden="true"></span><span>Collinear <span class="math">E</span>(<span class="math">c</span>, <span class="math">n</span>)</span></div>
           <div class="legend-item"><span class="legend-color legend-trap" aria-hidden="true"></span><span>Trap ½ <span class="math">P</span><sub>c</sub>(<span class="math">S</span>, <span class="math">V</span>)</span></div>
           <div class="legend-item"><span class="legend-color legend-enclosure" aria-hidden="true"></span><span>Enclosure ½ <span class="math">P</span><sub>c</sub>(<span class="math">S</span><sub>E</sub>, <span class="math">V</span><sub>E</sub>)</span></div>
           <div class="legend-item"><span class="legend-color legend-locator" aria-hidden="true"></span><span>Evaluated parameter</span></div>
           <div class="legend-item"><span class="legend-color legend-origin" aria-hidden="true"></span><span>Origin 0</span></div>
-        </div>
+            <p class="legend-note"><span class="math">N</span> = 2<span class="math">n</span> − 1. The difference attractor is displayed at half scale.</p>
+          </div>
+        </details>
       </section>
     </main>
   </div>
 
   <footer class="status-bar" id="footer-status" aria-label="Selected parameter search result">
-    <div class="status-group parameter-status">
-      <div><span class="status-label">c</span> <span id="stat-c">0.50000 + 1.10000i</span></div>
-      <div><span class="status-label">|c|</span> <span id="stat-rho">1.20830</span></div>
-      <div><span class="status-label">In lens</span> <span id="stat-lens">—</span></div>
-    </div>
-    <div class="status-group search-status">
-      <div class="verdict-readout"><span class="status-label">Search</span> <span class="verdict-tag verdict-Undetermined" id="stat-verdict" aria-live="polite" aria-atomic="true">Pending</span></div>
-      <div><span class="status-label">Nodes</span> <span id="stat-nodes">—</span></div>
-      <div><span class="status-label">Depth</span> <span id="stat-depth">—</span></div>
-    </div>
-    <div class="word-status"><span class="status-label">Word</span> <span id="stat-word">None</span></div>
-    <div class="search-reason" id="stat-reason"></div>
+    <div class="coordinate-readout"><span class="status-label">c</span><span id="stat-c">0.50000 + 1.10000i</span></div>
+    <div class="verdict-readout"><span class="status-label"><span class="math">M</span><sub>n</sub> search</span><span class="verdict-tag verdict-Undetermined" id="stat-verdict" aria-live="polite" aria-atomic="true">Pending</span></div>
+    <details class="result-details" id="result-details">
+      <summary>Details</summary>
+      <div class="result-card">
+        <div class="result-metrics">
+          <div><span class="status-label">|c|</span><span id="stat-rho">1.20830</span></div>
+          <div><span class="status-label">In lens</span><span id="stat-lens">—</span></div>
+          <div><span class="status-label">Nodes explored</span><span id="stat-nodes">—</span></div>
+          <div><span class="status-label">Search depth</span><span id="stat-depth">—</span></div>
+        </div>
+        <div class="word-status"><span class="status-label">Inverse word</span><span id="stat-word">None</span></div>
+        <p class="search-reason" id="stat-reason"></p>
+        <p class="search-reason" id="stat-view-detail" hidden></p>
+      </div>
+    </details>
   </footer>
 
   <div class="modal-backdrop" id="modal-backdrop" hidden>
