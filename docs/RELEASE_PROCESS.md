@@ -1,54 +1,49 @@
 # Release Process
 
-This project ships source-first GitHub releases. Registry publication to npm, PyPI, or other package indexes is intentionally deferred until the package metadata and CI history are mature.
+This project distributes source through GitHub. Package-registry publication
+is a separate action from a GitHub release or Pages deployment.
 
-## Release branches and versions
+## Version discipline
 
-- Use semantic versioning with prerelease identifiers: `v0.1.0-alpha`,
-  `v0.1.1-alpha`, `v0.2.0-alpha`, `v0.1.0-beta.1`, `v0.1.0`.
-- Treat `v0.2.0-alpha` as the next candidate only when the staged Pages site,
-  share URLs, curated example metadata, gallery index, schemas, and CI pass.
-- Keep `VERSION`, `README.md`, `CHANGELOG.md`, `CITATION.cff`, browser metadata, and package manifests in sync.
-- Use annotated tags for public releases.
+The current release metadata is `0.2.0-alpha`. Keep fixes under `Unreleased`
+until a new release is actually prepared. Use semantic prerelease versions
+such as `0.2.1-alpha.1`; do not retag an existing version to a different commit.
 
-## Required checks
+When preparing a release, update `VERSION`, package manifests and lockfile,
+`CITATION.cff`, browser/export metadata, example/figure metadata, and release
+notes consistently. A software citation must identify the released revision;
+do not attach an archival DOI until that archive exists.
 
-Run these before tagging:
+## Quality gate
 
-```bash
-python3 tools/validate_bundle.py
-git diff --check
-node --check explorer.js
-node --check qa/render_smoke_tests.js
-node --check qa/kernel_equivalence_tests.js
-node --check tools/bench/render_metadata_bench.js
-node --check workers/certificate-worker.js
-node --check workers/histogram-worker.js
-node qa/explorer-prefix-smoke-test.js
-node qa/render_smoke_tests.js
-node qa/kernel_equivalence_tests.js
-node tools/bench/render_metadata_bench.js
-cd javascript && npm test
-cd ../python && python3 -m unittest -v test_collinear.py
-cd ../swift && swift test
-```
+Follow [VALIDATION.md](VALIDATION.md), including the real-browser test suite
+and schema checks. Review the resulting static artifact and record unexecuted
+native ports. A locally passing check does not replace the CI result for the
+revision being published.
 
-The GitHub Actions CI workflow must pass on `main` before publishing a non-draft release.
+Pages must publish only the staged allowlisted `site/` artifact after the
+quality workflow passes. It must not publish the repository root, developer
+reports, runtime caches, or unreviewed source materials.
 
-## Artifact policy
+## Review and release
 
-Keep generated archives, local certificates, scratch certificates, and large
-figure outputs out of git. Curated example certificates and
-`certificates/verified/*.json` are allowed when they are reviewed
-reproducibility artifacts. Attach release bundles and checksum files to GitHub
-Releases instead. The repository's automatic GitHub source archives are
-acceptable for normal source downloads.
+1. Prepare a focused pull request with the problem, resulting behavior,
+   compatibility implications, and validation evidence.
+2. Wait for checks on the candidate revision and review the staged explorer.
+3. Merge according to the repository's review rules; confirm checks for the
+   resulting default-branch revision before release publication.
+4. Create an annotated version tag and a GitHub prerelease for an alpha/beta.
+   Keep release notes tied to the tagged revision.
+5. Verify the public explorer and source links after publication.
 
-## Release checklist
+A change to docs or numerical validation does not itself require a version
+bump or registry publication. Preserve the existing public version until a
+release is deliberately made.
 
-1. Update release metadata and `CHANGELOG.md`.
-2. Run the required checks locally when the runtimes are available.
-3. Push to `main` and wait for CI.
-4. Create an annotated tag, for example `git tag -a v0.2.0-alpha -m "v0.2.0-alpha"`.
-5. Create a GitHub prerelease with release notes, checksums, and any generated source bundle.
-6. Confirm GitHub Pages renders the explorer.
+## Artifacts
+
+Keep caches, scratch certificates, generated archives, and large render dumps
+out of git. Curated example search records may be versioned after schema and
+numerical review. Generated release bundles and checksums belong in the
+release assets; GitHub's source archives are sufficient for ordinary source
+downloads. Store figure provenance next to any curated asset.

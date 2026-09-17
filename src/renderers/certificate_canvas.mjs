@@ -4,7 +4,8 @@ export function certificateRendererMetadata(options = {}) {
   return {
     renderer: CERTIFICATE_RENDERER_ROLE,
     mode: options.mode || 'finite-capture',
-    proof_status: 'finite-search-certificate',
-    limitations: 'The theorem-level proof remains in the cited papers/thesis.'
+    arithmetic: 'binary64',
+    proof_status: 'exploratory',
+    limitations: 'A sampled floating-point status layer is not a mathematical certificate for every displayed point.'
   };
 }

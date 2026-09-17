@@ -1,8 +1,14 @@
+import { assertFiniteNumber } from '../math/validation.mjs';
+
 export function withAlpha(ctx, alpha, draw) {
+  assertFiniteNumber(alpha, 'alpha');
   ctx.save();
-  ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-  draw();
-  ctx.restore();
+  try {
+    ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+    draw();
+  } finally {
+    ctx.restore();
+  }
 }
 
 export function circle(ctx, x, y, radius, fillStyle) {

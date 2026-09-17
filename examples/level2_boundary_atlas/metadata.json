@@ -13,7 +13,7 @@
   "renderer": "prefix-cylinder",
   "renderer_depth": 7,
   "mode": "level2-boundary-atlas",
-  "expected_verdict": "exploratory",
+  "expected_verdict": "Interior",
   "proof_status": "exploratory",
   "related_work": "2026 finite-capture atlas and boundary-layer inspection",
   "limitations": "This metadata records an exploratory atlas entry. Theorem-level proof does not rely on visual inspection."

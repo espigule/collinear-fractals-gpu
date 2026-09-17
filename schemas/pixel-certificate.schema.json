@@ -57,11 +57,13 @@
     },
     "k_max": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 0,
+      "description": "Maximum inverse depth; zero tests only the initial point."
     },
     "L_max": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 1,
+      "description": "Per-depth retained-frontier cap, not a total node budget."
     },
     "verdict": {
       "enum": [
@@ -78,10 +80,43 @@
       }
     },
     "proof_status": {
-      "type": "string"
+      "type": "string",
+      "description": "Legacy status vocabulary. finite-search-certificate denotes a floating-point record, not an interval-verified proof."
     },
     "limitations": {
       "type": "string"
+    },
+    "stop_reason": {
+      "enum": [
+        "invalid-input",
+        "outside-domain",
+        "numerical-range",
+        "enclosure-escape",
+        "trap-hit",
+        "tree-exhausted",
+        "node-cap",
+        "depth-cap"
+      ]
+    },
+    "tol": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Target for the unscaled enclosure-series tail; not a bound on all arithmetic error."
+    },
+    "depth": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "arithmetic": {
+      "type": [
+        "string",
+        "object"
+      ],
+      "description": "Arithmetic provenance; finite-search verdicts are not interval-verified by this schema."
+    },
+    "nodes_explored": {
+      "type": "integer",
+      "minimum": 0
     }
   },
   "$defs": {
@@ -102,5 +137,6 @@
       "additionalProperties": false
     }
   },
-  "additionalProperties": true
+  "additionalProperties": true,
+  "description": "Floating-point finite-search record. Schema validity does not verify the mathematical result."
 }

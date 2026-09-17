@@ -1,0 +1,45 @@
+{
+  "schema_version": "0.2.0",
+  "software_version": "0.2.0-alpha",
+  "mode": "finite-capture",
+  "n": 3,
+  "N": 5,
+  "c": {
+    "re": 0.7,
+    "im": 1.4
+  },
+  "input_parameter": {
+    "re": 0.7,
+    "im": 1.4
+  },
+  "parameter_convention": "expanding-parameter",
+  "k_max": 37,
+  "L_max": 1000,
+  "tol": 1e-8,
+  "verdict": "Interior",
+  "word": [
+    2
+  ],
+  "depth": 1,
+  "nodes_explored": 3,
+  "stop_reason": "trap-hit",
+  "in_lens": true,
+  "trap_region": "lens",
+  "enclosure": {
+    "se": 6.876046013381387,
+    "ve": 5.162714411636046,
+    "err": false,
+    "truncationDepth": 43,
+    "tail": 7.597845730402191e-9,
+    "tailCertifiedToTol": true,
+    "tailCapHit": false
+  },
+  "trap": {
+    "S": 4.47213595499958,
+    "V": 2.0571428571428574
+  },
+  "renderer": "canvas-cpu",
+  "arithmetic": "binary64",
+  "proof_status": "finite-search-certificate",
+  "limitations": "Floating-point finite-search record; inequalities are not verified with interval arithmetic. Off-lens trap hits remain exploratory. The theorem-level proof remains in the cited papers/thesis."
+}

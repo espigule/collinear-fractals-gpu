@@ -1,19 +1,14 @@
 #!/usr/bin/env node
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
-
-const explorerPath = path.join(__dirname, '..', 'explorer.js');
-const source = fs.readFileSync(explorerPath, 'utf8').split('// Application State')[0];
-const context = { console, Math, Number };
-vm.createContext(context);
-vm.runInContext(source, context, { filename: 'explorer-prefix.js' });
-
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
+
+(async () => {
+// The browser imports this same module. Browser wiring is exercised separately
+// by browser.spec.cjs; source slicing and a VM cannot catch browser failures.
+const context = await import('../src/compute/inverse_search_reference.mjs');
 
 assert(context.firstAlphabetDigitAtOrAbove(-3.1, 5) === -2, 'A_5 parity helper failed.');
 assert(context.firstAlphabetDigitAtOrAbove(-3.1, 4) === -3, 'A_4 parity helper failed.');
@@ -38,3 +33,7 @@ console.log(JSON.stringify({
   offLensDepth: offLens.depth,
   enclosureDepth: enc.truncationDepth
 }, null, 2));
+})().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});

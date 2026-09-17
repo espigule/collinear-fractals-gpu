@@ -3,7 +3,7 @@ name = "collinear-fractals"
 version = "0.2.0a0"
 description = "Companion software for collinear fractals, finite capture, and restricted polynomial roots"
 authors = [{ name = "Bernat Espigule" }]
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 license-files = ["LICENSE"]
 readme = "README.md"
 requires-python = ">=3.9"
@@ -18,7 +18,6 @@ keywords = [
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Science/Research",
-  "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "Topic :: Scientific/Engineering :: Mathematics",
@@ -31,7 +30,7 @@ Issues = "https://github.com/espigule/collinear-fractals-gpu/issues"
 Changelog = "https://github.com/espigule/collinear-fractals-gpu/blob/main/CHANGELOG.md"
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]

@@ -35,7 +35,7 @@
       "path": "examples/trap_enclosure_n3",
       "config": "examples/trap_enclosure_n3/config.json",
       "metadata": "examples/trap_enclosure_n3/metadata.json",
-      "status": "finite-search-certified",
+      "status": "finite-search-record",
       "share_hash": "n=3&cx=0.5&cy=1.1&k=37&l=1000&q=3&mode=overlay&renderer=prefix&adepth=7&hseed=20260227&hsamples=50000&pieces=1&aop=0.72"
     },
     {
@@ -58,12 +58,12 @@
     },
     {
       "id": "off_lens_witnesses_n2_to_n19",
-      "title": "Off-lens witnesses for 2 <= n <= 19",
+      "title": "Off-lens search example for n=3",
       "path": "examples/off_lens_witnesses_n2_to_n19",
       "config": "examples/off_lens_witnesses_n2_to_n19/config.json",
       "metadata": "examples/off_lens_witnesses_n2_to_n19/metadata.json",
       "status": "exploratory",
-      "share_hash": "n=13&cx=0.72&cy=1.38&k=37&l=1000&q=3&mode=overlay&renderer=prefix&adepth=7&hseed=20260227&hsamples=50000&pieces=1&aop=0.72"
+      "share_hash": "n=3&cx=1.419643377607&cy=0.606290729207&k=37&l=1000&q=3&mode=overlay&renderer=prefix&adepth=7&hseed=20260227&hsamples=50000&pieces=1&aop=0.72"
     },
     {
       "id": "finite_capture_layers_n3",

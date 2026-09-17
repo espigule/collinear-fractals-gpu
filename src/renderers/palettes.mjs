@@ -11,7 +11,11 @@ export const PIECE_COLORS = [
 ];
 
 export function hexToRgb(hex) {
-  const normalized = String(hex || '#000000').replace('#', '').padEnd(6, '0').slice(0, 6);
+  let normalized = String(hex || '#000000').replace(/^#/, '');
+  if (/^[\da-f]{3}$/i.test(normalized)) {
+    normalized = normalized.split('').map(char => char + char).join('');
+  }
+  if (!/^[\da-f]{6}$/i.test(normalized)) return { r: 0, g: 0, b: 0 };
   const value = parseInt(normalized, 16);
   return {
     r: (value >> 16) & 255,

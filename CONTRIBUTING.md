@@ -1,34 +1,43 @@
 # Contributing
 
-This repository is research software. Contributions should make the numerical behavior easier to reproduce, audit, or use.
+Contributions should make the numerical behavior easier to reproduce, inspect,
+or use. A useful report starts with a minimal parameter example or share URL
+and the behavior you expected.
 
 ## Development setup
 
-No build step is required for the browser explorer. Open `index.html` directly or serve the repository root:
+The browser explorer has no application build step. Serve the repository root
+with `python3 -m http.server 8000`; ES modules and presets need HTTP loading.
+See [validation notes](docs/VALIDATION.md) for the complete automated workflow.
+The JavaScript and Python reference packages have no runtime dependencies.
 
-```bash
-python3 -m http.server 8000
-```
+Run the checks appropriate to your change. A numerical change needs regression
+cases that detect the defect, plus agreement checks across affected ports.
+A browser change needs a real browser interaction check in addition to syntax
+validation. Schema or preset changes need validation of the checked-in data.
 
-Run the release checks before opening a pull request:
+## Numerical contract
 
-```bash
-node --check explorer.js
-node qa/explorer-prefix-smoke-test.js
-cd javascript && npm test
-cd ../python && python3 -m unittest -v test_collinear.py
-cd ../swift && swift test
-cd .. && python3 tools/validate_bundle.py
-```
+- Use the IFS convention $f_t(z)=t+z/c$. The unscaled first digit is part of the
+  public convention, including visual renderers.
+- Keep `Interior`, `Interior-offLens`, `Exterior`, and `Undetermined` distinct.
+  These are numerical search outcomes; do not describe a floating-point
+  export as a rigorously verified proof.
+- Preserve defaults across implementations: `k_max = 37`, `L_max = 1000`,
+  `tol = 1e-8`. `L_max` is a per-depth frontier limit.
+- Report unsupported input and exhausted computational limits explicitly.
+  Never convert an incomplete search into an exterior conclusion.
+- Record changes to parameters, arithmetic, result fields, or reproducibility
+  behavior in [CHANGELOG.md](CHANGELOG.md).
 
-## Contribution standards
+## Public material
 
-- Keep theorem-level `Interior` separate from exploratory `Interior-offLens`.
-- Preserve the default `k_max = 37` unless a release deliberately changes it across all implementations.
-- Add or update tests for changes to numerical behavior.
-- Include certificate JSON or reproducible parameter values for validation reports.
-- Do not commit generated archives, caches, local certificates, or runtime build output.
+Keep source, tests, schemas, curated examples, and concise validation summaries
+in git. Keep build caches, scratch certificates, large generated images, and
+archives out of git. Curated search records should conform to their schema and
+include enough settings to reproduce them.
 
-## Public release material
-
-Source code, package tests, `qa/`, `tools/validate_bundle.py`, release notes, citation metadata, and QA summaries are public and versioned. Generated release archives belong on GitHub Releases, not in git history.
+Add references for mathematical claims and retain a clear distinction between
+published results, implemented behavior, and planned features. Before a release,
+follow [the release process](docs/RELEASE_PROCESS.md) and record which runtimes
+were actually exercised.

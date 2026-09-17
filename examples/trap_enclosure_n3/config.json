@@ -5,7 +5,7 @@
   "k_max": 37,
   "l_max": 1000,
   "mode": "trap-enclosure",
-  "expected_status": "finite-search-certified",
+  "expected_status": "finite-search-record",
   "renderer_mode": "prefix",
   "visual_renderer": {
     "mode": "prefix",
@@ -28,6 +28,18 @@
         "im": 3.0
       },
       "expected_verdict": "Exterior"
+    },
+    {
+      "id": "interior-word",
+      "parameter": {
+        "re": 0.7,
+        "im": 1.4
+      },
+      "expected_verdict": "Interior",
+      "expected_depth": 1,
+      "expected_word": [
+        2
+      ]
     }
   ]
 }

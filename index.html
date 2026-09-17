@@ -3,324 +3,264 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
   <title>Collinear Fractals GPU Explorer</title>
-  <meta name="description" content="Companion software for Collinear Fractals, Finite Capture, and Restricted Polynomial Roots. Inverse-search algorithms, certificate export, and real-time visualization dashboard.">
-  
-  <!-- Typography & Styling -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <meta name="description" content="Explore collinear fractals and connectedness loci in linked parameter and dynamical planes. Reproducible views, finite inverse search, and search-record export.">
   <link rel="stylesheet" href="index.css">
 </head>
 <body>
+  <a class="skip-link" href="#workspace">Skip to the plots</a>
+  <noscript><p class="noscript-notice">This interactive explorer requires JavaScript. Mathematical background and reference implementations are available in the <a href="https://github.com/espigule/collinear-fractals-gpu">project repository</a>.</p></noscript>
+
   <div class="container">
-    <!-- Controls Sidebar -->
-    <aside class="controls" id="sidebar-panel">
-      <!-- Title & Header Info -->
-      <div class="sidebar-header" style="margin-bottom: 0.8rem; border-bottom: 1px solid var(--panel-border); padding-bottom: 0.8rem;">
-        <h1 style="font-size: 1.25rem; font-weight: 700; color: #1e1b4b; line-height: 1.2; letter-spacing: 0;">Collinear Fractals GPU Explorer</h1>
-        <p style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.25rem; font-weight: 500; line-height: 1.35;">Companion Software for Collinear Fractals, Finite Capture, and Restricted Polynomial Roots</p>
-        <div style="font-size: 0.68rem; color: var(--text-secondary); margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.25rem; font-weight: 500;">
-          <div style="display: flex; justify-content: space-between;">
-            <span>B. Espigule (2026)</span>
-            <span>Version 0.2.0-alpha</span>
+    <aside class="controls" id="sidebar-panel" aria-label="Explorer controls">
+      <div class="sidebar-header">
+        <p class="eyebrow">Interactive research companion</p>
+        <h1>Collinear Fractals <span>GPU Explorer</span></h1>
+        <p class="subtitle">Connectedness loci, finite capture, and restricted polynomial roots.</p>
+        <div class="project-meta"><span>B. Espigule · 2026</span><span class="version-tag">v0.2.0-alpha</span></div>
+        <a href="https://github.com/espigule/collinear-fractals-gpu" target="_blank" rel="noopener noreferrer" class="repo-link">
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.23c-3.34.72-4.04-1.42-4.04-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.08 1.85 1.24 1.85 1.24 1.07 1.83 2.81 1.3 3.5 1 .11-.78.42-1.31.76-1.61-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.17 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.87.12 3.17.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.62-5.49 5.92.43.37.82 1.1.82 2.22v3.3c0 .32.22.69.83.57A12 12 0 0 0 24 12C24 5.37 18.63 0 12 0Z"/></svg>
+          Source &amp; documentation <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+
+      <details class="controls-disclosure" id="controls-disclosure" open>
+        <summary><span>Explorer controls</span><span class="section-note">Parameter, layers &amp; export</span></summary>
+        <div class="controls-body">
+          <div class="button-grid quick-help">
+            <button type="button" class="btn btn-secondary" id="btn-tour" title="Open a short guided tour">Quick tour</button>
+            <button type="button" class="btn btn-secondary" id="btn-about" title="Open mathematical context and citations">About &amp; cite</button>
           </div>
-          <div style="text-align: left; margin-top: 0.05rem;">
-            <a href="https://github.com/espigule/collinear-fractals-gpu" target="_blank" rel="noopener noreferrer" class="repo-link">
-              <svg style="width: 12px; height: 12px; fill: currentColor;" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-              github.com/espigule/collinear-fractals-gpu
-            </a>
+
+          <div class="control-group">
+            <label for="example-preset">Example</label>
+            <select id="example-preset"><option value="">Select an example</option></select>
+          </div>
+
+          <div class="control-group">
+            <label for="arity-slider">Number of maps <span class="math">n</span></label>
+            <div class="slider-container">
+              <input type="range" id="arity-slider" min="2" max="100" value="3" step="1">
+              <output class="slider-val" id="arity-val" for="arity-slider">3</output>
+            </div>
+          </div>
+
+          <fieldset class="control-group selected-parameter">
+            <legend>Selected parameter <span class="math">c</span></legend>
+            <div class="field-grid">
+              <div class="field">
+                <label for="param-real">Re(<span class="math">c</span>)</label>
+                <input type="number" id="param-real" value="0.5" step="any" inputmode="decimal" aria-describedby="parameter-domain">
+              </div>
+              <div class="field">
+                <label for="param-imag">Im(<span class="math">c</span>)</label>
+                <input type="number" id="param-imag" value="1.1" step="any" inputmode="decimal" aria-describedby="parameter-domain">
+              </div>
+            </div>
+            <p class="control-help" id="parameter-domain">Direct mode: |<span class="math">c</span>| &gt; 1, Im(<span class="math">c</span>) ≠ 0. For 0 &lt; |<span class="math">c</span>| &lt; 1, calculations use 1/<span class="math">c</span>.</p>
+            <p class="effective-parameter" id="stat-effective" hidden></p>
+          </fieldset>
+
+          <div class="control-group">
+            <label for="comparison-mode">Dynamical view</label>
+            <select id="comparison-mode">
+              <option value="overlay">Difference + optional collinear</option>
+              <option value="difference">Difference attractor only</option>
+              <option value="collinear">Collinear attractor only</option>
+              <option value="escape">Escape strata</option>
+            </select>
+          </div>
+
+          <details class="control-section" open>
+            <summary>Search limits</summary>
+            <div class="section-content">
+              <div class="field-grid">
+                <div class="field">
+                  <label for="param-kmax">Max depth <span class="math">k</span><sub>max</sub></label>
+                  <input type="number" id="param-kmax" value="37" min="0" max="100" step="1" inputmode="numeric" aria-describedby="search-help">
+                </div>
+                <div class="field">
+                  <label for="param-lmax">Max nodes <span class="math">L</span><sub>max</sub></label>
+                  <input type="number" id="param-lmax" value="1000" min="1" max="10000" step="1" inputmode="numeric" aria-describedby="search-help">
+                </div>
+              </div>
+              <p class="control-help" id="search-help">Higher limits may resolve more points and take longer. Undetermined points are not classified as boundary.</p>
+            </div>
+          </details>
+
+          <details class="control-section">
+            <summary>Attractor rendering</summary>
+            <div class="section-content">
+              <div class="control-group">
+                <label for="original-renderer-mode">Collinear attractor renderer</label>
+                <select id="original-renderer-mode">
+                  <option value="prefix">Prefix cylinders</option>
+                  <option value="histogram">Seeded histogram</option>
+                  <option value="survival">Search survivors (diagnostic)</option>
+                </select>
+              </div>
+              <div class="field-grid">
+                <div class="field">
+                  <label for="attractor-depth">Visual depth</label>
+                  <input type="number" id="attractor-depth" value="7" min="1" max="12" step="1" inputmode="numeric">
+                </div>
+                <div class="field">
+                  <label for="histogram-seed">Histogram seed</label>
+                  <input type="number" id="histogram-seed" value="20260227" min="1" step="1" inputmode="numeric">
+                </div>
+              </div>
+              <div class="field">
+                <label for="histogram-samples">Histogram samples</label>
+                <input type="number" id="histogram-samples" value="50000" min="1000" max="1000000" step="1000" inputmode="numeric">
+              </div>
+              <label class="checkbox-label" for="first-level-pieces"><input type="checkbox" id="first-level-pieces" checked><span>Color first-level pieces</span></label>
+              <div class="control-group">
+                <label for="original-attractor-opacity">Collinear attractor opacity</label>
+                <div class="slider-container">
+                  <input type="range" id="original-attractor-opacity" min="0" max="100" value="72" step="1">
+                  <output class="slider-val" id="original-attractor-opacity-val" for="original-attractor-opacity">72%</output>
+                </div>
+              </div>
+              <p class="control-help">These visual settings do not change the selected search limits.</p>
+            </div>
+          </details>
+
+          <details class="control-section">
+            <summary>Layers</summary>
+            <div class="section-content layer-controls">
+              <label class="checkbox-label" for="show-difference-attractor"><input type="checkbox" id="show-difference-attractor" checked><span>Difference attractor ½ <span class="math">E</span>(<span class="math">c</span>, <span class="math">N</span>)</span></label>
+              <label class="checkbox-label" for="show-collinear-attractor"><input type="checkbox" id="show-collinear-attractor"><span>Collinear attractor <span class="math">E</span>(<span class="math">c</span>, <span class="math">n</span>)</span></label>
+              <label class="checkbox-label" for="show-canonical-trap"><input type="checkbox" id="show-canonical-trap" checked><span>Trap ½ <span class="math">P</span><sub>c</sub>(<span class="math">S</span>, <span class="math">V</span>)</span></label>
+              <label class="checkbox-label" for="show-canonical-enclosure"><input type="checkbox" id="show-canonical-enclosure" checked><span>Enclosure ½ <span class="math">P</span><sub>c</sub>(<span class="math">S</span><sub>E</sub>, <span class="math">V</span><sub>E</sub>)</span></label>
+              <label class="checkbox-label" for="show-orbit-tree"><input type="checkbox" id="show-orbit-tree" checked><span>Inverse-search tree nodes</span></label>
+              <label class="checkbox-label" for="show-winning-path"><input type="checkbox" id="show-winning-path" checked><span>Capture / escape orbits</span></label>
+              <label class="checkbox-label" for="show-escape-strata"><input type="checkbox" id="show-escape-strata"><span>Escape strata</span></label>
+              <p class="control-help"><span class="math">N</span> = 2<span class="math">n</span> − 1. The difference attractor is displayed at half scale.</p>
+            </div>
+          </details>
+
+          <details class="control-section">
+            <summary>Color &amp; depth bands</summary>
+            <div class="section-content">
+              <div class="control-group">
+                <label for="param-modulo">Depth color cycle <span class="math">q</span></label>
+                <div class="slider-container">
+                  <input type="range" id="param-modulo" min="1" max="12" value="3" step="1" aria-describedby="modulo-help">
+                  <output class="slider-val" id="modulo-val" for="param-modulo">3</output>
+                </div>
+                <p class="control-help" id="modulo-help">Capture depth colors repeat modulo <span class="math">q</span>.</p>
+              </div>
+              <div class="control-group">
+                <label for="palette-mode">Palette</label>
+                <select id="palette-mode">
+                  <option value="research">Research grayscale</option>
+                  <option value="print">Print contrast</option>
+                  <option value="contrast">High contrast</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+              <fieldset class="palette-grid" id="custom-palette-controls">
+                <legend>Custom colors</legend>
+                <label for="palette-interior">In-lens capture<input type="color" id="palette-interior" value="#059669"></label>
+                <label for="palette-offlens">Off-lens capture<input type="color" id="palette-offlens" value="#2563eb"></label>
+                <label for="palette-undetermined">Undetermined<input type="color" id="palette-undetermined" value="#fbbf24"></label>
+                <label for="palette-exterior">Exterior<input type="color" id="palette-exterior" value="#ffffff"></label>
+              </fieldset>
+            </div>
+          </details>
+
+          <div class="action-group" aria-label="View and export actions">
+            <div class="button-grid">
+              <button type="button" class="btn btn-secondary" id="btn-undo" title="Undo the last view or setting change">Undo</button>
+              <button type="button" class="btn btn-secondary" id="btn-redo" title="Redo the last undone change">Redo</button>
+              <button type="button" class="btn btn-secondary" id="btn-share" title="Create a share URL for the current state">Share view</button>
+              <button type="button" class="btn btn-secondary" id="btn-embed" title="Copy an iframe embed for the current state">Copy embed</button>
+            </div>
+            <button type="button" class="btn btn-secondary" id="btn-save-image" title="Download a PNG image of the current panels">Save image</button>
+            <div class="button-grid">
+              <button type="button" class="btn btn-secondary" id="btn-reset-param" title="Reset the parameter-plane view">Reset parameter</button>
+              <button type="button" class="btn btn-secondary" id="btn-reset-dyn" title="Reset the dynamical-plane view">Reset dynamical</button>
+            </div>
+            <button type="button" class="btn" id="btn-copy-certificate" title="Copy the selected finite-search record as JSON">Copy search JSON</button>
+            <button type="button" class="btn btn-secondary" id="btn-download-certificate" title="Download the selected finite-search record as JSON">Download search JSON</button>
+            <button type="button" class="btn btn-text" id="btn-support" title="Open support and funding information">Support this project</button>
           </div>
         </div>
-      </div>
-      <!-- Arity Selection -->
-      <div class="control-group">
-        <label for="arity-slider">Arity (n)</label>
-        <div class="slider-container">
-          <input type="range" id="arity-slider" min="2" max="50" value="3" step="1">
-          <span class="slider-val" id="arity-val">3</span>
-        </div>
-      </div>
-
-      <!-- Certified Search Params -->
-      <div class="control-group">
-        <label>Inverse Iteration Search Limits</label>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.25rem;">
-          <div style="display: flex; flex-direction: column; gap: 0.2rem;">
-            <span style="font-size: 0.75rem; color: var(--text-secondary);">Max Depth (k<sub>max</sub>)</span>
-            <input type="number" id="param-kmax" value="37" min="1" max="80">
-          </div>
-          <div style="display: flex; flex-direction: column; gap: 0.2rem;">
-            <span style="font-size: 0.75rem; color: var(--text-secondary);">Max Nodes (L<sub>max</sub>)</span>
-            <input type="number" id="param-lmax" value="1000" min="10" max="50000">
-          </div>
-        </div>
-      </div>
-
-      <!-- Modulo Divisor (mod q) Slider -->
-      <div class="control-group">
-        <label for="param-modulo">Modulo Divisor (mod q)</label>
-        <div class="slider-container">
-          <input type="range" id="param-modulo" min="1" max="10" value="3" step="1">
-          <span class="slider-val" id="modulo-val">3</span>
-        </div>
-      </div>
-
-      <!-- Curated Examples -->
-      <div class="control-group">
-        <label for="example-preset">Curated Example</label>
-        <select id="example-preset">
-          <option value="">Select an example</option>
-        </select>
-      </div>
-
-      <!-- Comparison Mode -->
-      <div class="control-group">
-        <label for="comparison-mode">Comparison Mode</label>
-        <select id="comparison-mode">
-          <option value="overlay">Difference + optional collinear overlay</option>
-          <option value="difference">Difference attractor only</option>
-          <option value="collinear">Collinear attractor only</option>
-          <option value="escape">Escape strata</option>
-        </select>
-      </div>
-
-      <!-- Original Attractor Renderer -->
-      <div class="control-group">
-        <label for="original-renderer-mode">Original Attractor Renderer</label>
-        <select id="original-renderer-mode">
-          <option value="prefix">Prefix cylinders</option>
-          <option value="histogram">Seeded histogram</option>
-          <option value="survival">Inverse-search status</option>
-        </select>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.25rem;">
-          <div style="display: flex; flex-direction: column; gap: 0.2rem;">
-            <span style="font-size: 0.75rem; color: var(--text-secondary);">Visual Depth</span>
-            <input type="number" id="attractor-depth" value="7" min="1" max="12">
-          </div>
-          <div style="display: flex; flex-direction: column; gap: 0.2rem;">
-            <span style="font-size: 0.75rem; color: var(--text-secondary);">Histogram Seed</span>
-            <input type="number" id="histogram-seed" value="20260227" min="1" step="1">
-          </div>
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center;">
-          <input type="number" id="histogram-samples" value="50000" min="1000" max="1000000" step="1000" title="Histogram sample count">
-          <label class="checkbox-label" style="white-space: nowrap;">
-            <input type="checkbox" id="first-level-pieces" checked>
-            Pieces
-          </label>
-        </div>
-        <div class="slider-container">
-          <input type="range" id="original-attractor-opacity" min="0" max="100" value="72" step="1">
-          <span class="slider-val" id="original-attractor-opacity-val">72%</span>
-        </div>
-      </div>
-
-      <!-- Layer Visibilities -->
-      <div class="control-group" style="gap: 0.5rem; margin-top: 0.25rem;">
-        <label>Layers & Display</label>
-        <label class="checkbox-label">
-          <input type="checkbox" id="show-difference-attractor" checked>
-          Difference Attractor ½ E(c,N)
-        </label>
-        <label class="checkbox-label">
-          <input type="checkbox" id="show-collinear-attractor">
-          Collinear Attractor E(c,n)
-        </label>
-        <label class="checkbox-label">
-          <input type="checkbox" id="show-canonical-trap" checked>
-          Canonical Trap ½ P<sub>c</sub>(S,V)
-        </label>
-        <label class="checkbox-label">
-          <input type="checkbox" id="show-canonical-enclosure" checked>
-          Enclosure ½ P<sub>c</sub>(SE,VE)
-        </label>
-        <label class="checkbox-label">
-          <input type="checkbox" id="show-orbit-tree" checked>
-          Inverse Search Tree Nodes
-        </label>
-        <label class="checkbox-label">
-          <input type="checkbox" id="show-winning-path" checked>
-          Capture / Escape Orbits
-        </label>
-        <label class="checkbox-label">
-          <input type="checkbox" id="show-escape-strata">
-          Escape Strata
-        </label>
-      </div>
-
-      <!-- Palette -->
-      <div class="control-group">
-        <label for="palette-mode">Palette</label>
-        <select id="palette-mode">
-          <option value="research">Research grayscale</option>
-          <option value="print">Print contrast</option>
-          <option value="contrast">High contrast</option>
-          <option value="custom">Custom</option>
-        </select>
-        <div class="palette-grid" id="custom-palette-controls" aria-label="Custom palette controls">
-          <label>
-            Interior
-            <input type="color" id="palette-interior" value="#059669">
-          </label>
-          <label>
-            Off-lens
-            <input type="color" id="palette-offlens" value="#2563eb">
-          </label>
-          <label>
-            Undetermined
-            <input type="color" id="palette-undetermined" value="#fbbf24">
-          </label>
-          <label>
-            Exterior
-            <input type="color" id="palette-exterior" value="#ffffff">
-          </label>
-        </div>
-      </div>
-
-      <!-- Quick Actions -->
-      <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: auto; padding-top: 1rem;">
-        <div class="button-grid">
-          <button class="btn btn-secondary" id="btn-undo" title="Undo the last view or setting change">Undo</button>
-          <button class="btn btn-secondary" id="btn-redo" title="Redo the last undone change">Redo</button>
-        </div>
-        <div class="button-grid">
-          <button class="btn btn-secondary" id="btn-share" title="Create a share URL for the current state">Share View</button>
-          <button class="btn btn-secondary" id="btn-embed" title="Copy an iframe embed for the current state">Copy Embed</button>
-        </div>
-        <div class="button-grid">
-          <button class="btn btn-secondary" id="btn-save-image" title="Download a PNG image of the current panels">Save Image</button>
-          <button class="btn btn-secondary" id="btn-tour" title="Open a short guided tour">Tour</button>
-        </div>
-        <button class="btn btn-secondary" id="btn-reset-param">Reset Parameter Zoom</button>
-        <button class="btn btn-secondary" id="btn-reset-dyn">Reset Dynamical Zoom</button>
-        <button class="btn" id="btn-copy-certificate" title="Copy the current finite-search certificate payload as JSON">Copy Certificate JSON</button>
-        <button class="btn btn-secondary" id="btn-download-certificate" title="Download the current finite-search certificate payload as JSON">Download Certificate JSON</button>
-        <div class="button-grid">
-          <button class="btn btn-secondary" id="btn-about" title="Open mathematical context and citations">About + Cite</button>
-          <button class="btn btn-secondary" id="btn-support" title="Open support and funding information">Support</button>
-        </div>
-      </div>
+      </details>
     </aside>
 
-    <!-- Main Workspace (Dual Canvases) -->
-    <main class="workspace">
-      <!-- Parameter Plane -->
-      <section class="canvas-panel" id="parameter-panel">
+    <main class="workspace" id="workspace" tabindex="-1" aria-label="Linked fractal plots">
+      <section class="canvas-panel" id="parameter-panel" aria-labelledby="parameter-title">
         <div class="panel-header">
-          <span class="panel-title">PARAMETER PLANE (c-space)</span>
-          <div class="panel-actions">
-            <button class="panel-btn" id="btn-focus-param" title="Focus parameter panel">Focus</button>
-          </div>
+          <div><p class="panel-kicker">Connectedness locus</p><h2 class="panel-title" id="parameter-title">Parameter plane <span class="plane-coordinate">c</span></h2></div>
+          <div class="panel-actions"><span class="render-status" id="parameter-render-status" role="status">Refining…</span><button type="button" class="panel-btn" id="btn-focus-param" title="Focus the parameter panel">Focus</button></div>
         </div>
-        <div class="interaction-hint">Drag to pan. Wheel to zoom. Double-click the panel title area to isolate.</div>
+        <p class="interaction-hint" id="parameter-hint">Drag to pan or move the marker. Scroll or pinch to zoom. Double-click or double-tap to select <span class="math">c</span>.<span class="keyboard-hint">Keys: arrows pan · Shift + arrows move <span class="math">c</span> · +/− zoom · Home resets.</span></p>
         <div class="canvas-container">
-          <canvas id="parameter-canvas"></canvas>
-          <!-- Floating Legend -->
-          <div class="legend-panel" id="legend-parameter">
-            <div class="legend-item">
-              <span class="legend-color" style="border: 1px dashed rgba(0,0,0,0.3); background: none;"></span>
-              <span>Parameter Lens &#120003;<sub>n</sub></span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-color" id="legend-locus-color" style="background: #10b981;"></span>
-              <span>Interior / capture in lens (mod q)</span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-color" id="legend-offlens-color" style="background: #64748b;"></span>
-              <span>Interior-offLens trap hit</span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-color" style="background: #fbbf24;"></span>
-              <span>Undetermined boundary</span>
-            </div>
-          </div>
+          <canvas id="parameter-canvas" tabindex="0" aria-label="Parameter-plane plot of the connectedness locus" aria-describedby="parameter-hint">Use the selected parameter fields and example menu to explore a point. The search result appears below the plots.</canvas>
+        </div>
+        <div class="legend-panel" id="legend-parameter" aria-label="Parameter-plane legend">
+          <div class="legend-item"><span class="legend-color legend-lens" aria-hidden="true"></span><span>Parameter lens <span class="math">X</span><sub>n</sub></span></div>
+          <div class="legend-item"><span class="legend-color" id="legend-locus-color" aria-hidden="true"></span><span>In-lens capture (depth mod <span class="math">q</span>)</span></div>
+          <div class="legend-item"><span class="legend-color" id="legend-offlens-color" aria-hidden="true"></span><span>Off-lens trap hit</span></div>
+          <div class="legend-item"><span class="legend-color" id="legend-undetermined-color" aria-hidden="true"></span><span>Undetermined</span></div>
+          <div class="legend-item"><span class="legend-color" id="legend-exterior-color" aria-hidden="true"></span><span>Exterior</span></div>
         </div>
       </section>
 
-      <!-- Dynamical Plane -->
-      <section class="canvas-panel" id="dynamical-panel">
+      <section class="canvas-panel" id="dynamical-panel" aria-labelledby="dynamical-title">
         <div class="panel-header">
-          <span class="panel-title">DYNAMICAL PLANE (z-space)</span>
-          <div class="panel-actions">
-            <button class="panel-btn" id="btn-focus-dyn" title="Focus dynamical panel">Focus</button>
-          </div>
+          <div><p class="panel-kicker">Selected parameter</p><h2 class="panel-title" id="dynamical-title">Dynamical plane <span class="plane-coordinate">z</span></h2></div>
+          <div class="panel-actions"><span class="render-status" id="dynamical-render-status" role="status">Refining…</span><button type="button" class="panel-btn" id="btn-focus-dyn" title="Focus the dynamical panel">Focus</button></div>
         </div>
-        <div class="interaction-hint">Drag to pan. Wheel to zoom. Double-click the marker to move the selected parameter.</div>
+        <p class="interaction-hint" id="dynamical-hint">Drag to pan or move the marker. Scroll or pinch to zoom. Double-click or double-tap to select <span class="math">c</span>.<span class="keyboard-hint">Keys: arrows pan · Shift + arrows move <span class="math">c</span> · +/− zoom · Home resets.</span></p>
         <div class="canvas-container">
-          <canvas id="dynamical-canvas"></canvas>
-          <!-- Floating Legend -->
-          <div class="legend-panel" id="legend-dynamical">
-            <div class="legend-item">
-              <span class="legend-color" id="legend-diff-color" style="background: #d1fae5;"></span>
-              <span>Difference Attractor ½ E(c,N)</span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-color" id="legend-coll-color" style="background: #2e051a;"></span>
-              <span>Collinear Attractor E(c,n)</span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-color" style="border: 1px dashed #059669; background: rgba(5,150,105,0.03);"></span>
-              <span>Trap ½ P<sub>c</sub>(S,V)</span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-color" style="border: 1px solid #4f46e5; background: rgba(79,70,229,0.02);"></span>
-              <span>Enclosure ½ P<sub>c</sub>(SE,VE)</span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-color" style="border-radius: 50%; background: #dc2626; width: 8px; height: 8px; border: none; margin-left: 3px; margin-right: 3px;"></span>
-              <span>Parameter c Locator</span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-color" style="border-radius: 50%; background: #475569; width: 6px; height: 6px; border: none; margin-left: 4px; margin-right: 4px;"></span>
-              <span>Origin 0</span>
-            </div>
-          </div>
+          <canvas id="dynamical-canvas" tabindex="0" aria-label="Dynamical-plane plot of the selected collinear and difference attractors" aria-describedby="dynamical-hint">Change the dynamical view and layers in Explorer controls. The difference attractor is displayed at half scale.</canvas>
+        </div>
+        <div class="legend-panel" id="legend-dynamical" aria-label="Dynamical-plane legend">
+          <div class="legend-item"><span class="legend-color" id="legend-diff-color" aria-hidden="true"></span><span>Difference ½ <span class="math">E</span>(<span class="math">c</span>, <span class="math">N</span>)</span></div>
+          <div class="legend-item"><span class="legend-color" id="legend-coll-color" aria-hidden="true"></span><span>Collinear <span class="math">E</span>(<span class="math">c</span>, <span class="math">n</span>)</span></div>
+          <div class="legend-item"><span class="legend-color legend-trap" aria-hidden="true"></span><span>Trap ½ <span class="math">P</span><sub>c</sub>(<span class="math">S</span>, <span class="math">V</span>)</span></div>
+          <div class="legend-item"><span class="legend-color legend-enclosure" aria-hidden="true"></span><span>Enclosure ½ <span class="math">P</span><sub>c</sub>(<span class="math">S</span><sub>E</sub>, <span class="math">V</span><sub>E</sub>)</span></div>
+          <div class="legend-item"><span class="legend-color legend-locator" aria-hidden="true"></span><span>Evaluated parameter</span></div>
+          <div class="legend-item"><span class="legend-color legend-origin" aria-hidden="true"></span><span>Origin 0</span></div>
         </div>
       </section>
     </main>
   </div>
 
-  <!-- Footer Information Readout -->
-  <footer class="status-bar" id="footer-status">
-    <div class="status-group">
-      <div>c = <span id="stat-c" style="color: var(--text-primary); font-weight: 600;">0.50000 + 1.10000i</span></div>
-      <div>|c| = <span id="stat-rho">1.20830</span></div>
-      <div>In Lens: <span id="stat-lens" style="font-weight: 600;">Yes</span></div>
+  <footer class="status-bar" id="footer-status" aria-label="Selected parameter search result">
+    <div class="status-group parameter-status">
+      <div><span class="status-label">c</span> <span id="stat-c">0.50000 + 1.10000i</span></div>
+      <div><span class="status-label">|c|</span> <span id="stat-rho">1.20830</span></div>
+      <div><span class="status-label">In lens</span> <span id="stat-lens">—</span></div>
     </div>
-    
-    <div class="status-group">
-      <div style="display: flex; align-items: center; gap: 0.5rem;">
-        Verdict: 
-        <span class="verdict-tag verdict-Interior" id="stat-verdict">Interior</span>
-      </div>
-      <div>Nodes: <span id="stat-nodes">1</span></div>
-      <div>Depth: <span id="stat-depth">0</span></div>
+    <div class="status-group search-status">
+      <div class="verdict-readout"><span class="status-label">Search</span> <span class="verdict-tag verdict-Undetermined" id="stat-verdict" aria-live="polite" aria-atomic="true">Pending</span></div>
+      <div><span class="status-label">Nodes</span> <span id="stat-nodes">—</span></div>
+      <div><span class="status-label">Depth</span> <span id="stat-depth">—</span></div>
     </div>
-    
-    <div style="max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-      Word: <span id="stat-word" style="font-family: var(--font-mono); color: var(--color-interior); font-weight: 600;">None</span>
-    </div>
+    <div class="word-status"><span class="status-label">Word</span> <span id="stat-word">None</span></div>
+    <div class="search-reason" id="stat-reason"></div>
   </footer>
 
-  <!-- Lightweight Modal Layer -->
   <div class="modal-backdrop" id="modal-backdrop" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal" id="explorer-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
       <div class="modal-header">
         <h2 id="modal-title">Explorer</h2>
-        <button class="modal-close" id="modal-close" aria-label="Close dialog">&times;</button>
+        <button type="button" class="modal-close" id="modal-close" aria-label="Close dialog">&times;</button>
       </div>
-      <div class="modal-tabs" id="modal-tabs" hidden>
-        <button class="modal-tab active" data-tab="intuition">Quick intuition</button>
-        <button class="modal-tab" data-tab="framework">Mathematical framework</button>
-        <button class="modal-tab" data-tab="references">References and citation</button>
+      <div class="modal-tabs" id="modal-tabs" role="group" aria-label="About sections" hidden>
+        <button type="button" class="modal-tab active" data-tab="intuition">Quick intuition</button>
+        <button type="button" class="modal-tab" data-tab="framework">Mathematical framework</button>
+        <button type="button" class="modal-tab" data-tab="references">References &amp; citation</button>
       </div>
       <div class="modal-body" id="modal-body"></div>
       <div class="modal-actions" id="modal-actions"></div>
     </div>
   </div>
 
-  <!-- Explorer Engine Script -->
-  <script src="explorer.js"></script>
+  <script type="module" src="explorer.js"></script>
 </body>
 </html>

@@ -15,8 +15,9 @@
   "proof_status": "finite-search-certificate",
   "certificates": [
     "certificate_interior.json",
-    "certificate_exterior.json"
+    "certificate_exterior.json",
+    "certificate_interior_word.json"
   ],
   "related_work": "2026 canonical trap and enclosure construction",
-  "limitations": "Theorem-level proof does not rely on visual inspection."
+  "limitations": "Floating-point finite-search records; inequalities are not interval-verified."
 }

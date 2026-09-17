@@ -1,20 +1,43 @@
 {
-  "software": "Collinear Fractals GPU Explorer",
-  "version": "0.2.0-alpha",
+  "schema_version": "0.2.0",
+  "software_version": "0.2.0-alpha",
+  "mode": "finite-capture",
   "n": 3,
   "N": 5,
-  "parameter": {
+  "c": {
     "re": 0.5,
     "im": 1.1
   },
-  "search": {
-    "k_max": 37,
-    "l_max": 1000,
-    "tolerance": 1e-8
+  "input_parameter": {
+    "re": 0.5,
+    "im": 1.1
   },
+  "parameter_convention": "expanding-parameter",
+  "k_max": 37,
+  "L_max": 1000,
+  "tol": 1e-8,
   "verdict": "Interior",
+  "word": [],
   "depth": 0,
   "nodes_explored": 1,
-  "status": "finite-search export",
-  "proof_note": "Compact reproducibility artifact; theorem-level proof remains in the mathematical text."
+  "stop_reason": "trap-hit",
+  "in_lens": true,
+  "trap_region": "lens",
+  "enclosure": {
+    "se": 14.538482141150686,
+    "ve": 13.166914809780739,
+    "err": false,
+    "truncationDepth": 106,
+    "tail": 9.345440748328693e-9,
+    "tailCertifiedToTol": true,
+    "tailCapHit": false
+  },
+  "trap": {
+    "S": 4.5518323873130235,
+    "V": 3.0136986301369864
+  },
+  "renderer": "canvas-cpu",
+  "arithmetic": "binary64",
+  "proof_status": "finite-search-certificate",
+  "limitations": "Floating-point finite-search record; inequalities are not verified with interval arithmetic. Off-lens trap hits remain exploratory. The theorem-level proof remains in the cited papers/thesis."
 }

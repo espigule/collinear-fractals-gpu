@@ -35,7 +35,10 @@
       "minimum": 3
     },
     "c": {
-      "type": "object",
+      "type": [
+        "object",
+        "null"
+      ],
       "required": [
         "re",
         "im"
@@ -48,15 +51,18 @@
           "type": "number"
         }
       },
-      "additionalProperties": true
+      "additionalProperties": true,
+      "description": "Effective parameter used by the search. Null only when a reciprocal input exceeds finite numerical range; input_parameter preserves entered coordinates."
     },
     "k_max": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 0,
+      "description": "Maximum inverse depth; zero tests only the initial point."
     },
     "L_max": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 1,
+      "description": "Per-depth retained-frontier cap, not a total node budget."
     },
     "verdict": {
       "enum": [
@@ -107,11 +113,112 @@
         "illustrative",
         "exploratory",
         "bounded-search-undetermined"
-      ]
+      ],
+      "description": "Legacy status vocabulary. finite-search-certificate denotes a floating-point record, not an interval-verified proof."
     },
     "limitations": {
       "type": "string"
+    },
+    "stop_reason": {
+      "enum": [
+        "invalid-input",
+        "outside-domain",
+        "numerical-range",
+        "enclosure-escape",
+        "trap-hit",
+        "tree-exhausted",
+        "node-cap",
+        "depth-cap",
+        null
+      ]
+    },
+    "tol": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Target for the unscaled enclosure-series tail; not a bound on all arithmetic error."
+    },
+    "depth": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "arithmetic": {
+      "type": [
+        "string",
+        "object"
+      ],
+      "description": "Arithmetic provenance; finite-search verdicts are not interval-verified by this schema."
+    },
+    "nodes_explored": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "input_parameter": {
+      "type": "object",
+      "required": [
+        "re",
+        "im"
+      ],
+      "properties": {
+        "re": {
+          "type": "number"
+        },
+        "im": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": true
+    },
+    "effective_c": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Expanding parameter used by the search after any reciprocal normalization."
+    },
+    "parameter_convention": {
+      "enum": [
+        "expanding-parameter",
+        "reciprocal-input"
+      ]
+    },
+    "in_lens": {
+      "type": "boolean"
+    },
+    "trap_region": {
+      "type": [
+        "string",
+        "null"
+      ]
     }
   },
-  "additionalProperties": true
+  "additionalProperties": true,
+  "description": "Floating-point finite-search record. Schema validity does not verify the mathematical result.",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "c": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "c"
+        ]
+      },
+      "then": {
+        "properties": {
+          "verdict": {
+            "const": "Undetermined"
+          },
+          "stop_reason": {
+            "const": "numerical-range"
+          }
+        },
+        "required": [
+          "input_parameter",
+          "stop_reason"
+        ]
+      }
+    }
+  ]
 }
