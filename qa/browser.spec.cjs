@@ -132,6 +132,8 @@ test('partial and malformed share hashes preserve defaults and enforce bounds', 
   expect(Number(params.get('dz'))).toBeGreaterThan(0.01);
 
   // Same-document navigation verifies the hashchange path as well as startup.
+  // A navigation intentionally replaces any draft left focused in the old view.
+  await (await reveal(page, '#param-real')).fill('0.75');
   await page.goto('/#n=bad&cx=NaN&cy=Infinity&k=&l=bad&q=bad&renderer=bad&palette=bad&layers=x&pz=NaN');
   await expect(page.locator('#arity-slider')).toHaveValue('3');
   await expect(page.locator('#param-kmax')).toHaveValue('37');
@@ -202,6 +204,8 @@ test('share URL restores custom colors, renderer settings, exact coordinates and
   const hash = new URLSearchParams(new URL(url).hash.slice(1));
   expect(Number(hash.get('cx'))).toBe(1.2345678901234567);
   expect(Number(hash.get('cy'))).toBe(1.543210987654321);
+  expect(hash.get('hseed')).toBe('314159');
+  expect(hash.get('hsamples')).toBe('1000');
   expect(hash.get('ci')).toBe('#13579b');
   expect(hash.get('co')).toBe('#2468ac');
 
@@ -218,6 +222,35 @@ test('share URL restores custom colors, renderer settings, exact coordinates and
   await expect(page.locator('#palette-offlens')).toHaveValue('#2468ac');
   expect(await shareUrl(page)).toBe(url);
 });
+
+for (const edit of [
+  { name: 'histogram seed', selector: '#histogram-seed', value: '314159', hashKey: 'hseed' },
+  { name: 'search depth', selector: '#param-kmax', value: '19', hashKey: 'k' },
+]) {
+  test(`uncommitted ${edit.name} survives a real resize before blur`, async ({ page }) => {
+    await open(page);
+    const input = await reveal(page, edit.selector);
+    const canvas = page.locator('#dynamical-canvas');
+    await expect(canvas).toHaveAttribute('data-render-state', 'complete');
+    const initialWidth = await canvas.evaluate(element => element.width);
+    const viewport = page.viewportSize();
+    await input.fill(edit.value);
+    await expect(input).toBeFocused();
+
+    // Force an asynchronous redraw while the field still contains a draft.
+    // Waiting for both a changed backing size and completion avoids relying on
+    // timing or calling application internals to trigger the former input race.
+    await page.setViewportSize({ width: viewport.width + 24, height: viewport.height });
+    await expect.poll(() => canvas.evaluate(element => element.width)).not.toBe(initialWidth);
+    await expect(canvas).toHaveAttribute('data-render-state', 'complete');
+    await expect(input).toBeFocused();
+    expect(await input.inputValue(), 'Drawing must not replace a focused, uncommitted edit').toBe(edit.value);
+
+    await input.press('Tab');
+    const hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
+    expect(hash.get(edit.hashKey), 'The subsequent blur commits the preserved draft').toBe(edit.value);
+  });
+}
 
 test('dialogs contain keyboard focus, close from a focused control, and restore it', async ({ page }) => {
   await open(page);

@@ -439,8 +439,8 @@ function renderAfterStateChange(target) {
 }
 
 function updateControlsFromState() {
-  if (elParamReal && document.activeElement !== elParamReal) elParamReal.value = state.cx;
-  if (elParamImag && document.activeElement !== elParamImag) elParamImag.value = state.cy;
+  if (elParamReal) elParamReal.value = state.cx;
+  if (elParamImag) elParamImag.value = state.cy;
   if (elAritySlider) elAritySlider.value = state.n;
   if (elArityVal) elArityVal.textContent = state.n;
   if (elKmax) elKmax.value = state.kMax;
@@ -1643,8 +1643,9 @@ function updateStatusBar(test) {
     elStatEffective.textContent = reciprocal
       ? `Evaluated at 1/c = ${effective.x.toPrecision(7)} ${effective.y < 0 ? '−' : '+'} ${Math.abs(effective.y).toPrecision(7)}i` : '';
   }
-  updateControlsFromState();
-  
+  // Status is also refreshed asynchronously during rendering. Controls are
+  // synchronized by state-changing actions so an unfinished edit survives here.
+
   if (isInteriorVerdict(test.verdict) && test.word) {
     elStatWord.textContent = `[${test.word.join(', ')}]`;
     elStatWord.style.color = test.verdict === 'Interior-offLens' ? '#2563eb' : 'var(--color-interior)';

@@ -22,6 +22,8 @@
 - Share validated numerical helpers and histogram sampling across entry points.
 - Hardened URL-state parsing and clarified the distinction between numerical
   search results, finite visual approximations, and unresolved search limits.
+- Preserve unfinished numeric edits when background rendering or resizing
+  refreshes the search status.
 
 ### Maintenance and documentation
 

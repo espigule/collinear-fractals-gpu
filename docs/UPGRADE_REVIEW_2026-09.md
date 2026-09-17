@@ -37,7 +37,8 @@ Share links retain full numeric precision, custom colors, all layer flags,
 viewports, panel focus, tolerance, and rendering settings. Missing or invalid
 fields preserve defaults, and browser workloads are bounded. Preset requests
 cannot overwrite newer user interactions. Restoring plot guides during refinement
-no longer erases already-refined rows.
+no longer erases already-refined rows. Background status updates preserve numeric
+edits until the user commits them.
 
 The interface provides exact parameter fields, keyboard/pointer/touch controls,
 collapsible control groups, stacked mobile plots, unobstructed legends, visible
@@ -55,7 +56,7 @@ checks and Pages deployment.
 | Check | Result |
 | --- | --- |
 | `npm run test:all` | Passed |
-| Chromium desktop/mobile scenarios | 16/16 passed |
+| Chromium desktop/mobile scenarios | 20/20 passed |
 | Core regression groups | 16/16 passed |
 | State-codec regression groups | 9/9 passed |
 | Fast versus detailed search | 1,000 seeded cases agree |
@@ -85,7 +86,8 @@ pass first. Public staging includes only selected assets and excludes developmen
 artifacts. Action revisions and QA dependencies are pinned.
 
 The local environment has no Swift, Wolfram Language, MATLAB/Octave, or Maple
-runtime. Swift has a GitHub Actions job; its result must be checked on the actual
+runtime. The hosted macOS Swift job passed all 16 tests on the initial upgrade
+commit `02c3e82f6064d964f40444f613b36b76a24b09db`; CI repeats this gate for every
 candidate commit. The three CAS regression files require their native runtimes.
 Two Swift helpers now throw on invalid arguments; their documented callers must
 use `try`.
