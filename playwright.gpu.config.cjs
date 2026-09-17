@@ -17,8 +17,9 @@ module.exports = defineConfig({
   use: { ...base.use, baseURL: 'http://127.0.0.1:4174' },
   webServer: {
     ...base.webServer,
-    command: `python -c 'from pathlib import Path; import tools.stage_site as stage; stage.OUTPUT = Path("artifacts/qa/gpu/site").resolve(); stage.main()' && python -m http.server 4174 --bind 127.0.0.1 --directory artifacts/qa/gpu/site`,
+    command: `python -c 'from pathlib import Path; import tools.stage_site as stage; stage.OUTPUT = Path("artifacts/qa/gpu/site").resolve(); stage.OUTPUT.parent.mkdir(parents=True, exist_ok=True); stage.main()' && python -m http.server 4174 --bind 127.0.0.1 --directory artifacts/qa/gpu/site`,
     url: 'http://127.0.0.1:4174',
+    stderr: 'pipe',
   },
   projects: [
     { name: 'webgl-swiftshader', grep: /WebGL2:/, use: { browserName: 'chromium', viewport: { width: 1024, height: 720 }, launchOptions: software } },
