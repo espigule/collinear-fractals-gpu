@@ -130,7 +130,7 @@ test('finite oversized values clamp safely, including reciprocal camera overflow
 
 test('current hash state wins legacy query settings and force markers as a whole', () => {
   const query = '?legacy=1&n=99&cx=55&cy=44&panels=1111&zoom=0.4&queue=128';
-  for (const hash of ['#n=5&pm=rn', '#n=5&k=0', '#n=5&pz=0.002', '#n=5&dz=3', '#n=5&layers=1111111']) {
+  for (const hash of ['#n=5&pm=rn', '#n=5&k=0', '#n=5&pz=0.002', '#n=5&dz=3', '#n=5&layers=1111111', '#n=5&backend=gpu']) {
     const imported = decode(query, hash);
     assert.equal(imported.importedLegacy, false, hash);
     assert.equal(imported.source, 'hash', hash);
@@ -143,6 +143,23 @@ test('current hash state wins legacy query settings and force markers as a whole
   assert.equal(explicitBadModern.importedLegacy, false);
   assert.equal(explicitBadModern.state.parameterMode, 'mn');
   assert.equal(explicitBadModern.state.n, 3);
+});
+
+test('backend-only current hash overrides a forced legacy query without changing user preference', () => {
+  for (const backend of ['auto', 'gpu', 'cpu']) {
+    const result = decode('?legacy=1&n=99&cx=22&panels=1111', `#backend=${backend}`);
+    assert.equal(result.importedLegacy, false);
+    assert.equal(result.source, 'hash');
+    assert.equal(result.state.backend, backend);
+    assert.equal(result.state.n, DEFAULT_EXPLORER_STATE.n);
+    assert.equal(result.state.cx, DEFAULT_EXPLORER_STATE.cx);
+    assert.deepEqual(result.warnings, []);
+  }
+  const invalid = decode('?legacy=1&n=99&panels=1111', '#backend=unsupported');
+  assert.equal(invalid.importedLegacy, false);
+  assert.equal(invalid.state.backend, 'auto');
+  assert.equal(invalid.state.n, DEFAULT_EXPLORER_STATE.n);
+  assert.equal(decode('?panels=0010').state.backend, 'auto');
 });
 
 test('legacy signature hashes override queries while force flags disambiguate core-only hashes', () => {

@@ -56,6 +56,7 @@ a:hover { text-decoration-thickness: 2px; }
 .control-group { display: flex; flex-direction: column; gap: 0.4rem; }
 label, legend { color: var(--text-primary); font-size: 0.77rem; font-weight: 600; }
 .control-help { color: var(--text-secondary); font-size: 0.71rem; line-height: 1.5; }
+.backend-status { padding: 0.55rem 0.65rem; border: 1px solid #d5deee; border-radius: 0.35rem; background: #f1f5fd; color: #344a70; font-size: 0.72rem; line-height: 1.5; overflow-wrap: anywhere; }
 .selected-parameter { padding: 0.85rem; border: 1px solid var(--panel-border); border-radius: 0.5rem; background: var(--panel-bg); }
 .selected-parameter legend { padding: 0 0.3rem; margin-left: -0.3rem; margin-bottom: 0; }
 .selected-parameter .control-help { margin-top: 0.3rem; }

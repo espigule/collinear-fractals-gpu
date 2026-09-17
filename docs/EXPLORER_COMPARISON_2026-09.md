@@ -13,8 +13,11 @@ HTML is preserved at `/collinear/legacy-2026-09/`.
 The legacy's strengths are visual exploration and comparative breadth; the
 upgraded foundation's strengths are its numerical contract, provenance, and
 maintainability. Combining these strengths is preferable to maintaining two
-divergent scientific engines. Neither version is an interval-verified proof
-system, and the combined implementation remains Canvas/CPU software.
+divergent scientific engines. The maintained implementation now combines
+bounded WebGL 2 previews with binary64 CPU-worker refinement. Neither version
+is an interval-verified proof system. The dated update below supersedes the
+earlier implementation's CPU-only rendering description; the historical
+baseline comparison remains intact.
 
 ## Review basis and publication state
 
@@ -62,6 +65,43 @@ These identities explain the half-scale difference display: the corresponding
 visible membership question is $c\in\tfrac12E(c,N)$. The visual scale must
 remain explicit when comparing the applications.
 
+## Hybrid rendering update — 17 September 2026
+
+The rendering extension adds an actual WebGL 2 fragment-shader preview and a
+bounded CPU-worker raster pool to the combined interface. It retains the
+corrected full coordinates of $E(c,n)$ and the distinct half-scale difference
+display. Forward prefix and histogram drawings remain CPU Canvas overlays;
+the selected binary64 search record remains independent of preview pixels.
+
+| Requested mode | Rendering behavior | Interpretation |
+|---|---|---|
+| `auto` — default | Bounded float32 GPU preview, followed by full-raster binary64 worker refinement at the requested search settings. | The first picture is provisional; the CPU pass supplies the completed numerical raster. |
+| `gpu` — explicit preview mode | Finish with the supported bounded GPU preview, or fall back to CPU if the view/device is unsupported. | Completion here does not mean binary64 refinement or use of every requested search resource. |
+| `cpu` | Binary64 worker rendering; progressive main-thread fallback if workers cannot run. | Retain the numerical search contract while broadening execution support. |
+
+The GPU preview currently limits arity to 2–32, depth to 64, retained frontier
+to 32, and per-search candidate work to 2,048; requested lower limits remain
+effective. Its raster is capped at 120,000 pixels and 768 pixels on either
+side. Coordinate precision and numerical-domain guards can request CPU
+fallback or leave individual pixels unresolved. A cap or uncertainty does
+not become an escape verdict by discarding branches. These engineering
+guards do not establish interval certification.
+
+Backend preference is stored in share links, while active-backend and fallback
+status describe the actual execution. No physical-device GPU speedup or
+matched-budget performance comparison with the archive has been established.
+Earlier local browser counts below describe the pre-hybrid checkpoint; the
+new rendering paths require their own final-commit validation.
+
+WebGPU remains deferred. WGSL currently supplies concrete `f32` and optional
+`f16`, without runtime `f64`; switching APIs alone would not replace the
+binary64 numerical path. WebGPU also has browser/OS/device conditions despite
+availability in all major browser families. The present WebGL 2 choice keeps
+one GPU preview implementation alongside the existing CPU fallback.
+See the [W3C floating-point type specification](https://www.w3.org/TR/2026/CRD-WGSL-20260915/#floating-point-types),
+[browser-platform availability](https://web.dev/blog/webgpu-supported-major-browsers#browser_and_os_availability),
+and the source-level [rendering architecture](RENDERING_ARCHITECTURE.md).
+
 ## Implemented combination after PR #8
 
 These changes describe the combined working implementation following
@@ -80,7 +120,7 @@ checks support the interface claims; publication status is separate.
 | About and citation | References include copyable software citation and software BibTeX, incorporating the full source commit when a deployment manifest is available. About links the archive, shows legacy-import warnings, and exposes build provenance. Tour and copy feedback use finite-search terminology. | Convenient citation returns without confusing a software version with a mathematical paper or a numerical record with a proof. |
 | Mobile and keyboard use | The drawer becomes modal on narrow screens, with background interaction disabled and focus contained/restored. Toolbar, scene controls, dialogs, and canvases remain keyboard operable. A rejected fullscreen request leaves the interface usable. | The plot-first layout retains accessible ways to reach detailed settings and recover from unavailable browser features. |
 | Legacy links | The importer recognizes old parameter/panel/view keys and explicit `legacy=1` provenance, translates the old vertical view span to the new canvas aspect ratios, and reports unsupported settings. | Old scientific views can be resumed while obsolete shader, thickness, and beam-search settings remain associated with the archive. |
-| Rendering and packaging | The corrected prefix, histogram, and survival paths remain CPU/Canvas implementations. The staged site includes an allowlisted asset inventory and a deployment manifest. | No hardware-GPU or WebGPU claim accompanies this interface upgrade. The repository is the maintained numerical source. |
+| Rendering and packaging | The hybrid update adds bounded WebGL 2 pixel previews and binary64 worker raster refinement. Prefix and histogram overlays remain CPU Canvas drawings. Staging uses an allowlisted asset inventory and deployment manifest. | Requested and actual rendering backends have distinct provenance. Source capability does not imply a measured hardware speedup. |
 
 Fresh first-visit presentation and URL defaults are deliberately separate.
 Unparameterized startup selects the $E(c,4)$ example, while existing partial
@@ -92,7 +132,7 @@ $2A_n\subset A_{2n-1}$ implies $2E(c,n)\subset E(c,2n-1)$ and therefore
 $R_n\subset\mathcal M_n$. That inclusion does not turn finite surviving
 branches into confirmed members of either set.
 
-The final local validation gate for the combined work passed **44 Chromium
+Before the hybrid extension, the local validation gate for the combined interface passed **44 Chromium
 browser checks** across desktop and mobile projects in 2.2 minutes, with no
 retries or script, console, or local-asset errors, and **10 geometry test
 groups**. The browser checks exercise rendered support, navigation, drawer
@@ -288,7 +328,8 @@ half-scale drawing without explanation.
 | Next focused increment | Curate the public preset menu, exact-expression captions, and optional paper-BibTeX copy. Keep atlas/figure scaffolds distinct from finished examples. | Each public example has a clear purpose, complete reproducible state, and an accurate reference. |
 | Next focused increment | Build the concrete one-step guided explanation, then audit a depth-layer tour. | Tour values, path, scale, and selected JSON agree at every step. |
 | Next focused increment | Add minimum-depth display filters and opt-in session resume if visitor use supports them. | Display filters leave numerical acceptance unchanged; published links take precedence over remembered state. |
-| Later, with separate justification | GPU previews, finite polynomial-root plots, and a richer atlas. | Precise mathematical definitions, matched reference checks, and explicit approximation labels precede public claims. |
+| Delivered rendering extension | Bounded WebGL 2 previews, automatic binary64 worker refinement, explicit backend preference, and CPU fallback. | The dated hybrid section records the contract; final validation must cover shader results, cancellation, unsupported contexts, and precision fallback. |
+| Later, with separate justification | WebGPU, finite polynomial-root plots, and a richer atlas. | A WebGPU backend needs measured value and its own arithmetic contract; mathematical views need definitions and matched reference checks. |
 
 Color choices should remain flexible, but mathematical meaning should remain
 stable: first-level map identity, capture depth, or search outcome. A palette

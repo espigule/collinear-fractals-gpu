@@ -2,7 +2,9 @@
  * Validated, DOM-independent state for the browser explorer.
  *
  * Existing URL keys remain compatible. New links also retain the enclosure
- * tolerance, survival-overlay opacity, focused panel, and custom palette.
+ * tolerance, survival-overlay opacity, focused panel, custom palette, and
+ * requested rendering backend. Backend preferences are portable; runtime
+ * capability checks must not rewrite the user's requested setting.
  * Missing or invalid fields retain their defaults; finite out-of-range values
  * are clamped to browser work limits. Only explicitly supported own properties
  * are read, so URL parameters and imported JSON cannot alter object prototypes.
@@ -24,6 +26,7 @@ export const DEFAULT_EXPLORER_STATE = Object.freeze({
   showPath: true,
   showEscapeStrata: false,
   parameterMode: 'mn',
+  backend: 'auto',
   comparisonMode: 'overlay',
   rendererMode: 'prefix',
   attractorDepth: 7,
@@ -70,6 +73,7 @@ const CENTER_FIELDS = [
 ];
 
 const ENUM_FIELDS = [
+  ['backend', 'backend', ['auto', 'gpu', 'cpu']],
   ['parameterMode', 'pm', ['mn', 'rn', 'compare']],
   ['comparisonMode', 'mode', ['overlay', 'difference', 'collinear', 'escape']],
   ['rendererMode', 'renderer', ['prefix', 'histogram', 'survival']],

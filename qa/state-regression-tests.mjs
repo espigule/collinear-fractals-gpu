@@ -97,6 +97,7 @@ test('deep zooms, scientific notation and all view settings roundtrip losslessly
     dynZoom: 1.0000000000000003e-9,
     tol: 1e-15,
     rendererMode: 'histogram',
+    backend: 'gpu',
     parameterMode: 'compare',
     comparisonMode: 'collinear',
     firstLevelPieces: false,
@@ -168,6 +169,30 @@ test('parameter-mode links default to Mn and preserve each supported mode', () =
   }
   assert.equal(decodeExplorerState('#pm=Rn').parameterMode, 'mn');
   assert.equal(decodeExplorerState('#n=5', { ...defaults, parameterMode: 'rn' }).parameterMode, 'rn');
+});
+
+test('backend preferences roundtrip independently of local rendering capabilities', () => {
+  for (const backend of ['auto', 'gpu', 'cpu']) {
+    const state = { ...defaults, backend };
+    const params = encodeExplorerState(state);
+    assert.equal(params.get('backend'), backend);
+    assert.deepEqual(decodeExplorerState(`#${params}`), state);
+    // Unknown runtime capability metadata is not part of the portable state.
+    const noGpu = normalizeExplorerState({ ...state, gpuAvailable: false, activeBackend: 'cpu' });
+    assert.equal(noGpu.backend, backend);
+    assert.equal(Object.hasOwn(noGpu, 'gpuAvailable'), false);
+    assert.equal(Object.hasOwn(noGpu, 'activeBackend'), false);
+  }
+});
+
+test('old links default to automatic backend and invalid preferences retain valid defaults', () => {
+  assert.equal(decodeExplorerState('#n=4&cx=1.5&cy=1.658312395').backend, 'auto');
+  for (const invalid of ['', 'GPU', 'webgpu', 'constructor', ' cpu ', 'null']) {
+    assert.equal(decodeExplorerState(new URLSearchParams({ backend: invalid })).backend, 'auto');
+    assert.equal(decodeExplorerState(new URLSearchParams({ backend: invalid }), { ...defaults, backend: 'cpu' }).backend, 'cpu');
+  }
+  assert.equal(decodeExplorerState('#n=5', { ...defaults, backend: 'gpu' }).backend, 'gpu');
+  assert.equal(normalizeExplorerState({ backend: null }).backend, 'auto');
 });
 
 test('normalization is nonmutating, copies nested data and validates defaults', () => {

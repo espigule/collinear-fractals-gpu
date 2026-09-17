@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light">
   <title>Collinear Fractals · Explore</title>
-  <meta name="description" content="Explore collinear fractals and connectedness loci in linked parameter and dynamical planes. Reproducible views, finite inverse search, and search-record export.">
+  <meta name="description" content="Explore collinear fractals and connectedness loci with GPU-accelerated previews, double-precision refinement, linked parameter and dynamical planes, and reproducible search records.">
   <link rel="stylesheet" href="index.css">
 </head>
 <body>
@@ -104,6 +104,22 @@
                 </div>
               </div>
               <p class="control-help" id="search-help">Higher limits may resolve more points and take longer. Undetermined points are not classified as boundary.</p>
+            </div>
+          </details>
+
+          <details class="control-section">
+            <summary>Rendering engine</summary>
+            <div class="section-content">
+              <div class="control-group">
+                <label for="render-backend">Rendering engine</label>
+                <select id="render-backend" aria-describedby="render-backend-help render-backend-status">
+                  <option value="auto">Automatic · GPU + refinement</option>
+                  <option value="gpu">GPU preview</option>
+                  <option value="cpu">CPU precision</option>
+                </select>
+              </div>
+              <p class="backend-status" id="render-backend-status" role="status" aria-atomic="true">Initializing renderer…</p>
+              <p class="control-help" id="render-backend-help">Automatic mode shows a bounded GPU preview, then refines pixel searches in double precision. Selected search records always use the full numerical settings. Prefix and histogram drawings use their own renderer.</p>
             </div>
           </details>
 

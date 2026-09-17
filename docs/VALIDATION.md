@@ -25,16 +25,18 @@ From the repository root:
 ```bash
 npm test
 npm run test:browser
+npm run test:gpu
 npm run site:stage
 ```
 
-`npm run test:all` runs the first two commands together. If Python is available
+`npm run test:all` runs the first three commands together. If Python is available
 only as `python3`, select it with `PYTHON=python3 npm test`.
 
 | Command | Coverage |
 |---|---|
-| `npm test` | JavaScript syntax, static publication checks, JSON Schemas and data invariants, JavaScript/Python packages, browser-engine and renderer/kernel regressions, benchmark metadata. |
-| `npm run test:browser` | Real Chromium interactions through Playwright. |
+| `npm test` | JavaScript syntax, static publication checks, JSON Schemas and data invariants, JavaScript/Python packages, numerical/rendering regressions, raster-tile and worker-protocol tests, share/legacy migration, benchmark metadata, and staging integrity. |
+| `npm run test:browser` | Desktop and mobile-viewport Chromium interactions through Playwright, including state, geometry, navigation, and exports. |
+| `npm run test:gpu` | Production WebGL 2 shaders and hybrid integration in software-rendered Chromium, native module workers, context loss, numerical guards, and explicit WebGL-disabled CPU fallback. |
 | `npm run site:stage` | Builds the allowlisted static Pages artifact in `site/`. |
 | `swift test --package-path swift --jobs 2` | Swift package tests, when Swift is installed. |
 
@@ -54,13 +56,84 @@ The regression suite targets meaningful failure modes:
 - depth-zero searches and conservative frontier-cap handling;
 - reference/fast-kernel consistency and executable package comparisons;
 - deterministic sampling and bounded renderer workloads;
-- share-state parsing and reproducible settings.
+- share-state parsing, backend preference, and legacy-link precedence;
+- tiled raster agreement at full-frame pixel centers and correct full/half attractor scales;
+- worker cancellation, independent panels, malformed/stale replies, startup/runtime failure, and timeout recovery.
 
 Schema validation checks configured arity, difference-alphabet size, matching
 parameters and share links, certificate shape, and valid inverse digits. It
 verifies data structure and consistency, not the proof behind a search result.
 Performance measurements are environment-dependent; a benchmark does not
 establish a universal speed guarantee.
+
+## Hybrid rendering coverage
+
+`npm run test:gpu` uses `playwright.gpu.config.cjs` and a separate staged site
+on port 4174. It loads production rendering modules, shaders, and worker entry
+points from that artifact. Its WebGL projects use ANGLE/SwiftShader on desktop
+and mobile viewports; its fallback project disables native WebGL. These runs
+exercise browser graphics APIs without claiming physical GPU performance.
+
+The GPU suite checks known numerical fixtures and independent CPU pixel grids,
+full original-attractor orientation, palette compositing, resource/precision
+guards, context loss and restoration, backend-state preservation, export
+metadata, actual worker refinement, and main-thread recovery after worker
+failure. A GPU preview remains approximate: checks compare declared outcomes
+and effective budgets rather than assuming every GPU pixel equals a
+full-budget binary64 result.
+
+For a focused investigation, select a project while retaining the same staged
+production assets:
+
+```bash
+npm run test:gpu -- --project=webgl-swiftshader
+npm run test:gpu -- --project=webgl-swiftshader-mobile
+npm run test:gpu -- --project=webgl-disabled-fallback
+```
+
+The normal publication gate still runs the complete suite. General browser
+reports are written to `artifacts/qa/report/`; GPU reports are written to
+`artifacts/qa/gpu/report/`. Failure screenshots and traces are retained in the
+corresponding `results/` directories, and CI preserves browser failure
+evidence. These generated files remain outside source history.
+
+Backend status separates the requested preference from the actual executor.
+Validate `auto` through completed binary64 refinement, `gpu` through its
+explicit bounded-preview completion, and `cpu` through worker completion or
+disclosed main-thread fallback. The selected search JSON must retain its
+binary64 arithmetic and full requested limits in every case. See
+[rendering architecture](RENDERING_ARCHITECTURE.md) for the contract.
+
+## Hybrid QA checkpoint — 17 September 2026
+
+The frozen hybrid working tree based on
+`210547081a9621470817177ad209f831e719511f` passed the following local gates.
+The extension was still awaiting its publication commit at this checkpoint;
+the final CI run and deployment manifest identify the published revision.
+
+| Gate | Confirmed result |
+|---|---|
+| `npm test` | Passed, including the new 18 raster/worker regression groups: 7 numerical tile/worker-wire groups and 11 worker-pool lifecycle/failure groups. State/backend, legacy migration, schema, reference-package, and staging checks also passed. |
+| `npm run test:browser` | 44 desktop/mobile Chromium checks passed in 2.1 minutes. |
+| `npm run test:gpu` | 20 checks passed in 52.0 seconds: 9 WebGL cases on each of desktop/mobile SwiftShader projects, plus 2 forced-WebGL-disabled fallback cases. |
+
+The GPU run compiled the actual production GLSL and read classifications
+through Chromium's native WebGL APIs using software graphics. Each WebGL
+profile checked 20 static fixtures alongside 13 pixel grids. The grids covered
+2,180 pixels and 3,054 compared numerical channels, with no opposed decisive
+CPU/GPU outcomes.
+Classification-code checks were exact; palette/display comparisons allowed
+one byte of quantization difference. Native module workers matched CPU tile
+bytes and respected panel cancellation. Context-loss recovery, worker failure
+to main-thread fallback, disabled-WebGL fallback, requested/effective GPU
+limits, and independent selected-record metadata were exercised.
+
+This checkpoint establishes behavior in the tested Chromium environments,
+not physical GPU throughput, cross-browser coverage, or interval correctness.
+Swift and the other native-language runtime gates remain separate; their
+results are not implied by these browser counts. The earlier
+[release QA report](QA_REPORT.md) and [upgrade review](UPGRADE_REVIEW_2026-09.md)
+remain historical records of their own revisions.
 
 ## Manual review
 
@@ -75,7 +148,10 @@ Automation complements a visual review of the final Pages artifact:
 4. Reload a shared URL, exercise undo/redo, and confirm layers and limits return.
 5. Export an image and search JSON. Reproduce a simple interior, exterior, and
    off-lens case in a reference package.
-6. Check Safari and Firefox when available; Chromium automation does not
+6. Change rendering backends on the same saved view. Inspect the active backend,
+   preview limits, refinement completion, and exported rendering metadata.
+   Check a precision-guarded deep zoom and CPU fallback with WebGL disabled.
+7. Check Safari and Firefox when available; Chromium automation does not
    establish cross-browser compatibility.
 
 Record the revision, runtime/browser versions, commands and exit statuses,

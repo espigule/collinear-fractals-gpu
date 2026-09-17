@@ -11,8 +11,11 @@ Changes after that release are listed under [Unreleased](CHANGELOG.md).
 
 This repository contains a build-free browser explorer and reference packages
 for inverse search in the collinear connectedness loci $\mathcal M_n$.
-The browser uses **Canvas and CPU computation**. The historical GPU name does
-not imply that WebGL or WebGPU acceleration is implemented.
+The browser combines **WebGL 2 previews with binary64 CPU refinement**. Its
+default automatic mode displays a bounded GPU approximation, then refines the
+pixel search at the requested settings in Web Workers. Unsupported GPU views
+use CPU rendering; the existing progressive main-thread renderer is retained
+for environments without working workers.
 
 Search results use floating-point arithmetic. They are reproducible numerical
 evidence, with finite inverse words when capture succeeds. Turning such a
@@ -44,6 +47,28 @@ Share links, captioned image export, search JSON, and undo/redo retain the
 reproducible research workflow. The drawer becomes a modal on narrow screens;
 canvas navigation, dialogs, and controls support keyboard operation.
 
+## Rendering engines
+
+Choose **Controls → Rendering engine** to set a portable backend preference:
+
+| Preference | Image computation and completion |
+|---|---|
+| **Automatic · GPU + refinement** (`auto`, default) | WebGL 2 supplies a bounded float32 preview when supported. Binary64 CPU workers then refine the full raster using the requested depth, frontier cap, and tolerance. |
+| **GPU preview** (`gpu`) | Explicitly finish with the bounded float32 preview. The GPU's effective limits can be lower than the requested search limits. Unsupported views fall back to CPU computation. |
+| **CPU precision** (`cpu`) | Use binary64 CPU workers directly. If workers are unavailable or fail, use progressive computation on the main thread. |
+
+The **selected search record always uses the binary64 reference search** and
+the requested settings, independently of the image backend. Prefix-cylinder
+and seeded-histogram drawings of $E(c,n)$ remain CPU Canvas overlays in all
+three modes. A GPU preview is not a completed binary64 refinement, and neither
+arithmetic mode supplies an interval-verified proof.
+
+The interface reports the active backend separately from the saved preference.
+Deep zooms, unsupported arities, insufficient shader precision, and WebGL
+failure can trigger CPU fallback without changing `backend=gpu` in a share
+link. [Rendering architecture](docs/RENDERING_ARCHITECTURE.md) documents the
+preview limits, worker scheduling, arithmetic boundaries, and WebGPU decision.
+
 ## Browser quick start
 
 Clone the repository and serve its root:
@@ -74,9 +99,9 @@ real-axis and unit-circle inputs are not classified by it. See
 
 | Path | Contents and current status |
 |---|---|
-| `index.html`, `index.css`, `explorer.js` | Canvas/CPU browser explorer. |
-| `src/` | Browser ES modules, finite-search reference kernel, and visual renderers. |
-| `workers/` | Standalone worker entry points; the explorer does not schedule its rendering through them. |
+| `index.html`, `index.css`, `explorer.js` | Linked browser explorer, Canvas composition, and backend selection. |
+| `src/` | Numerical reference kernels, bounded WebGL 2 preview, CPU raster scheduler, state modules, and visual renderers. |
+| `workers/` | Module raster worker used for binary64 image refinement, plus standalone search/histogram entry points. |
 | `javascript/`, `python/` | Executable reference packages and regression tests. |
 | `swift/` | Swift Package Manager reference implementation and tests. |
 | `mathematica/`, `matlab/`, `maple/` | Reference ports requiring validation in their native runtimes. |
@@ -86,10 +111,11 @@ real-axis and unit-circle inputs are not classified by it. See
 | `schemas/` | JSON Schemas for search exports, examples, and figure metadata. |
 | `qa/`, `tools/`, `docs/` | Regression checks, validation tools, and maintenance documentation. |
 
-Pixel rendering uses a scalar kernel with reusable typed-array frontiers. The
-selected-parameter search retains the detailed reference tree and inverse
-word. A GPU backend, per-pixel certificate inspector, and completed boundary
-atlas remain future work.
+CPU pixel rendering uses a scalar kernel with reusable typed-array frontiers,
+scheduled in bounded worker tiles. GPU preview classification and palette
+mapping run in two WebGL 2 passes. The selected-parameter search retains its
+detailed reference tree and inverse word. A per-pixel certificate inspector,
+completed boundary atlas, and WebGPU backend remain future work.
 
 ## Mathematical scope
 
@@ -166,7 +192,7 @@ only lists planned jobs.
 ## Share URLs and reproducible states
 
 Share records the selected parameter, viewports, search limits, palette,
-parameter-set and scene modes, layers, renderer, visual depth, histogram seed/sample count,
+parameter-set and scene modes, backend preference, layers, renderer, visual depth, histogram seed/sample count,
 piece coloring, and opacity in the URL fragment. A share link restores the
 view; a search JSON export records the numerical result.
 
@@ -232,6 +258,9 @@ absence of a runtime is not a passing test.
 
 Rendering and search costs rise with arity, depth, and viewport resolution.
 Prefix drawings use bounded point counts; histogram drawings are sampled.
+GPU previews have explicit resolution, search, and numerical limits; automatic
+refinement uses the requested CPU limits. No physical-device GPU speedup or
+cross-browser performance benchmark is claimed by this documentation.
 Neither a rendered pixel nor an exported floating-point search record is an
 interval-arithmetic proof. See [numerical interpretation](docs/RESPONSIBLE_USE.md).
 
