@@ -26,11 +26,12 @@ $|c|>1$.
 
 | Entry point | Interpretation |
 |---|---|
-| Browser parameter locator and share coordinates | Input $p$ with $0<|p|<1$ is replaced by $c=1/p$; input $|p|>1$ is used directly. |
+| Browser parameter locator and share coordinates | Reciprocal coordinates inside the unit disk; direct expanding coordinates outside it. |
 | Browser ES-module search | Uses the same reciprocal normalization as the browser. |
 | JavaScript, Python, Swift and symbolic reference packages | Take the expanding $c$ directly; no reciprocal conversion is performed. |
 | Prefix/histogram renderers | Take an already normalized expanding $c$ directly. |
 
+For $0<|p|<1$, the browser uses $c=1/p$; for $|p|>1$, it uses $c=p$.
 For example, browser input $p=0.4+0.3i$ uses $c=1.6-1.2i$.
 Pass the latter value to a reference package to reproduce that search. Real
 parameters, zero, and points on the unit circle are outside the canonical
@@ -44,10 +45,11 @@ geometry helpers reject invalid values. Check package READMEs for native-port
 validation scope. The mathematical arity must be an integer at least 2, with
 the difference alphabet representable exactly in the implementation.
 
-For $c=x+iy$ and $\rho=|c|$, the canonical coordinates of $z=u+iv$ are
+For $c=x+iy$ and $\rho=|c|$, write $z=u+iv$. Its canonical coordinates are
+$(s,v)$ with
 
 $$
-s=\frac{xv+yu}{\rho},\qquad v=\operatorname{Im}z.
+s=\frac{xv+yu}{\rho}.
 $$
 
 The marked point $2c$ has coordinates $s_0=4xy/\rho$, $v_0=2y$.

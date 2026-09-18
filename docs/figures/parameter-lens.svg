@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="500" viewBox="0 0 880 500" role="img" aria-labelledby="lens-title lens-description">
+  <title id="lens-title">The open non-real parameter lens for n = 3</title>
+  <desc id="lens-description">In equal-scale Cartesian coordinates c = x + iy, the blue region satisfies 1 &lt; x² + y² &lt; 5 − 2|x| and y ≠ 0. It is the intersection of the open disks centered at plus and minus one with radius square root of six, excluding the closed unit disk and real axis. All excluded boundaries are dashed. The marked example c = 0.5 + 1.1i lies strictly in the lens because 1 &lt; 1.46 &lt; 4. The shaded lens is a geometric parameter region, not a plot or membership test of the connectedness locus M₃.</desc>
+  <style>
+    text { font-family: Arial, Helvetica, sans-serif; fill: #183047; }
+    .math { font-family: Georgia, 'Times New Roman', serif; }
+    .body { font-size: 16px; fill: #385268; }
+    .small { font-size: 14px; fill: #52677b; }
+    .boundary { fill: none; stroke: #39759b; stroke-width: 1.8; stroke-dasharray: 5 4; }
+    .tick { fill: none; stroke: #8b9dad; stroke-width: 1; }
+    .tick-label { font-size: 13px; fill: #63778b; }
+  </style>
+  <defs>
+    <marker id="axis-arrow" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 6 3 L 0 6 Z" fill="#8b9dad"/>
+    </marker>
+  </defs>
+  <rect width="880" height="500" rx="18" fill="#f5f8fc"/>
+  <text x="24" y="38" font-size="26" font-weight="700">A geometric lens in parameter space</text>
+  <text x="24" y="67" class="body">The n = 3 case, with equal scales on the real and imaginary axes.</text>
+  <rect x="24" y="94" width="390" height="382" rx="13" fill="#fff" stroke="#dbe3ec"/>
+  <g aria-label="Equal-scale parameter plane">
+    <circle cx="219" cy="288" r="71" fill="#f5f8fc"/>
+    <path d="M 219 129.239173598 A 173.913771738 173.913771738 0 0 1 219 446.760826402 A 173.913771738 173.913771738 0 0 1 219 129.239173598 Z M 148 288 A 71 71 0 1 0 290 288 A 71 71 0 1 0 148 288 Z" fill="#c9e3f2" fill-rule="evenodd"/>
+    <path d="M 219 129.239173598 A 173.913771738 173.913771738 0 0 1 219 446.760826402 A 173.913771738 173.913771738 0 0 1 219 129.239173598 Z" class="boundary"/>
+    <circle cx="219" cy="288" r="71" class="boundary"/>
+    <path d="M 219 461 V 110" stroke="#a5b4c2" stroke-width="1" marker-end="url(#axis-arrow)"/>
+    <!-- A white underlay makes the excluded real axis visible through the fill. -->
+    <path d="M 60 288 H 384" stroke="#fff" stroke-width="4"/>
+    <path d="M 60 288 H 384" stroke="#6f8598" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#axis-arrow)"/>
+    <path d="M 77 283 V 293" class="tick"/><text x="77" y="309" class="tick-label" text-anchor="middle">−2</text>
+    <path d="M 214 430 H 224" class="tick"/><text x="207" y="434" class="tick-label" text-anchor="end">−2</text>
+    <path d="M 148 283 V 293" class="tick"/><text x="148" y="309" class="tick-label" text-anchor="middle">−1</text>
+    <path d="M 214 359 H 224" class="tick"/><text x="207" y="363" class="tick-label" text-anchor="end">−1</text>
+    <path d="M 290 283 V 293" class="tick"/><text x="290" y="309" class="tick-label" text-anchor="middle">1</text>
+    <path d="M 214 217 H 224" class="tick"/><text x="207" y="221" class="tick-label" text-anchor="end">1</text>
+    <path d="M 361 283 V 293" class="tick"/><text x="361" y="309" class="tick-label" text-anchor="middle">2</text>
+    <path d="M 214 146 H 224" class="tick"/><text x="207" y="150" class="tick-label" text-anchor="end">2</text>
+    <text x="228" y="123" font-size="16" class="math">Im c</text>
+    <text x="366" y="278" font-size="16" class="math">Re c</text>
+    <text x="207" y="309" class="tick-label" text-anchor="end">0</text>
+    <rect x="181" y="326" width="76" height="21" rx="3" fill="#f5f8fc"/>
+    <text x="219" y="342" class="math" font-size="17" text-anchor="middle">|c| ≤ 1</text>
+    <circle cx="254.5" cy="209.9" r="5.5" fill="#b34b1e" stroke="#fff" stroke-width="1.8"/>
+    <text x="264.5" y="200.9" class="math" font-size="21" style="fill:#923b19">c</text>
+  </g>
+  <g aria-label="Exact definition and exclusions">
+    <text x="444" y="121" font-size="19" font-weight="700">Open non-real lens · n = 3</text>
+    <text x="444" y="159" class="math" font-size="24">1 &lt; x² + y² &lt; 5 − 2|x|</text>
+    <text x="444" y="188" class="math" font-size="20">y ≠ 0,   c = x + iy</text>
+    <rect x="444" y="216" width="18" height="14" rx="2" fill="#c9e3f2" stroke="#a8cddd"/>
+    <text x="472" y="229" class="body">Shaded region: parameter lens</text>
+    <path d="M 444 252 H 463" class="boundary"/>
+    <text x="472" y="257" class="body">Dashed boundaries are excluded</text>
+    <text x="444" y="296" class="body">Intersect the two open disks</text>
+    <text x="444" y="323" class="math" font-size="20">|c − 1| &lt; √6   and   |c + 1| &lt; √6,</text>
+    <text x="444" y="350" class="body">then remove |c| ≤ 1 and the real axis.</text>
+    <circle cx="451" cy="388" r="5" fill="#b34b1e"/>
+    <text x="468" y="394" class="math" font-size="21">c = 0.5 + 1.1i</text>
+    <text x="444" y="421" class="body">Inside the lens: 1 &lt; 1.46 &lt; 4.</text>
+    <text x="444" y="463" class="small">This region is not a plot of the connectedness locus M₃.</text>
+  </g>
+</svg>
