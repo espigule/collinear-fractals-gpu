@@ -10,8 +10,9 @@ const asError = value => value instanceof Error ? value : new Error(String(value
  * worker immediately, since a synchronous numerical tile cannot process an
  * abort message. The other panel and idle workers remain available.
  *
- * onTile receives {jobId,x,y,width,height,data,pixelsCompleted,totalPixels}.
+ * onTile receives {jobId,x,y,width,height,data,pieces?,pixelsCompleted,totalPixels}.
  * Four Uint8 bytes per pixel encode primary code/depth, secondary code/depth.
+ * Optional two-byte piece records encode primary/secondary index+1, or zero.
  * onComplete includes tile/pixel counts, elapsedMs, workerCount and backend.
  * onError(Error,{jobId,backend}) is asynchronous, including unsupported starts.
  * No frame buffers or unbounded pending tile queues are held by the pool.
@@ -133,6 +134,8 @@ export function createRasterWorkerPool(options = {}) {
     }
     if (message.type !== 'tile' || !(message.data instanceof Uint8Array) ||
         message.data.byteLength !== 4 * tile.width * tile.height ||
+        (message.pieces !== undefined && (!(message.pieces instanceof Uint8Array) ||
+          message.pieces.byteLength !== 2 * tile.width * tile.height)) ||
         ['x', 'y', 'width', 'height'].some(key => message[key] !== tile[key])) {
       failPool(new Error('Raster worker returned a malformed tile'));
       return;
@@ -144,6 +147,7 @@ export function createRasterWorkerPool(options = {}) {
     try {
       job.callbacks.onTile?.({
         jobId: job.id, ...tile, data: message.data,
+        ...(message.pieces === undefined ? {} : { pieces: message.pieces }),
         pixelsCompleted: job.pixelsCompleted, totalPixels: job.totalPixels
       });
     } catch (error) {

@@ -12,7 +12,11 @@ collinear attractor \(E(c,4)\), where \(N = 2n-1 = 7\).
   attractor examples.
 
 To reproduce, open the browser explorer, set `n = 4`, set `k_max = 37`, select
-the parameter above, and enable the collinear attractor layer in prefix mode.
+the parameter above, and select the original-attractor scene in **Sharp
+boundary** mode. The preset enables automatic boundary depth, adaptation, and
+first-level piece colors. Zooming increases detail without changing the
+selected connectedness search limits. Prefix rendering remains an advanced
+option for inspecting finite cylinders.
 
 The image is a visual aid. Theorem-level proofs do not rely on visual
 inspection.

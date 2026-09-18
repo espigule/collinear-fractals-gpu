@@ -10,15 +10,17 @@
   "k_max": 37,
   "l_max": 1000,
   "mode": "collinear-attractor",
-  "renderer": "prefix",
+  "renderer": "boundary",
   "visual_status": "visual-approximation",
   "proof_status": "illustrative-thesis-example",
   "related_thesis_figure": "Figure 3.1",
   "expected_status": "illustrative",
-  "renderer_mode": "prefix",
+  "renderer_mode": "boundary",
   "visual_renderer": {
-    "mode": "prefix",
+    "mode": "boundary",
     "depth": 7,
-    "first_level_pieces": true
+    "first_level_pieces": true,
+    "boundary_depth": 0,
+    "adaptive_boundary": true
   }
 }

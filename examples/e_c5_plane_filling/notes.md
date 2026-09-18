@@ -11,7 +11,11 @@ behavior in the collinear family \(E(c,5)\), where \(N = 2n-1 = 9\).
   plane-filling examples.
 
 To reproduce, open the browser explorer, set `n = 5`, set `k_max = 37`, select
-the parameter above, and inspect the collinear attractor layer in prefix mode.
+the parameter above, and inspect the original-attractor scene in **Sharp
+boundary** mode. The preset enables automatic boundary depth, adaptation, and
+first-level piece colors. Zooming increases detail without changing the
+selected connectedness search limits. Prefix rendering remains an advanced
+option for inspecting finite cylinders.
 
 The visualization is not a proof. The theorem-level argument belongs to the
 mathematical text and finite-certificate framework.

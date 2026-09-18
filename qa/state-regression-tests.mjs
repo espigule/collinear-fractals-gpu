@@ -100,6 +100,8 @@ test('deep zooms, scientific notation and all view settings roundtrip losslessly
     backend: 'gpu',
     parameterMode: 'compare',
     comparisonMode: 'collinear',
+    boundaryDepth: 73,
+    adaptiveBoundary: false,
     firstLevelPieces: false,
     attractorDepth: 12,
     histogramSeed: 4294967295,
@@ -121,6 +123,8 @@ test('deep zooms, scientific notation and all view settings roundtrip losslessly
   assert.ok(params instanceof URLSearchParams);
   assert.equal(params.get('cy'), '1e-10');
   assert.equal(params.get('pcx'), '-0');
+  assert.equal(params.get('bdepth'), '73');
+  assert.equal(params.get('badapt'), '0');
   assert.equal(params.get('layers'), '0101011');
   for (const form of [params, params.toString(), `#${params}`, `?${params}`]) {
     assert.deepEqual(decodeExplorerState(form, DEFAULT_EXPLORER_STATE), state);
@@ -137,6 +141,9 @@ test('ordinary historical links still decode with their original field names', (
   assert.equal(linked.tol, 1e-8);
   assert.equal(linked.survivalOverlayOpacity, 0.45);
   assert.equal(linked.focusedPanel, 'both');
+  assert.equal(linked.rendererMode, 'prefix');
+  assert.equal(linked.boundaryDepth, 0);
+  assert.equal(linked.adaptiveBoundary, true);
 });
 
 test('enum, layer, boolean and color validation rejects unsupported values', () => {
@@ -159,16 +166,90 @@ test('enum, layer, boolean and color validation rejects unsupported values', () 
   assert.deepEqual(decodeExplorerState('#pieces=0', defaults), { ...defaults, firstLevelPieces: false });
 });
 
-test('parameter-mode links default to Mn and preserve each supported mode', () => {
+test('parameter-mode links default to Mn and preserve each canonical mode', () => {
   assert.equal(decodeExplorerState('#n=4&cx=1.5&cy=1.658312395').parameterMode, 'mn');
-  for (const parameterMode of ['mn', 'rn', 'compare']) {
+  for (const parameterMode of ['mn', 'mn0', 'mn1', 'compare']) {
     const state = { ...defaults, parameterMode };
     const params = encodeExplorerState(state);
     assert.equal(params.get('pm'), parameterMode);
     assert.deepEqual(decodeExplorerState(params), state);
   }
   assert.equal(decodeExplorerState('#pm=Rn').parameterMode, 'mn');
-  assert.equal(decodeExplorerState('#n=5', { ...defaults, parameterMode: 'rn' }).parameterMode, 'rn');
+  assert.equal(decodeExplorerState('#n=5', { ...defaults, parameterMode: 'mn1' }).parameterMode, 'mn1');
+});
+
+test('historical Rn URLs and JSON import as Mn0 and only emit the canonical name', () => {
+  const oldState = JSON.parse(JSON.stringify({ ...defaults, parameterMode: 'rn' }));
+  const canonical = { ...defaults, parameterMode: 'mn0' };
+  assert.deepEqual(decodeExplorerState('#pm=rn', defaults), canonical);
+  assert.deepEqual(normalizeExplorerState(oldState), canonical);
+  assert.equal(oldState.parameterMode, 'rn');
+  assert.equal(encodeExplorerState(oldState).get('pm'), 'mn0');
+  assert.deepEqual(decodeExplorerState(encodeExplorerState(oldState)), canonical);
+  // Old imported state can also supply defaults for a later partial link.
+  assert.deepEqual(decodeExplorerState('#n=5', oldState), { ...canonical, n: 5 });
+  assert.equal(decodeExplorerState('#pm=unsupported', oldState).parameterMode, 'mn0');
+});
+
+test('new and partial links use boundary rendering while explicit historical renderers survive', () => {
+  for (const hash of ['', '#n=2', '#pm=mn1', '#renderer=unsupported']) {
+    const state = decodeExplorerState(hash);
+    assert.equal(state.rendererMode, 'boundary', hash);
+    assert.equal(state.boundaryDepth, 0, hash);
+    assert.equal(state.adaptiveBoundary, true, hash);
+    assert.equal(state.firstLevelPieces, true, hash);
+  }
+  for (const rendererMode of ['boundary', 'prefix', 'histogram', 'survival']) {
+    const state = decodeExplorerState(`#renderer=${rendererMode}`, defaults);
+    assert.equal(state.rendererMode, rendererMode);
+    assert.deepEqual(decodeExplorerState(encodeExplorerState(state)), state);
+    assert.equal(decodeExplorerState('#n=5', state).rendererMode, rendererMode);
+  }
+});
+
+test('automatic boundary depth stays zero across zooms while explicit depths are bounded integers', () => {
+  for (const hash of ['#n=2&dz=1e-10', '#n=5&dz=1e6', '#n=100&bdepth=0']) {
+    const state = decodeExplorerState(hash);
+    assert.equal(state.boundaryDepth, 0, hash);
+    assert.equal(encodeExplorerState(state).get('bdepth'), '0', hash);
+  }
+  for (const [input, expected] of [['-1e99', 0], ['0', 0], ['2.49', 2], ['2.5', 3], ['1e2', 100], ['1e99', 100]]) {
+    const state = decodeExplorerState(new URLSearchParams({ bdepth: input }));
+    assert.equal(state.boundaryDepth, expected, input);
+    assert.equal(decodeExplorerState(encodeExplorerState(state)).boundaryDepth, expected, input);
+  }
+  const custom = { ...defaults, boundaryDepth: 21 };
+  for (const invalid of ['', ' ', 'NaN', 'Infinity', '-Infinity', '1e999', '0x10', '7oops']) {
+    assert.equal(decodeExplorerState(new URLSearchParams({ bdepth: invalid }), custom).boundaryDepth, 21, invalid);
+  }
+  for (const invalid of [null, undefined, true, false, NaN, Infinity, [], {}]) {
+    assert.equal(normalizeExplorerState({ boundaryDepth: invalid }, custom).boundaryDepth, 21);
+  }
+});
+
+test('adaptive boundary state is independent of first-level pieces and seven layer bits', () => {
+  for (const adaptiveBoundary of [true, false]) {
+    for (const firstLevelPieces of [true, false]) {
+      const state = { ...defaults, adaptiveBoundary, firstLevelPieces };
+      const params = encodeExplorerState(state);
+      assert.equal(params.get('badapt'), adaptiveBoundary ? '1' : '0');
+      assert.equal(params.get('pieces'), firstLevelPieces ? '1' : '0');
+      assert.equal(params.get('layers').length, 7);
+      assert.deepEqual(decodeExplorerState(params), state);
+      assert.deepEqual(decodeExplorerState('#n=13', state), state);
+      for (const invalid of ['', 'true', 'false', '2', '-1', ' 0 ', 'constructor']) {
+        assert.deepEqual(decodeExplorerState(new URLSearchParams({ badapt: invalid }), state), state, invalid);
+      }
+    }
+  }
+  const state = decodeExplorerState('#badapt=0&pieces=1&layers=0000000');
+  assert.equal(state.adaptiveBoundary, false);
+  assert.equal(state.firstLevelPieces, true);
+  for (const key of ['showDifference', 'showCollinear', 'showTrap', 'showEnclosure', 'showTree', 'showPath', 'showEscapeStrata']) {
+    assert.equal(state[key], false, key);
+  }
+  assert.equal(normalizeExplorerState({ adaptiveBoundary: false }).adaptiveBoundary, false);
+  assert.equal(normalizeExplorerState({ adaptiveBoundary: null }).adaptiveBoundary, true);
 });
 
 test('backend preferences roundtrip independently of local rendering capabilities', () => {
@@ -224,8 +305,9 @@ test('unknown, inherited and accessor properties cannot inject state or prototyp
   assert.equal(Object.hasOwn(normalized, 'constructor'), false);
   assert.equal({}.polluted, undefined);
   assert.deepEqual(decodeExplorerState('#__proto__[polluted]=true&constructor=evil&unknown=42', defaults), defaults);
-  const inherited = Object.create({ n: 99, cx: 99, customPalette: { interior: '#000000' } });
+  const inherited = Object.create({ n: 99, cx: 99, parameterMode: 'rn', boundaryDepth: 100, adaptiveBoundary: false, customPalette: { interior: '#000000' } });
   Object.defineProperty(inherited, 'cy', { get() { throw new Error('must not invoke accessors'); } });
+  Object.defineProperty(inherited, 'adaptiveBoundary', { get() { throw new Error('must not invoke accessors'); } });
   assert.deepEqual(normalizeExplorerState(inherited, defaults), defaults);
 });
 

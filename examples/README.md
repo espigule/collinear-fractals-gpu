@@ -30,8 +30,17 @@ arity-by-arity witness table. The hole preset records an exterior sample, not
 a proof that its complementary component is bounded. The atlas and gallery
 entries are starting-point metadata, not completed atlas products.
 
-Visual settings are independent of search settings. Prefix depth, histogram
-seed/sample count, first-level coloring, and opacity describe a finite image.
+Curated presets open the sharp boundary renderer with automatic base depth
+(`boundary_depth: 0`) and adaptation enabled (`adaptive_boundary: true`).
+The $E(c,4)$ and $E(c,5)$ presets show the original-attractor scene. Automatic
+depth starts at 16 for two maps and 12 otherwise, and increases with zoom and
+raster resolution, up to 100. Work-limited pixels remain unresolved.
+
+Visual settings are independent of the selected connectedness search.
+Boundary depth/adaptation, advanced prefix depth, histogram seed/sample count,
+first-level coloring, and opacity describe a finite image. The existing
+`visual_renderer.depth` setting is the advanced prefix depth; it is separate
+from `visual_renderer.boundary_depth`.
 The IFS convention is $f_t(z)=t+z/c$: prefix sums start with an unscaled digit.
 A fixed seed reproduces a histogram sequence in the same implementation.
 

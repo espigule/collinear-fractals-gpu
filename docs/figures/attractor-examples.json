@@ -13,7 +13,7 @@
     "src/math/prefix_cylinders.mjs": "094567856fb73caabba86ce5bec152d108cb8cf71f66758b277fb68d0fd03dca",
     "src/math/validation.mjs": "19ed9444507f93799359ad1849ed8dfc28eac741be14a0fc4537622d0b4cedc9",
     "src/renderers/palettes.mjs": "36c2a4cac522d069725675a0190e872b318511d0cb43f330bc9cb2612f07229f",
-    "src/state/explorer_state.mjs": "127a95eac9a642159b0e34bf8c6bd6ed3b8331778917d8118e970f286ca380c2"
+    "src/state/explorer_state.mjs": "3df13d9b24506f810c83248aa540b405ce4e7cd27148da131912131b4222a03e"
   },
   "svg_size": {
     "width": 1200,
@@ -37,15 +37,17 @@
       "id": "e_c4_overlap",
       "label": "OVERLAP PRESET",
       "source_example": "examples/e_c4_overlap/config.json",
-      "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=4&k=37&l=1000&tol=1e-8&q=3&cx=1.5&cy=1.6583123951777&pz=2.414&dz=9.730607775891547&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=prefix&palette=research&focus=dynamical&pieces=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
+      "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=4&k=37&l=1000&tol=1e-8&q=3&cx=1.5&cy=1.6583123951777&pz=2.414&dz=9.730607775891547&bdepth=0&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
       "interactive_rendering": {
         "corresponding_view_only": true,
-        "requested_prefix_depth": 8,
-        "default_browser_maximum_prefixes": 60000,
-        "expected_prefix_depth_with_default_cap": 7,
-        "expected_prefix_count_with_default_cap": 16384,
-        "depth_reduced_by_default_cap": true,
-        "note": "This URL opens the corresponding original-attractor view, not a pixel-identical reproduction. The browser uses its default prefix work cap; its viewport aspect, display marks, and per-prefix compositing also depend on the interactive renderer."
+        "renderer_mode": "boundary",
+        "requested_boundary_depth": 0,
+        "automatic_base_depth": 12,
+        "adaptive_boundary": true,
+        "maximum_effective_boundary_depth": 100,
+        "advanced_prefix_depth": 8,
+        "resource_cap_result": "unresolved",
+        "note": "This URL opens the corresponding original-attractor view using adaptive capture-and-escape boundary rendering. Its effective depth depends on viewport zoom and raster resolution; GPU previews have separate depth/work caps before automatic CPU refinement. The committed figure remains a complete depth-eight prefix illustration, reproduced by this generator."
       },
       "set": "E(c,n)",
       "n": 4,
@@ -127,15 +129,17 @@
       "id": "e_c5_plane_filling",
       "label": "PLANE-FILLING PRESET",
       "source_example": "examples/e_c5_plane_filling/config.json",
-      "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=5&k=37&l=1000&tol=1e-8&q=3&cx=1&cy=2&pz=2.414&dz=12.923663597204854&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=prefix&palette=research&focus=dynamical&pieces=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
+      "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=5&k=37&l=1000&tol=1e-8&q=3&cx=1&cy=2&pz=2.414&dz=12.923663597204854&bdepth=0&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
       "interactive_rendering": {
         "corresponding_view_only": true,
-        "requested_prefix_depth": 8,
-        "default_browser_maximum_prefixes": 60000,
-        "expected_prefix_depth_with_default_cap": 6,
-        "expected_prefix_count_with_default_cap": 15625,
-        "depth_reduced_by_default_cap": true,
-        "note": "This URL opens the corresponding original-attractor view, not a pixel-identical reproduction. The browser uses its default prefix work cap; its viewport aspect, display marks, and per-prefix compositing also depend on the interactive renderer."
+        "renderer_mode": "boundary",
+        "requested_boundary_depth": 0,
+        "automatic_base_depth": 12,
+        "adaptive_boundary": true,
+        "maximum_effective_boundary_depth": 100,
+        "advanced_prefix_depth": 8,
+        "resource_cap_result": "unresolved",
+        "note": "This URL opens the corresponding original-attractor view using adaptive capture-and-escape boundary rendering. Its effective depth depends on viewport zoom and raster resolution; GPU previews have separate depth/work caps before automatic CPU refinement. The committed figure remains a complete depth-eight prefix illustration, reproduced by this generator."
       },
       "set": "E(c,n)",
       "n": 5,
@@ -222,15 +226,17 @@
       "id": "e_c3_sparse",
       "label": "SPARSE EXAMPLE",
       "source_example": null,
-      "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=3&k=37&l=1000&tol=1e-8&q=3&cx=3&cy=3&pz=2.414&dz=5.284458204387503&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=prefix&palette=research&focus=dynamical&pieces=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
+      "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=3&k=37&l=1000&tol=1e-8&q=3&cx=3&cy=3&pz=2.414&dz=5.284458204387503&bdepth=0&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
       "interactive_rendering": {
         "corresponding_view_only": true,
-        "requested_prefix_depth": 8,
-        "default_browser_maximum_prefixes": 60000,
-        "expected_prefix_depth_with_default_cap": 8,
-        "expected_prefix_count_with_default_cap": 6561,
-        "depth_reduced_by_default_cap": false,
-        "note": "This URL opens the corresponding original-attractor view, not a pixel-identical reproduction. The browser uses its default prefix work cap; its viewport aspect, display marks, and per-prefix compositing also depend on the interactive renderer."
+        "renderer_mode": "boundary",
+        "requested_boundary_depth": 0,
+        "automatic_base_depth": 12,
+        "adaptive_boundary": true,
+        "maximum_effective_boundary_depth": 100,
+        "advanced_prefix_depth": 8,
+        "resource_cap_result": "unresolved",
+        "note": "This URL opens the corresponding original-attractor view using adaptive capture-and-escape boundary rendering. Its effective depth depends on viewport zoom and raster resolution; GPU previews have separate depth/work caps before automatic CPU refinement. The committed figure remains a complete depth-eight prefix illustration, reproduced by this generator."
       },
       "set": "E(c,n)",
       "n": 3,

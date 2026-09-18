@@ -13,7 +13,9 @@ This repository contains a build-free browser explorer and reference packages
 for inverse search in the collinear connectedness loci $\mathcal{M}_n$.
 The browser combines **WebGL 2 previews with binary64 CPU refinement**. Its
 default automatic mode displays a bounded GPU approximation, then refines the
-pixel search at the requested settings in Web Workers. Unsupported GPU views
+pixel search at the requested settings in Web Workers. The default original
+attractor view uses adaptive capture-and-escape boundary rendering, with
+first-level piece colors. Unsupported GPU views
 use CPU rendering; the existing progressive main-thread renderer is retained
 for environments without working workers.
 
@@ -31,6 +33,8 @@ $f_t(z)=t+z/c$. Each panel has its own fitted scale; colors identify the first
 digit. Finite resolution and visible point sizes make these illustrations,
 not mathematical certificates. [Figure data and reproduction](docs/figures/README.md)
 record the exact parameters, tails, and display settings.
+Their interactive links open the sharper boundary renderer at the same
+parameters and coordinate spans; the static figures retain their prefix construction.
 
 **Explore these examples:** [Four-piece attractor][view-e4] ·
 [Five-piece attractor][view-e5] · [Sparse three-piece attractor][view-e3].
@@ -44,15 +48,21 @@ entry, search limits, renderers, layers, palettes, and exports.
 
 Switch the dynamical scene between $E(c,n)$, the half-scale difference
 $\frac{1}{2}E(c,2n-1)$, and their overlay. The parameter plane offers
-$\mathcal{M}_n$, the marked-point set $R_n=\{c:c\in E(c,n)\}$, and a comparison.
-The $R_n$ preview distinguishes finite survival from unfinished searches;
-neither asserts membership. Search details identify which set each result concerns.
+$\mathcal{M}_n$, $\mathcal{M}_n^0=\{c:c\in E(c,n)\}$,
+$\mathcal{M}_n^1=\{c:c\in A_{n-1}+c^{-1}E(c,n)\}$, and a comparison.
+The old name $R_n$ imports as $\mathcal{M}_n^0$. In $\mathcal{M}_n^1$,
+only the first digit comes from the complementary alphabet $A_{n-1}$;
+all later digits come from $A_n$. These two views are not presented as a
+decomposition of the full connectedness locus.
 
-The default prefix renderer draws finite approximations of the original
-attractor. A seeded histogram offers a second visual preview; the survival
-renderer shows points still admissible after a finite inverse search. The
-selected-parameter search uses its own depth and frontier-width limits,
-independently of visual rendering depth.
+**Sharp boundary** evaluates the original attractor at pixel scale. It uses
+capture only where the original alphabet has a canonical self-covering trap,
+and otherwise follows inverse branches until escape, finite-depth survival,
+or a work limit. Finite survivors describe visual coverage; unfinished work
+remains unresolved. Automatic depth starts at 16 for two maps and 12 otherwise,
+and adapts to zoom and raster resolution. Prefix, seeded histogram, and
+survival rendering remain available as advanced views. The selected
+$\mathcal M_n$ search keeps its independent depth and frontier-width limits.
 
 Share links, captioned image export, search JSON, and undo/redo retain the
 reproducible research workflow. The drawer becomes a modal on narrow screens;
@@ -64,12 +74,14 @@ Choose **Controls → Rendering engine** to set a portable backend preference:
 
 | Preference | Image computation and completion |
 |---|---|
-| **Automatic · GPU + refinement** (`auto`, default) | WebGL 2 supplies a bounded float32 preview when supported. Binary64 CPU workers then refine the full raster using the requested depth, frontier cap, and tolerance. |
-| **GPU preview** (`gpu`) | Explicitly finish with the bounded float32 preview. The GPU's effective limits can be lower than the requested search limits. Unsupported views fall back to CPU computation. |
+| **Automatic · GPU + refinement** (`auto`, default) | WebGL 2 supplies a bounded float32 preview when supported. Binary64 CPU workers then refine the full raster using the applicable search or adaptive boundary settings. |
+| **GPU preview** (`gpu`) | Explicitly finish with the bounded float32 preview. Its effective search or boundary limits can be lower than requested. Unsupported views fall back to CPU computation. |
 | **CPU precision** (`cpu`) | Use binary64 CPU workers directly. If workers are unavailable or fail, use progressive computation on the main thread. |
 
 The **selected search record always uses the binary64 reference search** and
-the requested settings, independently of the image backend. Prefix-cylinder
+the requested `kMax`, `LMax`, and tolerance, independently of image backend
+or boundary depth. The default sharp boundary view runs through the GPU/worker
+raster pipeline. Advanced prefix-cylinder
 and seeded-histogram drawings of $E(c,n)$ remain CPU Canvas overlays in all
 three modes. A GPU preview is not a completed binary64 refinement, and neither
 arithmetic mode supplies an interval-verified proof.
@@ -151,7 +163,8 @@ real-axis and unit-circle inputs are not classified by it. See
 | `qa/`, `tools/`, `docs/` | Regression checks, validation tools, and maintenance documentation. |
 
 CPU pixel rendering uses a scalar kernel with reusable typed-array frontiers,
-scheduled in bounded worker tiles. GPU preview classification and palette
+scheduled in bounded worker tiles; original-attractor boundaries use a bounded
+depth-first search. GPU preview classification and palette
 mapping run in two WebGL 2 passes. The selected-parameter search retains its
 detailed reference tree and inverse word. A per-pixel certificate inspector,
 completed boundary atlas, and WebGPU backend remain future work.
@@ -203,10 +216,13 @@ does not independently verify those theorems or their full certificate corpus.
 
 ## Verdicts: Interior, Interior-offLens, Exterior, Undetermined
 
-These are the selected $\mathcal{M}_n$ search labels. The optional $R_n$
-marked-point search uses enclosure pruning without a trap; surviving its full
-depth budget remains `Undetermined`. Its label is distinct from the countable
-restricted-polynomial root set denoted $\mathcal{R}_n$ in the finite-capture paper.
+These are the selected $\mathcal{M}_n$ search labels. The optional
+$\mathcal M_n^0$ and $\mathcal M_n^1$ views have separate original-alphabet
+membership searches. They allow capture only when
+$|c|^2+2|\mathrm{Re}\,c|<n$, including valid even alphabets.
+Finite-depth survival and work-cap termination remain `Undetermined`.
+The historical label $R_n$ is accepted in old links; it is distinct from the
+countable restricted-polynomial root set $\mathcal R_n$ in the finite-capture paper.
 
 | Verdict | Meaning of the numerical search result |
 |---|---|
@@ -249,8 +265,12 @@ planned jobs.
 ## Share URLs and reproducible states
 
 Share records the selected parameter, viewports, search limits, palette,
-parameter-set and scene modes, backend preference, layers, renderer, visual depth, histogram seed/sample count,
-piece coloring, and opacity in the URL fragment. A share link restores the
+parameter-set and scene modes, backend preference, layers, renderer, boundary
+depth and adaptation, advanced prefix depth, histogram seed/sample count,
+piece coloring, and opacity in the URL fragment. The boundary keys are
+`bdepth=0` for automatic base depth and `badapt=1` for adaptation; explicit base
+depths range from 1 to 100. Old `pm=rn` links become canonical `pm=mn0` when
+shared again. A share link restores the
 view; a search JSON export records the numerical result.
 
 For a reproducible issue or figure, retain both, together with the git commit
@@ -314,7 +334,9 @@ Language, MATLAB, Maple, and Swift checks require their respective runtimes;
 absence of a runtime is not a passing test.
 
 Rendering and search costs rise with arity, depth, and viewport resolution.
-Prefix drawings use bounded point counts; histogram drawings are sampled.
+Boundary rendering has explicit depth/work caps; it keeps exhausted work
+distinct from completed finite survival. Prefix drawings use bounded point
+counts; histogram drawings are sampled.
 GPU previews have explicit resolution, search, and numerical limits; automatic
 refinement uses the requested CPU limits. No physical-device GPU speedup or
 cross-browser performance benchmark is claimed by this documentation.
@@ -382,6 +404,6 @@ Documentation and non-code repository materials use **Creative Commons
 Attribution 4.0 International** unless otherwise stated; see
 [LICENSE-docs.md](LICENSE-docs.md) and [the full license](LICENSES/CC-BY-4.0.txt).
 
-[view-e4]: https://complextrees.com/collinear-fractals-gpu/#n=4&k=37&l=1000&tol=1e-8&q=3&cx=1.5&cy=1.6583123951777&pz=2.414&dz=9.730607775891547&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=prefix&palette=research&focus=dynamical&pieces=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
-[view-e5]: https://complextrees.com/collinear-fractals-gpu/#n=5&k=37&l=1000&tol=1e-8&q=3&cx=1&cy=2&pz=2.414&dz=12.923663597204854&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=prefix&palette=research&focus=dynamical&pieces=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
-[view-e3]: https://complextrees.com/collinear-fractals-gpu/#n=3&k=37&l=1000&tol=1e-8&q=3&cx=3&cy=3&pz=2.414&dz=5.284458204387503&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=prefix&palette=research&focus=dynamical&pieces=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
+[view-e4]: https://complextrees.com/collinear-fractals-gpu/#n=4&k=37&l=1000&tol=1e-8&q=3&cx=1.5&cy=1.6583123951777&pz=2.414&dz=9.730607775891547&bdepth=0&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
+[view-e5]: https://complextrees.com/collinear-fractals-gpu/#n=5&k=37&l=1000&tol=1e-8&q=3&cx=1&cy=2&pz=2.414&dz=12.923663597204854&bdepth=0&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
+[view-e3]: https://complextrees.com/collinear-fractals-gpu/#n=3&k=37&l=1000&tol=1e-8&q=3&cx=3&cy=3&pz=2.414&dz=5.284458204387503&bdepth=0&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff

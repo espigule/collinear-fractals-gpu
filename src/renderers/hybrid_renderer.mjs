@@ -1,14 +1,22 @@
 import { createWebGLPreview } from './webgl_preview.mjs';
 import { createRasterWorkerPool } from '../compute/raster_worker_pool.mjs';
+import { PIECE_COLORS, hexToRgb } from './palettes.mjs';
 
 const TABLE_WIDTH = 101;
 const TEAL = [50, 138, 148];
+const DEFAULT_PIECE_COLORS = Uint8Array.from(PIECE_COLORS.flatMap(value => {
+  const { r, g, b } = hexToRgb(value); return [r, g, b];
+}));
 
 /** Convert independent numerical result codes to the same palette as the GPU. */
-export function colorizeRasterTile(data, job, colors) {
+export function colorizeRasterTile(data, job, colors, pieces) {
   const output = new Uint8ClampedArray(data.length);
   const lookup = (code, depth) => (Math.min(8, code) * TABLE_WIDTH + Math.min(100, depth)) * 4;
   const opacity = Math.max(0, Math.min(1, colors.survivalOpacity ?? job.survivalOpacity ?? 0.45));
+  const originalOpacity = Math.max(0, Math.min(1, colors.originalOpacity ?? job.originalOpacity ?? 1));
+  const pieceColors = colors.pieceColors ?? DEFAULT_PIECE_COLORS;
+  const pieceCount = Math.floor(pieceColors.length / 3);
+  const originalBoundary = (job.originalRenderer ?? 'boundary') === 'boundary';
   for (let i = 0; i < data.length; i += 4) {
     let code = data[i], depth = data[i + 1];
     const secondary = data[i + 2];
@@ -17,7 +25,8 @@ export function colorizeRasterTile(data, job, colors) {
       if (code === 5 || (job.parameterMode === 'compare' && secondary === 5)) {
         code = 5; depth = 0;
       } else {
-        teal = job.parameterMode === 'rn' ? code === 3 : job.parameterMode === 'compare' && secondary === 3;
+        teal = (job.parameterMode === 'rn' || job.parameterMode === 'mn0' || job.parameterMode === 'mn1') ? code === 3
+          : job.parameterMode === 'compare' && (secondary === 1 || secondary === 3);
         if (job.parameterMode === 'compare' && secondary !== 0 && !teal) { code = 4; depth = 0; }
       }
     }
@@ -27,7 +36,19 @@ export function colorizeRasterTile(data, job, colors) {
     if (job.kind === 'dynamical') {
       if (!job.showDifference) [r, g, b] = colors.exterior;
       if (job.showOriginalSurvival) {
-        if (secondary === 1 || secondary === 2 || secondary === 3 || secondary === 4 || secondary === 7) {
+        if (originalBoundary) {
+          if (secondary === 1 || secondary === 3) {
+            const encodedPiece = pieces?.[i / 2 + 1] ?? 0;
+            const pieceOffset = ((encodedPiece - 1) % pieceCount) * 3;
+            const usePiece = job.firstLevelPieces !== false && encodedPiece > 0 && pieceCount > 0;
+            r = Math.round(r * (1 - originalOpacity) + (usePiece ? pieceColors[pieceOffset] : colors.branch[0]) * originalOpacity);
+            g = Math.round(g * (1 - originalOpacity) + (usePiece ? pieceColors[pieceOffset + 1] : colors.branch[1]) * originalOpacity);
+            b = Math.round(b * (1 - originalOpacity) + (usePiece ? pieceColors[pieceOffset + 2] : colors.branch[2]) * originalOpacity);
+          } else if (secondary !== 0 && secondary !== 5) {
+            const unknown = lookup(secondary, data[i + 3]);
+            r = colors.table[unknown]; g = colors.table[unknown + 1]; b = colors.table[unknown + 2];
+          }
+        } else if (secondary === 1 || secondary === 2 || secondary === 3 || secondary === 4 || secondary === 7) {
           r = Math.round(r * (1 - opacity) + colors.branch[0] * opacity);
           g = Math.round(g * (1 - opacity) + colors.branch[1] * opacity);
           b = Math.round(b * (1 - opacity) + colors.branch[2] * opacity);
@@ -124,7 +145,7 @@ export function createHybridRenderer({ onStatus = () => {} } = {}) {
         run.workerHandle = getPool().render(job, {
           onTile: tile => {
             if (!current(run)) return;
-            const rgba = colorizeRasterTile(tile.data, job, run.colors);
+            const rgba = colorizeRasterTile(tile.data, job, run.colors, tile.pieces);
             context.putImageData(new ImageData(rgba, tile.width, tile.height), tile.x, tile.y);
             if (preview) {
               run.context.imageSmoothingEnabled = false;
@@ -175,7 +196,12 @@ export function createHybridRenderer({ onStatus = () => {} } = {}) {
       id: ++serial, job: structuredClone(job), colors, callbacks, canvas, context,
       started: performance.now(), cancelled: false, completed: false, refining: false,
       metadata: { requested_backend: job.backend, active_backend: 'initializing', phase: 'initializing',
-        requested_limits: { depth: job.kMax, frontier: job.LMax, tolerance: job.tol } }
+        requested_limits: { depth: job.kMax, frontier: job.LMax, tolerance: job.tol,
+          escape_depth: job.escapeDepth ?? (job.n === 2 ? 16 : 12), boundary_work: job.boundaryWork ?? 20000 },
+        original_renderer: job.originalRenderer ?? 'boundary',
+        original_sample_type: job.kind === 'dynamical' && (job.originalRenderer ?? 'boundary') === 'boundary' ? 'pixel-footprint' : 'point',
+        pixel_radius_world: job.kind === 'dynamical' && (job.originalRenderer ?? 'boundary') === 'boundary'
+          ? Math.SQRT1_2 * job.spanX / job.width : 0 }
     };
     runs.set(job.kind, run);
     report(run);

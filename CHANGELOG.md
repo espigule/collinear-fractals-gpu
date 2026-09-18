@@ -4,6 +4,15 @@
 
 ### Correctness
 
+- Share an original-alphabet membership search across the sharp boundary and
+  marked-point views. Canonical capture is restricted to
+  `|c|² + 2|Re c| < n`, including even alphabets. Exhaustive escape, finite
+  survival, and work-cap termination keep distinct meanings.
+- Name the original marked-point view `M_n^0` and add `M_n^1`, whose first
+  digit comes from `A_(n-1)` and later digits from `A_n`. Preserve `rn` as an
+  input alias for `mn0`; new URLs and imported state use the canonical name.
+- Apply geometric pixel footprints only to dynamical coverage. Parameter
+  membership tests do not acquire a screen-sized geometric tolerance.
 - Corrected prefix and histogram rendering to use the documented IFS
   `z -> t + z/c`, including the unscaled first digit and matching tail radius.
   Previously those visual renderers showed a scaled/rotated attractor.
@@ -17,6 +26,11 @@
 
 ### Browser and performance
 
+- Make **Sharp boundary** the default original-attractor renderer, using
+  bounded GPU previews followed by binary64 worker refinement. Automatic
+  boundary depth starts at 16 for two maps and 12 otherwise, adapts to zoom and
+  raster resolution, and is shared through `bdepth` and `badapt`. First-level
+  coloring remains enabled; prefix, histogram, and survival are advanced choices.
 - Added a hybrid rendering pipeline: bounded WebGL 2 previews for parameter
   and dynamical inverse-search images, followed by double-precision refinement
   in background workers. Direct prefix and histogram attractor drawing remains
@@ -33,8 +47,9 @@
   in JSON exports.
 - Restored a canvas-first workspace with a collapsible controls drawer,
   Cartesian and polar parameter input, direct set comparisons, quick view and
-  zoom controls, fullscreen, and a persistent selected-search readout. Rₙ
-  rendering reports finite-search survival separately from the Mₙ search record.
+  zoom controls, fullscreen, and a persistent selected-search readout.
+  Marked-point rendering reports capture, finite survival, and unresolved work
+  separately from the selected Mₙ search record.
 - Reuse typed-array frontiers for verdict-only pixel searches while retaining
   the detailed reference search for selected-parameter trees and inverse words.
 - Share validated numerical helpers and histogram sampling across entry points.
@@ -54,6 +69,9 @@
   cap, the IFS convention, and floating-point certification limits.
 - Aligned example metadata with actual search outcomes and distinguished
   implemented features from planned gallery and atlas work.
+- Updated curated presets and README interactive links to sharp boundary
+  rendering. The reproducible README illustrations retain their explicit
+  depth-eight prefix construction.
 - Marked prior QA reports as historical and kept the released `0.2.0-alpha`
   version unchanged while these changes are under review.
 

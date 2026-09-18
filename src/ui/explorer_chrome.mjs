@@ -65,7 +65,7 @@ export function createExplorerChrome({ state, changeArity, changeView, changeSce
   for (const [id, view] of [['btn-view-param', 'parameter'], ['btn-view-dyn', 'dynamical'], ['btn-view-split', 'both']]) {
     bind(id, () => changeView(view));
   }
-  for (const mode of ['mn', 'rn', 'compare']) bind(`btn-locus-${mode}`, () => changeParameterMode(mode));
+  for (const mode of ['mn', 'mn0', 'mn1', 'compare']) bind(`btn-locus-${mode}`, () => changeParameterMode(mode));
   for (const scene of ['collinear', 'difference', 'overlay']) bind(`btn-layer-${scene}`, () => changeScene(scene));
   for (const panel of ['param', 'dyn']) {
     bind(`btn-zoom-in-${panel}`, () => zoom(panel, 0.8));
@@ -98,17 +98,21 @@ export function createExplorerChrome({ state, changeArity, changeView, changeSce
     for (const [id, view] of [['btn-view-param', 'parameter'], ['btn-view-dyn', 'dynamical'], ['btn-view-split', 'both']]) {
       byId(id)?.setAttribute('aria-pressed', String(state.focusedPanel === view));
     }
-    for (const mode of ['mn', 'rn', 'compare']) byId(`btn-locus-${mode}`)?.setAttribute('aria-pressed', String(state.parameterMode === mode));
+    for (const mode of ['mn', 'mn0', 'mn1', 'compare']) byId(`btn-locus-${mode}`)?.setAttribute('aria-pressed', String(state.parameterMode === mode));
     const scene = state.showEscapeStrata ? null : state.showCollinear && state.showDifference ? 'overlay'
       : state.showCollinear ? 'collinear' : state.showDifference ? 'difference' : null;
     for (const mode of ['collinear', 'difference', 'overlay']) byId(`btn-layer-${mode}`)?.setAttribute('aria-pressed', String(scene === mode));
-    const names = { mn: 'Mₙ · Connectedness', rn: 'Rₙ · Marked-point set', compare: 'Rₙ ⊆ Mₙ · Comparison' };
+    const names = { mn: 'Mₙ · Connectedness', mn0: 'Mₙ⁰ · Original digits', mn1: 'Mₙ¹ · Complement digits', compare: 'Mₙ and Mₙ⁰ · Comparison' };
     if (byId('parameter-plane-title')) byId('parameter-plane-title').textContent = names[state.parameterMode] || names.mn;
-    if (byId('btn-view-param')) byId('btn-view-param').textContent = state.parameterMode === 'rn' ? 'Rₙ' : state.parameterMode === 'compare' ? 'Parameter' : 'Mₙ';
+    if (byId('btn-view-param')) byId('btn-view-param').textContent = ({ mn: 'Mₙ', mn0: 'Mₙ⁰', mn1: 'Mₙ¹', compare: 'Parameter' })[state.parameterMode] || 'Mₙ';
     const parameterNote = byId('parameter-view-note');
     if (parameterNote) {
       parameterNote.hidden = state.parameterMode === 'mn';
-      parameterNote.textContent = 'Rₙ tests c ∈ E(c,n). Teal marks survival through the chosen depth; amber marks an unfinished search. Neither proves membership. The Mₙ search record remains separate.';
+      parameterNote.textContent = ({
+        mn0: 'Mₙ⁰ tests c ∈ E(c,n), using the original digit alphabet Aₙ. The selected Mₙ search record remains in the bottom strip.',
+        mn1: 'Mₙ¹ tests c ∈ (Dₙ ∖ Aₙ) + c⁻¹E(c,n). The first digit uses the complementary alphabet Aₙ₋₁; subsequent digits use Aₙ.',
+        compare: 'Compare Mₙ (connectedness) with Mₙ⁰ (c ∈ E(c,n)). The selected search record refers to Mₙ.',
+      })[state.parameterMode] || '';
     }
     syncDrawer();
     syncFullscreen();

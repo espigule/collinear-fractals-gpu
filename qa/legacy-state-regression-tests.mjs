@@ -28,15 +28,15 @@ test('legacy links restore omitted archived core defaults without changing curre
 test('verified legacy panel bits map to the right parameter and dynamical sets', () => {
   const cases = [
     ['0010', 'parameter', 'mn', 'overlay', false, false],
-    ['1000', 'parameter', 'rn', 'overlay', false, false],
+    ['1000', 'parameter', 'mn0', 'overlay', false, false],
     ['1010', 'parameter', 'compare', 'overlay', false, false],
     ['0100', 'dynamical', 'mn', 'collinear', true, false],
     ['0001', 'dynamical', 'mn', 'difference', false, true],
     ['0101', 'dynamical', 'mn', 'overlay', true, true],
-    ['1100', 'both', 'rn', 'collinear', true, false],
+    ['1100', 'both', 'mn0', 'collinear', true, false],
     ['0011', 'both', 'mn', 'difference', false, true],
     ['0110', 'both', 'mn', 'collinear', true, false],
-    ['1001', 'both', 'rn', 'difference', false, true],
+    ['1001', 'both', 'mn0', 'difference', false, true],
     ['1111', 'both', 'compare', 'overlay', true, true]
   ];
   for (const [panels, focus, pm, mode, collinear, difference] of cases) {
@@ -53,6 +53,23 @@ test('verified legacy panel bits map to the right parameter and dynamical sets',
   assert.equal(empty.state.focusedPanel, 'parameter');
   assert.equal(empty.state.parameterMode, 'mn');
   assert.match(empty.warnings.join(' '), /hid every set/);
+});
+
+test('the archived Rn bit and old current Rn links migrate to canonical Mn0 shares', () => {
+  const imported = decode('?legacy=1', '#panels=1000&n=4&cx=0&cy=2');
+  assert.equal(imported.importedLegacy, true);
+  assert.equal(imported.state.parameterMode, 'mn0');
+  const params = encodeExplorerState(imported.state);
+  assert.equal(params.get('pm'), 'mn0');
+  const restored = decode('?legacy=1&panels=0010&n=99', `#${params}`);
+  assert.equal(restored.importedLegacy, false);
+  assert.deepEqual(restored.state, imported.state);
+
+  const oldCurrentLink = decode('?legacy=1&panels=1111&n=99', '#pm=rn');
+  assert.equal(oldCurrentLink.importedLegacy, false);
+  assert.equal(oldCurrentLink.state.parameterMode, 'mn0');
+  assert.equal(oldCurrentLink.state.n, DEFAULT_EXPLORER_STATE.n);
+  assert.deepEqual(oldCurrentLink.warnings, []);
 });
 
 test('camera conversion preserves vertical world span and centers in both target aspects', () => {
@@ -83,6 +100,9 @@ test('shader depth, beam queue and thickness never become current search bounds'
   assert.equal(imported.state.modulo, 3);
   assert.equal(imported.state.originalAttractorOpacity, 0.72);
   assert.equal(imported.state.palette, 'research');
+  assert.equal(imported.state.rendererMode, 'boundary');
+  assert.equal(imported.state.boundaryDepth, 0);
+  assert.equal(imported.state.adaptiveBoundary, true);
   const warning = imported.warnings.join(' ');
   for (const key of ['mmax1', 'mmax2', 'queue', 'thicknessRE', 'depth', 'skipRE', 'useRectTrap', 'pShift', 'color1']) {
     assert.ok(warning.includes(key), key);
@@ -160,6 +180,32 @@ test('backend-only current hash overrides a forced legacy query without changing
   assert.equal(invalid.state.backend, 'auto');
   assert.equal(invalid.state.n, DEFAULT_EXPLORER_STATE.n);
   assert.equal(decode('?panels=0010').state.backend, 'auto');
+});
+
+test('new parameter and boundary keys select current state even with forced legacy settings', () => {
+  const query = '?legacy=1&n=99&cx=22&panels=1111&zoom=0.4&depth=50';
+  const cases = [
+    ['#pm=mn0', 'parameterMode', 'mn0'],
+    ['#pm=mn1', 'parameterMode', 'mn1'],
+    ['#bdepth=24', 'boundaryDepth', 24],
+    ['#bdepth=NaN', 'boundaryDepth', 0],
+    ['#badapt=0', 'adaptiveBoundary', false],
+    ['#badapt=unsupported', 'adaptiveBoundary', true],
+    ['#renderer=boundary', 'rendererMode', 'boundary']
+  ];
+  for (const [hash, key, expected] of cases) {
+    // Legacy keys in either location must not supplement a recognized current hash.
+    for (const suffix of ['', '&panels=1000&zoom=0.1&depth=99']) {
+      const result = decode(query, hash + suffix);
+      assert.equal(result.importedLegacy, false, hash + suffix);
+      assert.equal(result.source, 'hash', hash + suffix);
+      assert.equal(result.state[key], expected, hash + suffix);
+      assert.equal(result.state.n, DEFAULT_EXPLORER_STATE.n);
+      assert.equal(result.state.cx, DEFAULT_EXPLORER_STATE.cx);
+      assert.equal(result.state.focusedPanel, DEFAULT_EXPLORER_STATE.focusedPanel);
+      assert.deepEqual(result.warnings, []);
+    }
+  }
 });
 
 test('legacy signature hashes override queries while force flags disambiguate core-only hashes', () => {
