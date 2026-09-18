@@ -57,9 +57,11 @@ the names of the existing presets.
 
 The metadata includes a fully encoded `interactive_url` for each panel. Those
 links restore the corresponding parameter, original-attractor scene, colors,
-requested depth, and horizontal coordinate span. The browser fits the image
-to the available screen and caps prefix work for responsiveness, so its
-effective depth and rasterization can differ from these static illustrations.
+and horizontal coordinate span using the default sharp boundary renderer.
+The linked view requests automatic base depth and zoom adaptation; its
+effective depth depends on the viewport and raster resolution. GPU previews
+have separate depth/work caps before automatic binary64 CPU refinement.
+The static illustrations retain their complete depth-eight prefix construction.
 Use the generators to reproduce the committed figures exactly.
 
 The SVG embeds its three raster plots as PNG data, with vector titles, axes,

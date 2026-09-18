@@ -7,8 +7,7 @@
   "k_max": 37,
   "L_max": 1000,
   "renderer": "certificate-status-renderer",
-  "visual_renderer": "prefix-cylinder",
-  "renderer_depth": 7,
+  "visual_renderer": "capture-escape-boundary",
   "certificate_renderer": "canvas-cpu",
   "mode": "trap-enclosure",
   "expected_verdict": "Interior and Exterior",
@@ -19,5 +18,9 @@
     "certificate_interior_word.json"
   ],
   "related_work": "2026 canonical trap and enclosure construction",
-  "limitations": "Floating-point finite-search records; inequalities are not interval-verified."
+  "limitations": "Floating-point finite-search records; inequalities are not interval-verified.",
+  "advanced_prefix_depth": 7,
+  "requested_boundary_depth": 0,
+  "adaptive_boundary": true,
+  "first_level_pieces": true
 }

@@ -104,6 +104,34 @@
         "object",
         "null"
       ],
+      "properties": {
+        "renderer_mode": {
+          "enum": [
+            "boundary",
+            "prefix",
+            "histogram",
+            "survival"
+          ]
+        },
+        "requested_base_depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "adaptive": {
+          "type": "boolean"
+        },
+        "effective_depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "pixel_radius_world": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true,
       "description": "Optional visual-renderer metadata. This is not a proof field."
     },
     "proof_status": {

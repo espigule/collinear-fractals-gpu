@@ -1,7 +1,7 @@
 'use strict';
 
 const { test: base, expect } = require('playwright/test');
-const { readFile } = require('node:fs/promises');
+const { readFile, writeFile } = require('node:fs/promises');
 const { spawnSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
 
@@ -158,7 +158,7 @@ test('served deployment manifest identifies the checkout and fingerprints public
   }
 });
 
-for (const renderer of ['prefix', 'histogram', 'survival']) {
+for (const renderer of ['boundary', 'prefix', 'histogram', 'survival']) {
   test(`${renderer} renders full E(c,4) geometry for c=2i in the actual canvas`, async ({ page }, testInfo) => {
     // Even and odd radix -4 expansions give E(2i,4)=[-4,4]×[-2,2]
     // exactly. An erroneous extra division by c has x bounds [-1,1], so
@@ -168,6 +168,9 @@ for (const renderer of ['prefix', 'histogram', 'survival']) {
       mode: 'collinear', layers: '0100000', renderer, adepth: '7',
       hseed: '20260917', hsamples: '200000', pieces: '0', aop: '1', sop: '1', k: '12',
     });
+    // Omission exercises the canonical boundary default; older renderers remain
+    // explicit so their geometry coverage cannot silently change with defaults.
+    if (renderer === 'boundary') hash.delete('renderer');
     await page.goto(`/#${hash}`);
     const canvas = page.locator('#dynamical-canvas');
     await expect(canvas).toBeVisible();
@@ -178,7 +181,7 @@ for (const renderer of ['prefix', 'histogram', 'survival']) {
     await expect(page.locator('#show-difference-attractor')).not.toBeChecked();
     for (const point of [{ x: 3, y: 0.7 }, { x: -3, y: 0.7 }]) {
       const pixels = await dynamicalPatch(page, point);
-      expect(pixels.coverage, `${renderer}: original-scale interior near (${point.x},${point.y})`).toBeGreaterThan(0.05);
+      expect(pixels.coverage, `${renderer}: original-scale interior near (${point.x},${point.y})`).toBeGreaterThan(renderer === 'boundary' ? 0.9 : 0.05);
     }
     for (const point of [{ x: 4.25, y: 0.7 }, { x: -4.25, y: 0.7 }, { x: 0.7, y: 2.25 }]) {
       const pixels = await dynamicalPatch(page, point);
@@ -187,6 +190,100 @@ for (const renderer of ['prefix', 'histogram', 'survival']) {
     await page.screenshot({ path: testInfo.outputPath(`full-E-${renderer}.png`) });
   });
 }
+
+for (const fixture of [
+  { name: 'E4 overlap', slug: 'e4', n: 4, re: 1.5, im: 1.6583123951777 },
+  { name: 'E5 tile', slug: 'e5', n: 5, re: 1, im: 2 },
+]) {
+  test(`sharp boundary gallery: ${fixture.name} before, after and zoom`, async ({ page }, testInfo) => {
+    const hash = new URLSearchParams({
+      n: String(fixture.n), cx: String(fixture.re), cy: String(fixture.im),
+      focus: 'dynamical', mode: 'collinear', layers: '0100000', backend: 'cpu',
+      renderer: 'prefix', adepth: '7', pieces: '1', k: '12',
+    });
+    await page.goto(`/#${hash}`);
+    const canvas = page.locator('#dynamical-canvas');
+    await page.locator('#btn-reset-dyn').click();
+    await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+    const prefix = await readRecord(page);
+    expect(prefix.visual_renderer.renderer_mode).toBe('prefix');
+    await page.locator('#btn-close-controls').click();
+    await page.screenshot({ path: testInfo.outputPath(`${fixture.slug}-01-prefix.png`) });
+
+    await select(page, '#original-renderer-mode', 'boundary');
+    await page.locator('#btn-close-controls').click();
+    await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+    const boundary = await readRecord(page);
+    expect(boundary.visual_renderer).toMatchObject({ renderer: 'capture-escape-boundary', first_level_pieces: true });
+    expect(boundary.view.dynamical_zoom).toBe(prefix.view.dynamical_zoom);
+    expect(boundary.view.dynamical_center).toEqual(prefix.view.dynamical_center);
+    await page.locator('#btn-close-controls').click();
+    await page.screenshot({ path: testInfo.outputPath(`${fixture.slug}-02-boundary.png`) });
+
+    // Cross a full detail threshold even on the narrower mobile canvas.
+    for (let count = 0; count < 6; count++) await page.locator('#btn-zoom-in-dyn').click();
+    await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+    const zoomed = await readRecord(page);
+    expect(zoomed.visual_renderer.effective_depth).toBeGreaterThan(boundary.visual_renderer.effective_depth);
+    expect(zoomed.visual_renderer.pixel_radius_world).toBeLessThan(boundary.visual_renderer.pixel_radius_world);
+    await page.locator('#btn-close-controls').click();
+    await page.screenshot({ path: testInfo.outputPath(`${fixture.slug}-03-boundary-zoom.png`) });
+    const recordPath = testInfo.outputPath(`${fixture.slug}-rendering-records.json`);
+    await writeFile(recordPath, JSON.stringify({ prefix, boundary, zoomed }, null, 2) + '\n');
+    await testInfo.attach(`${fixture.slug}-rendering-records.json`, { path: recordPath, contentType: 'application/json' });
+  });
+}
+
+test('boundary detail follows zoom and preserves manual depth independently of search limits', async ({ page }) => {
+  await page.goto('/#n=4&cx=0&cy=2&dcx=0&dcy=0&dz=12&focus=dynamical&mode=collinear&layers=0100000&backend=cpu&k=8');
+  const canvas = page.locator('#dynamical-canvas');
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  await expect(page.locator('#original-renderer-mode')).toHaveValue('boundary');
+  await reveal(page, '#boundaryDepth');
+  await expect(page.locator('#boundaryDepth')).toHaveValue('0');
+  await expect(page.locator('#adaptiveBoundary')).toBeChecked();
+  await expect(page.locator('#prefix-settings')).not.toBeVisible();
+  await expect(page.locator('#histogram-settings')).not.toBeVisible();
+  const initial = await readRecord(page);
+  expect(initial.visual_renderer).toMatchObject({
+    renderer: 'capture-escape-boundary', requested_base_depth: 0, adaptive: true,
+  });
+  expect(initial.visual_renderer.effective_depth).toBeGreaterThanOrEqual(12);
+  expect(initial.visual_renderer.pixel_radius_world).toBeGreaterThan(0);
+  // The adaptive budget accounts for actual pixel width. On a 390px mobile
+  // canvas, three steps from this wide span still fit within the base depth.
+  for (let count = 0; count < 6; count++) await (await reveal(page, '#btn-zoom-in-dyn')).click();
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  const zoomed = await readRecord(page);
+  expect(zoomed.visual_renderer.effective_depth).toBeGreaterThan(initial.visual_renderer.effective_depth);
+  expect(zoomed.visual_renderer.pixel_radius_world).toBeLessThan(initial.visual_renderer.pixel_radius_world);
+  expect(zoomed.k_max).toBe(8);
+
+  await fillNumber(page, '#boundaryDepth', 17);
+  await (await reveal(page, '#adaptiveBoundary')).uncheck();
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  const manual = await readRecord(page);
+  expect(manual.visual_renderer).toMatchObject({ effective_depth: 17, requested_base_depth: 17, adaptive: false });
+  expect(manual.k_max).toBe(8);
+  const url = await shareUrl(page);
+  const hash = new URLSearchParams(new URL(url).hash.slice(1));
+  expect(hash.get('bdepth')).toBe('17');
+  expect(hash.get('badapt')).toBe('0');
+  await page.goto('/');
+  await page.goto(url);
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  await expect(page.locator('#boundaryDepth')).toHaveValue('17');
+  await expect(page.locator('#adaptiveBoundary')).not.toBeChecked();
+  const restored = await readRecord(page);
+  expect(restored.visual_renderer).toMatchObject({ effective_depth: 17, requested_base_depth: 17, adaptive: false });
+
+  await select(page, '#original-renderer-mode', 'prefix');
+  await expect(page.locator('#prefix-settings')).toBeVisible();
+  await expect(page.locator('#boundary-settings')).not.toBeVisible();
+  await select(page, '#original-renderer-mode', 'histogram');
+  await expect(page.locator('#histogram-settings')).toBeVisible();
+  await expect(page.locator('#prefix-settings')).not.toBeVisible();
+});
 
 test('immersive workspace has an accessible drawer, view switch and synchronized quick arity', async ({ page, isMobile }) => {
   await open(page);
@@ -279,10 +376,13 @@ test('scene chips, zoom and fit update the rendered view and shared state', asyn
   await expect(page.locator('#btn-layer-difference')).toHaveAttribute('aria-pressed', 'true');
 
   await page.locator('#btn-view-param').click();
-  await page.locator('#btn-locus-rn').click();
-  await expect(page.locator('#btn-locus-rn')).toHaveAttribute('aria-pressed', 'true');
-  hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
-  expect(hash.get('pm')).toBe('rn');
+  for (const mode of ['mn0', 'mn1']) {
+    await page.locator(`#btn-locus-${mode}`).click();
+    await expect(page.locator(`#btn-locus-${mode}`)).toHaveAttribute('aria-pressed', 'true');
+    await expectInsideViewport(page, `#btn-locus-${mode}`);
+    hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
+    expect(hash.get('pm')).toBe(mode);
+  }
   await page.locator('#btn-locus-compare').click();
   await expect(page.locator('#btn-locus-compare')).toHaveAttribute('aria-pressed', 'true');
   hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
@@ -292,7 +392,7 @@ test('scene chips, zoom and fit update the rendered view and shared state', asyn
   await expect(page.locator('#parameter-canvas')).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
 });
 
-test('M_n, R_n and comparison pixels stay distinct while JSON retains the M_n record', async ({ page }) => {
+test('M_n, M_n^0, M_n^1 and comparison pixels preserve their definitions and M_n record', async ({ page }) => {
   // This magnified classification fixture needs only a narrow neighborhood.
   // Preserve horizontal scale and the independent probes while bounding the
   // number of expensive search pixels on slower CI machines. Full viewport
@@ -301,13 +401,15 @@ test('M_n, R_n and comparison pixels stay distinct while JSON retains the M_n re
   await open(page, '#n=2&cx=1.2&cy=.9&k=12&l=1000&pm=mn&focus=parameter&pcx=1.2&pcy=.9&pz=.02&layers=0000000');
   const canvas = page.locator('#parameter-canvas');
   let witness;
-  for (const mode of ['mn', 'rn', 'compare']) {
+  for (const mode of ['mn', 'mn0', 'mn1', 'compare']) {
     await (await reveal(page, `#btn-locus-${mode}`)).click();
     await expect(page.locator(`#btn-locus-${mode}`)).toHaveAttribute('aria-pressed', 'true');
     await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
     await expect(page.locator('#stat-verdict')).toHaveText('Interior-offLens');
     // The independent n=2 witness has an off-lens M_n trap hit but is outside
-    // R_n. Probe its small stable neighborhood at c=1.202+.901i, away from the
+    // M_n^0. It is also outside M_n^1: for n=2, the complementary first digit
+    // is 0, so M_n^1 requires c² in E(c,2). Im(c²)=2.16 exceeds the vertical
+    // support sum Σ|Im(c^-j)|≈1.4113. Probe the stable neighborhood at c=1.202+.901i, away from the
     // selected-point marker at the viewport center (span .02, center 1.2+.9i).
     const coverage = await canvas.evaluate(element => {
       const x = Math.round(element.width * 0.6);
@@ -319,7 +421,7 @@ test('M_n, R_n and comparison pixels stay distinct while JSON retains the M_n re
       }
       return marked / 81;
     });
-    if (mode === 'rn') expect(coverage, 'R_n exterior is white').toBeLessThan(0.01);
+    if (mode === 'mn0' || mode === 'mn1') expect(coverage, `${mode} exterior is white`).toBeLessThan(0.01);
     else expect(coverage, `${mode} shows the M_n off-lens result`).toBeGreaterThan(0.9);
     const record = await readRecord(page);
     expect(record.n).toBe(2);
@@ -331,15 +433,50 @@ test('M_n, R_n and comparison pixels stay distinct while JSON retains the M_n re
     expect(record.parameter_view.search_record_set).toBe('M_n');
     if (mode === 'mn') {
       witness = record.word;
-      expect(record.parameter_view.rn).toBeNull();
     } else {
       expect(record.word).toEqual(witness);
-      expect(record.parameter_view.rn.verdict).toBe('Exterior');
-      expect(record.parameter_view.rn.usesTrap).toBe(false);
-      await expect(page.locator('#stat-view-detail')).toContainText('Rₙ: Exterior');
+      const set = mode === 'mn1' ? 'mn1' : 'mn0';
+      expect(record.parameter_view[set].verdict).toBe('Exterior');
+      await expect(page.locator('#stat-view-detail')).toContainText('Exterior');
     }
+    expect(record.parameter_view).not.toHaveProperty('rn');
     const hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
     expect(hash.get('pm')).toBe(mode);
+  }
+});
+
+test('complementary first digits distinguish M_n^1 from M_n^0 in actual parameter pixels', async ({ page }) => {
+  // At n=2, c=1+i belongs to M_n^0: the original-digit inverse orbit uses +1,
+  // then repeats -1 forever at -1+i. M_n^1 instead has only first digit 0 and
+  // would require c²=2i in E(c,2), whose exact vertical support is 5/3 < 2.
+  // A tiny neighborhood remains a finite survivor at depth 12; the off-center
+  // patch avoids the selected-point marker and preserves the exact witness.
+  await page.setViewportSize({ width: page.viewportSize().width, height: 520 });
+  await open(page, '#n=2&cx=1&cy=1&k=12&l=1000&pm=mn0&focus=parameter&pcx=1&pcy=1&pz=.0002&layers=0000000&backend=cpu');
+  const canvas = page.locator('#parameter-canvas');
+  for (const mode of ['mn0', 'mn1']) {
+    await (await reveal(page, `#btn-locus-${mode}`)).click();
+    await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+    const coverage = await canvas.evaluate(element => {
+      const x = Math.round(element.width * 0.6);
+      const y = Math.round(element.height / 2 - element.width * 0.05);
+      const data = element.getContext('2d').getImageData(x - 4, y - 4, 9, 9).data;
+      let marked = 0;
+      for (let offset = 0; offset < data.length; offset += 4) {
+        if (Math.min(data[offset], data[offset + 1], data[offset + 2]) < 220) marked++;
+      }
+      return marked / 81;
+    });
+    if (mode === 'mn0') expect(coverage, 'M_n^0 contains finite survivors near the periodic witness').toBeGreaterThan(0.9);
+    else expect(coverage, 'M_n^1 is outside its exact vertical support').toBeLessThan(0.01);
+    const record = await readRecord(page);
+    expect(record.parameter_view.mode).toBe(mode);
+    if (mode === 'mn0') {
+      expect(record.parameter_view.mn0.stopReason).toBe('depth-cap');
+      expect(record.parameter_view.mn0.displayReason).toBe('finite-survival');
+    } else {
+      expect(record.parameter_view.mn1.verdict).toBe('Exterior');
+    }
   }
 });
 
@@ -437,6 +574,7 @@ test('legacy links preserve their selected sets and vertical camera span through
   await expect(page.locator('#param-imag')).toHaveValue('2');
   await expect(page.locator('#show-collinear-attractor')).toBeChecked();
   await expect(page.locator('#show-difference-attractor')).not.toBeChecked();
+  await expect(page.locator('#original-renderer-mode')).toHaveValue('boundary');
   const aspect = await canvas.evaluate(element => element.width / element.height);
   const url = await shareUrl(page);
   const hash = new URLSearchParams(new URL(url).hash.slice(1));
@@ -457,6 +595,7 @@ test('legacy links preserve their selected sets and vertical camera span through
 
 test('startup finishes both scientific panels with real pixel content', async ({ page, isMobile }, testInfo) => {
   await open(page);
+  await expect(page.locator('#original-renderer-mode')).toHaveValue('boundary');
   await expect(page.locator('#stat-verdict')).toHaveText('Undetermined');
   await expect(page.locator('#arity-slider')).toHaveValue('4');
   await expect(page.locator('#param-real')).toHaveValue('1.5');
@@ -552,7 +691,7 @@ test('partial and malformed share hashes preserve defaults and enforce bounds', 
   await expect(page.locator('#param-kmax')).toHaveValue('37');
   await expect(page.locator('#param-real')).toHaveValue('0.5');
   await expect(page.locator('#param-imag')).toHaveValue('1.1');
-  await expect(page.locator('#original-renderer-mode')).toHaveValue('prefix');
+  await expect(page.locator('#original-renderer-mode')).toHaveValue('boundary');
   await expect(page.locator('#palette-mode')).toHaveValue('research');
 
   await page.goto('/#n=-9&k=-9&l=999999&q=999&hsamples=99999999&hseed=99999999999');
@@ -637,11 +776,12 @@ test('share URL restores custom colors, renderer settings, exact coordinates and
 });
 
 for (const edit of [
-  { name: 'histogram seed', selector: '#histogram-seed', value: '314159', hashKey: 'hseed' },
+  { name: 'histogram seed', selector: '#histogram-seed', value: '314159', hashKey: 'hseed', renderer: 'histogram' },
   { name: 'search depth', selector: '#param-kmax', value: '19', hashKey: 'k' },
 ]) {
   test(`uncommitted ${edit.name} survives a real resize before blur`, async ({ page }) => {
     await open(page);
+    if (edit.renderer) await select(page, '#original-renderer-mode', edit.renderer);
     const input = await reveal(page, edit.selector);
     const canvas = page.locator('#dynamical-canvas');
     await expect(canvas).toHaveAttribute('data-render-state', 'complete');
@@ -716,7 +856,8 @@ test('keyboard selection, undo/redo, focus and resize preserve usable scientific
 });
 
 test('out-of-range reciprocal remains an explicit undetermined record', async ({ page }) => {
-  await open(page, '#cx=0&cy=5e-324');
+  await page.goto('/#cx=0&cy=5e-324&focus=dynamical&renderer=boundary&mode=collinear&layers=0100000');
+  await expect(page.locator('#dynamical-canvas')).toHaveAttribute('data-render-state', 'complete');
   await expect(page.locator('#stat-verdict')).toHaveText('Undetermined');
   const record = await readRecord(page);
   expect(record.input_parameter).toEqual({ re: 0, im: 5e-324 });
@@ -724,6 +865,17 @@ test('out-of-range reciprocal remains an explicit undetermined record', async ({
   expect(record.verdict).toBe('Undetermined');
   expect(record.stop_reason).toBe('numerical-range');
   expect(record.proof_status).toBe('bounded-search-undetermined');
+  expect(record.visual_renderer).toMatchObject({ available: false, stop_reason: 'numerical-range',
+    effective_depth: 0, effective_work_limit: 0, self_covering_region: false });
+
+  // A representable parameter just above the unit circle also exceeds the
+  // conservative enclosure arithmetic range; mathematical lens eligibility
+  // must not be reported as a capture computation that actually ran.
+  await page.goto('/#n=3&cx=.6&cy=.8000000000000003&focus=dynamical&renderer=boundary&mode=collinear&layers=0100000');
+  await expect(page.locator('#dynamical-canvas')).toHaveAttribute('data-render-state', 'complete');
+  const closeToUnit = await readRecord(page);
+  expect(closeToUnit.visual_renderer).toMatchObject({ available: false, stop_reason: 'numerical-range',
+    effective_depth: 0, effective_work_limit: 0, self_covering_region: false });
 });
 
 test('a slow preset cannot replace a newer selection and invalid JSON uses the fallback', async ({ page }) => {

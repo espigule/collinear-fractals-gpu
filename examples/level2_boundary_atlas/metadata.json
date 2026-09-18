@@ -10,11 +10,14 @@
   },
   "k_max": 37,
   "L_max": 1000,
-  "renderer": "prefix-cylinder",
-  "renderer_depth": 7,
+  "renderer": "capture-escape-boundary",
   "mode": "level2-boundary-atlas",
   "expected_verdict": "Interior",
   "proof_status": "exploratory",
   "related_work": "2026 finite-capture atlas and boundary-layer inspection",
-  "limitations": "This metadata records an exploratory atlas entry. Theorem-level proof does not rely on visual inspection."
+  "limitations": "This metadata records an exploratory atlas entry. Theorem-level proof does not rely on visual inspection.",
+  "advanced_prefix_depth": 7,
+  "requested_boundary_depth": 0,
+  "adaptive_boundary": true,
+  "first_level_pieces": true
 }

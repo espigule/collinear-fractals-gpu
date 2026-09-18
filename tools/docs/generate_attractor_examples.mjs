@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
 import { alphabet } from '../../src/math/alphabets.mjs';
 import { attractorBounds } from '../../src/math/attractor_bounds.mjs';
-import { choosePrefixDepth, prefixCenters, tailRadius } from '../../src/math/prefix_cylinders.mjs';
+import { prefixCenters, tailRadius } from '../../src/math/prefix_cylinders.mjs';
 import { colorForPiece, hexToRgb } from '../../src/renderers/palettes.mjs';
 import {
   DEFAULT_EXPLORER_STATE, decodeExplorerState, encodeExplorerState, normalizeExplorerState
@@ -92,7 +92,8 @@ async function preset(id, label, parameterLabel) {
 function interactiveView(example, spanX) {
   const state = normalizeExplorerState({
     n: example.n, cx: example.c.re, cy: example.c.im,
-    comparisonMode: 'collinear', rendererMode: 'prefix',
+    comparisonMode: 'collinear', rendererMode: 'boundary',
+    boundaryDepth: 0, adaptiveBoundary: true,
     showCollinear: true, showDifference: false, showTrap: false,
     showEnclosure: false, showTree: false, showPath: false, showEscapeStrata: false,
     firstLevelPieces: true, palette: 'research', originalAttractorOpacity: PIECE_OPACITY,
@@ -101,17 +102,18 @@ function interactiveView(example, spanX) {
   }, DEFAULT_EXPLORER_STATE);
   const encoded = encodeExplorerState(state);
   assert.deepEqual(decodeExplorerState(encoded), state, 'Interactive links must roundtrip the complete state');
-  const browserDepth = choosePrefixDepth(example.c, example.n, DEPTH);
   return {
     interactive_url: `${EXPLORER_URL}#${encoded}`,
     interactive_rendering: {
       corresponding_view_only: true,
-      requested_prefix_depth: DEPTH,
-      default_browser_maximum_prefixes: browserDepth.maxPrefixes,
-      expected_prefix_depth_with_default_cap: browserDepth.depth,
-      expected_prefix_count_with_default_cap: browserDepth.estimatedPrefixes,
-      depth_reduced_by_default_cap: browserDepth.truncatedByWorkCap,
-      note: 'This URL opens the corresponding original-attractor view, not a pixel-identical reproduction. The browser uses its default prefix work cap; its viewport aspect, display marks, and per-prefix compositing also depend on the interactive renderer.'
+      renderer_mode: 'boundary',
+      requested_boundary_depth: 0,
+      automatic_base_depth: example.n === 2 ? 16 : 12,
+      adaptive_boundary: true,
+      maximum_effective_boundary_depth: 100,
+      advanced_prefix_depth: DEPTH,
+      resource_cap_result: 'unresolved',
+      note: 'This URL opens the corresponding original-attractor view using adaptive capture-and-escape boundary rendering. Its effective depth depends on viewport zoom and raster resolution; GPU previews have separate depth/work caps before automatic CPU refinement. The committed figure remains a complete depth-eight prefix illustration, reproduced by this generator.'
     }
   };
 }

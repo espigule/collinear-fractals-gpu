@@ -11,12 +11,13 @@
 const PARAMETER_JOB = {
   kind: 'parameter', width: 1, height: 1, spanX: 12,
   n: 3, cx: 0, cy: 2, kMax: 12, LMax: 32, tol: 1e-8,
+  escapeDepth: 12, boundaryWork: 20000,
   parameterMode: 'compare', showDifference: true,
   showOriginalSurvival: true, showEscapeStrata: true, survivalOpacity: 0.45
 };
 
 const DYNAMICAL_JOB = {
-  ...PARAMETER_JOB, kind: 'dynamical', n: 4, cx: 0, cy: 2
+  ...PARAMETER_JOB, kind: 'dynamical', n: 4, cx: 0, cy: 2, originalRenderer: 'survival'
 };
 
 // Surviving branches can meet subdivision boundaries even when the queried
@@ -30,14 +31,14 @@ const CORE_GPU_FIXTURES = [
   {
     name: 'parameter: wide-margin lens trap',
     job: { ...PARAMETER_JOB, center: { x: 0.5, y: 1.1 } },
-    primary: [1], secondary: [4, 7, 8], cpuRole: 'compare',
-    rationale: 'The Mn depth-zero trap has margins greater than 0.81. Rn fills the bounded queue; it must remain unresolved.'
+    primary: [1], secondary: [1], cpuRole: 'compare',
+    rationale: 'Both the Mn trap and the independent canonical original-alphabet trap capture this point at depth zero.'
   },
   {
-    name: 'parameter: exact R3 finite expansion stays unresolved',
+    name: 'parameter: exact M30 finite expansion stays a finite survivor',
     job: { ...PARAMETER_JOB, center: { x: 1, y: 1 }, kMax: 8 },
     primary: [1], secondary: SURVIVAL_CODES, cpuRole: 'compare',
-    rationale: 'c=1+i=2-2/c gives digits [2,-2,0,...] in A3. Mn reaches its lens trap, while an Rn survival display is not an interior proof.'
+    rationale: 'c=1+i=2-2/c gives digits [2,-2,0,...] in A3. Mn reaches its lens trap; original DFS survival does not assert interior without the canonical original trap.'
   },
   {
     name: 'parameter: Mn and Rn have distinct outcomes',
@@ -114,18 +115,18 @@ const CORE_GPU_FIXTURES = [
   // Budget and domain controls are semantic assertions, not visual tolerances.
   {
     name: 'budget: zero depth is retained',
-    job: { ...PARAMETER_JOB, center: { x: 1.2, y: 0.9 }, n: 2, kMax: 0 },
+    job: { ...PARAMETER_JOB, center: { x: 1.2, y: 0.9 }, n: 2, kMax: 0, escapeDepth: 0 },
     primary: [3], secondary: [3], cpuRole: 'compare',
-    rationale: 'Both initial points lie inside their enclosures but outside any applicable Mn trap. No inverse step is authorized at kMax=0.'
+    rationale: 'Both initial points lie inside their enclosures but outside their applicable traps. Both independent depth budgets are explicitly zero.'
   },
   {
     name: 'budget: one-node queue cap is not exhaustion',
     job: { ...PARAMETER_JOB, center: { x: 1, y: 1 }, kMax: 8, LMax: 1 },
-    primary: [4], secondary: [4], cpuRole: 'compare',
-    rationale: 'Ascending-digit traversal reaches the one-node cap at depth 1 before the Mn trap word; a capped queue cannot establish exterior or completed survival.'
+    primary: [4], secondary: [3, 8], cpuRole: 'compare',
+    rationale: 'Mn reaches its one-node frontier cap, while original DFS retains its independent depth/work budget and may finish a branch; it has no frontier cap.'
   },
   {
-    name: 'mode: Rn-only output cannot become an interior label',
+    name: 'mode: legacy Rn alias uses canonical M_n0 without a false trap',
     job: { ...PARAMETER_JOB, center: { x: 1, y: 1 }, kMax: 8, parameterMode: 'rn' },
     primary: SURVIVAL_CODES, cpuRole: 'rn',
     rationale: 'Rn-only mode places its unresolved survival result in the primary channel and never borrows the Mn lens trap.'

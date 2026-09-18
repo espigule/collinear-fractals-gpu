@@ -376,3 +376,40 @@ test('disposing pending work is idempotent and suppresses messages already queue
   await turn();
   assert.equal(observed.tiles.length + observed.completed.length + observed.errors.length, 0);
 });
+
+test('optional first-piece arrays preserve ownership and reach the compositor unchanged', async t => {
+  const h = harness({ maxWorkers: 1 });
+  t.after(() => h.pool.dispose());
+  const observed = recorder();
+  h.pool.render(job('dynamical', { width: 2, height: 2, originalRenderer: 'boundary', firstLevelPieces: true }), observed.callbacks);
+  await turn();
+  const worker = h.workers.find(value => value.pending);
+  const response = worker.response();
+  response.pieces = Uint8Array.from([0, 4, 0, 1, 0, 0, 0, 3]);
+  worker.pending = null;
+  worker.emit('message', { data: response });
+  await turn();
+  assert.equal(observed.errors.length, 0);
+  assert.equal(observed.completed.length, 1);
+  assert.equal(observed.tiles[0].pieces, response.pieces, 'the pool must not copy or discard piece metadata');
+  assert.deepEqual([...observed.tiles[0].pieces], [0, 4, 0, 1, 0, 0, 0, 3]);
+});
+
+test('malformed piece attachments cannot enter the compositor or complete a frame', async t => {
+  for (const invalid of [null, new Uint8Array(7), new Uint16Array(8), new Array(8).fill(0)]) {
+    const h = harness({ maxWorkers: 1 });
+    t.after(() => h.pool.dispose());
+    const observed = recorder();
+    h.pool.render(job('dynamical', { width: 2, height: 2 }), observed.callbacks);
+    await turn();
+    const worker = h.workers.find(value => value.pending);
+    worker.emit('message', { data: { ...worker.response(), pieces: invalid } });
+    await turn();
+    assert.equal(observed.tiles.length, 0);
+    assert.equal(observed.completed.length, 0);
+    assert.equal(observed.errors.length, 1);
+    assert.match(observed.errors[0].error.message, /malformed tile/);
+    assert.equal(h.pool.supported, false);
+    assert.ok(h.workers.every(value => value.terminated));
+  }
+});

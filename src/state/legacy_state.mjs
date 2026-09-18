@@ -4,8 +4,9 @@
  *
  * Mapping verified against the archived explorer's DEFAULT_PARAMS,
  * loadParamsFromHash(), and getWorldCoords(): legacy keys are n, cx, cy,
- * panels, centerX, centerY, zoom. The four panel bits are Rn / E(c,n) / Mn /
- * half-E(c,2n-1). The legacy camera's vertical world span is 2 / zoom;
+ * panels, centerX, centerY, zoom. The four panel bits are M_n^0 (formerly Rn) /
+ * E(c,n) / Mn / half-E(c,2n-1); the archive has no M_n^1 bit.
+ * The legacy camera's vertical world span is 2 / zoom;
  * the current camera stores horizontal world width, so target aspect ratios
  * are required to translate its zoom. No cRe/cIm aliases are assumed.
  */
@@ -74,14 +75,14 @@ function isForcedLegacy(params) {
 }
 
 function panelsToState(panels) {
-  const rn = panels[0] === '1';
+  const mn0 = panels[0] === '1';
   const collinear = panels[1] === '1';
   const mn = panels[2] === '1';
   const difference = panels[3] === '1';
-  const parameter = rn || mn;
+  const parameter = mn0 || mn;
   const dynamical = collinear || difference;
   return {
-    parameterMode: rn ? (mn ? 'compare' : 'rn') : 'mn',
+    parameterMode: mn0 ? (mn ? 'compare' : 'mn0') : 'mn',
     focusedPanel: parameter && dynamical ? 'both' : dynamical ? 'dynamical' : 'parameter',
     comparisonMode: collinear && difference ? 'overlay' : collinear ? 'collinear' : difference ? 'difference' : 'overlay',
     showCollinear: collinear,
@@ -178,7 +179,7 @@ export function importLegacyExplorerState(input, defaults = DEFAULT_EXPLORER_STA
 
 /**
  * Resolve current hash links and archived links with explicit precedence:
- * 1. Any current-only hash key (backend, pm, k, pz, layers, ...) selects current decoding.
+ * 1. Any current-only hash key (backend, pm, bdepth, badapt, k, ...) selects current decoding.
  * 2. A legacy-specific hash key selects legacy decoding of the whole hash.
  * 3. An n/cx/cy-only hash stays current unless the query has legacy=1 or
  *    from=legacy-collinear, supplied by the archived-route redirect.

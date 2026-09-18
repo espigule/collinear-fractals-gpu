@@ -89,7 +89,7 @@ test('modern hash keys remain authoritative even when the short-route redirect r
   assert.equal(imported.state.n, 5);
   assert.equal(imported.state.cx, 1);
   assert.equal(imported.state.cy, 2);
-  assert.equal(imported.state.parameterMode, 'rn');
+  assert.equal(imported.state.parameterMode, 'mn0');
   assert.equal(imported.state.kMax, 0);
   assert.equal(imported.state.focusedPanel, 'dynamical');
 });

@@ -9,7 +9,8 @@ exploratory: this is a preset and metadata target for future atlas development,
 not a completed atlas or theorem-level certificate.
 
 To reproduce it, open the explorer, choose this example from the curated
-example list, and keep the original-attractor renderer in prefix-cylinder mode.
+example list, and use the default sharp boundary renderer. Its adaptive
+visual depth is separate from the finite-capture search depth.
 The finite-search controls remain `k_max = 37` and `L_max = 1000`.
 
 The entry relates to the finite-capture layer and boundary-atlas workflow in the

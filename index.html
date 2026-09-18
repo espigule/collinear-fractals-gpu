@@ -128,25 +128,38 @@
             <div class="section-content">
               <div class="control-group">
                 <label for="original-renderer-mode">Collinear attractor renderer</label>
-                <select id="original-renderer-mode">
-                  <option value="prefix">Prefix cylinders</option>
-                  <option value="histogram">Seeded histogram</option>
-                  <option value="survival">Search survivors (diagnostic)</option>
+                <select id="original-renderer-mode" aria-describedby="attractor-renderer-help">
+                  <option value="boundary" selected>Sharp boundary</option>
+                  <optgroup label="Advanced renderers">
+                    <option value="prefix">Prefix cylinders</option>
+                    <option value="histogram">Seeded histogram</option>
+                    <option value="survival">Finite escape (diagnostic)</option>
+                  </optgroup>
                 </select>
               </div>
-              <div class="field-grid">
+              <div class="renderer-settings" id="boundary-settings">
                 <div class="field">
-                  <label for="attractor-depth">Visual depth</label>
+                  <label for="boundaryDepth">Boundary depth · 0 = automatic</label>
+                  <input type="number" id="boundaryDepth" value="0" min="0" max="100" step="1" inputmode="numeric" aria-describedby="boundary-depth-help">
+                </div>
+                <label class="checkbox-label" for="adaptiveBoundary"><input type="checkbox" id="adaptiveBoundary" checked><span>Increase detail as you zoom</span></label>
+                <p class="control-help" id="boundary-depth-help">Automatic depth starts at 16 for two maps and 12 otherwise. Adaptive detail increases the depth when you zoom in.</p>
+              </div>
+              <div class="renderer-settings" id="prefix-settings" hidden>
+                <div class="field">
+                  <label for="attractor-depth">Prefix depth</label>
                   <input type="number" id="attractor-depth" value="7" min="1" max="12" step="1" inputmode="numeric">
                 </div>
+              </div>
+              <div class="renderer-settings" id="histogram-settings" hidden>
                 <div class="field">
                   <label for="histogram-seed">Histogram seed</label>
                   <input type="number" id="histogram-seed" value="20260227" min="1" step="1" inputmode="numeric">
                 </div>
-              </div>
-              <div class="field">
-                <label for="histogram-samples">Histogram samples</label>
-                <input type="number" id="histogram-samples" value="50000" min="1000" max="1000000" step="1000" inputmode="numeric">
+                <div class="field">
+                  <label for="histogram-samples">Histogram samples</label>
+                  <input type="number" id="histogram-samples" value="50000" min="1000" max="1000000" step="1000" inputmode="numeric">
+                </div>
               </div>
               <label class="checkbox-label" for="first-level-pieces"><input type="checkbox" id="first-level-pieces" checked><span>Color first-level pieces</span></label>
               <div class="control-group">
@@ -156,7 +169,7 @@
                   <output class="slider-val" id="original-attractor-opacity-val" for="original-attractor-opacity">72%</output>
                 </div>
               </div>
-              <p class="control-help">These visual settings do not change the selected search limits.</p>
+              <p class="control-help" id="attractor-renderer-help">Sharp boundary evaluates the attractor at pixel scale. Piece colors follow the first digit. These visual settings do not change the selected search limits.</p>
             </div>
           </details>
 
@@ -233,8 +246,9 @@
         </div>
         <div class="panel-mode-switch" role="group" aria-label="Parameter set">
           <button type="button" id="btn-locus-mn" data-parameter-mode="mn" aria-pressed="true" title="Connectedness locus M_n"><span class="math">M</span><sub>n</sub></button>
-          <button type="button" id="btn-locus-rn" data-parameter-mode="rn" aria-pressed="false" title="Marked-point set R_n"><span class="math">R</span><sub>n</sub></button>
-          <button type="button" id="btn-locus-compare" data-parameter-mode="compare" aria-pressed="false" title="Compare the parameter sets">Compare</button>
+          <button type="button" id="btn-locus-mn0" data-parameter-mode="mn0" aria-pressed="false" title="M_n^0: c belongs to E(c,n)" aria-label="M n zero: original digits"><span class="indexed-math"><span class="math">M</span><span class="math-indices"><sup>0</sup><sub>n</sub></span></span></button>
+          <button type="button" id="btn-locus-mn1" data-parameter-mode="mn1" aria-pressed="false" title="M_n^1: c belongs to (D_n minus A_n) + (1/c)E(c,n)" aria-label="M n one: complementary first digit"><span class="indexed-math"><span class="math">M</span><span class="math-indices"><sup>1</sup><sub>n</sub></span></span></button>
+          <button type="button" id="btn-locus-compare" data-parameter-mode="compare" aria-pressed="false" title="Compare M_n and M_n^0">Compare</button>
         </div>
         <div class="canvas-container">
           <canvas id="parameter-canvas" tabindex="0" aria-label="Parameter-plane plot" aria-describedby="parameter-hint">Choose a parameter set and use the selected parameter fields to explore a point. The current search result appears in the bottom strip.</canvas>
@@ -251,6 +265,7 @@
           <div class="legend-item"><span class="legend-color" id="legend-offlens-color" aria-hidden="true"></span><span>Off-lens trap hit</span></div>
           <div class="legend-item"><span class="legend-color" id="legend-undetermined-color" aria-hidden="true"></span><span>Undetermined</span></div>
           <div class="legend-item"><span class="legend-color" id="legend-exterior-color" aria-hidden="true"></span><span>Exterior</span></div>
+            <div class="legend-item" id="legend-subset-survival" hidden><span class="legend-color" style="background:#328a94" aria-hidden="true"></span><span>Mₙ⁰ finite-depth survivors</span></div>
             <p class="legend-note" id="parameter-view-note" hidden></p>
           </div>
         </details>
@@ -288,6 +303,7 @@
           <div class="legend-item"><span class="legend-color legend-locator" aria-hidden="true"></span><span>Evaluated parameter</span></div>
           <div class="legend-item"><span class="legend-color legend-origin" aria-hidden="true"></span><span>Origin 0</span></div>
             <p class="legend-note"><span class="math">N</span> = 2<span class="math">n</span> − 1. The difference attractor is displayed at half scale.</p>
+            <p class="legend-note" id="boundary-renderer-note">Sharp boundary uses first-digit colors for captures and finite-depth survivors. Unresolved pixels are shown separately.</p>
           </div>
         </details>
       </section>

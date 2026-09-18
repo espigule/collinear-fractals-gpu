@@ -29,7 +29,7 @@ $|c|>1$.
 | Browser parameter locator and share coordinates | Reciprocal coordinates inside the unit disk; direct expanding coordinates outside it. |
 | Browser ES-module search | Uses the same reciprocal normalization as the browser. |
 | JavaScript, Python, Swift and symbolic reference packages | Take the expanding $c$ directly; no reciprocal conversion is performed. |
-| Prefix/histogram renderers | Take an already normalized expanding $c$ directly. |
+| Original-attractor boundary/prefix/histogram renderers | Take an already normalized expanding $c$ directly. |
 
 For $0<|p|<1$, the browser uses $c=1/p$; for $|p|>1$, it uses $c=p$.
 For example, browser input $p=0.4+0.3i$ uses $c=1.6-1.2i$.
@@ -106,7 +106,34 @@ for the evidentiary meaning of a result.
 
 ## Visual renderers and computational cost
 
-The prefix renderer draws complete levels up to its point budget, reducing the
+The default `boundary` renderer evaluates the original $E(c,n)$ by depth-first
+inverse search. It permits canonical trap capture only when
+$|c|^2+2|\mathrm{Re}\,c|<n$, in the non-real expanding domain. This
+original-alphabet rule is valid for both alphabet parities; it does not reuse
+the difference-alphabet trap or an off-lens acceptance rule.
+
+An exhausted inverse tree is escape. An admissible branch reaching the
+requested depth is finite survival, while a work or stack cap is unresolved.
+Outside the original-alphabet self-covering region, only enclosure pruning and
+finite survival contribute to the boundary image. First-level colors identify
+the outermost original digit. These outcomes describe floating-point visual
+coverage rather than an interval-certified boundary.
+
+The dynamical raster uses a pixel footprint: its radius is
+$\mathrm{spanX}/(\sqrt{2}\,\mathrm{rasterWidth})$ for square pixels.
+The parameter raster uses zero geometric footprint, so screen resolution does
+not thicken $\mathcal M_n^0$ or $\mathcal M_n^1$. Numerical error guards
+remain a separate concern.
+
+Automatic boundary depth starts at 16 for two maps and 12 otherwise. A nonzero
+`boundaryDepth` overrides that base. Adaptation adds
+`ceil(log2(max(1, referenceSpan / spanX * rasterWidth / 768)))` and caps the
+result at 100. With adaptation disabled, depth stays at the selected base.
+The browser's boundary work budget is 20,000 digit evaluations per point;
+the GPU preview has smaller depth/work limits. None of these visual controls
+changes the selected $\mathcal M_n$ search's `kMax`, `LMax`, or tolerance.
+
+The advanced prefix renderer draws complete levels up to its point budget, reducing the
 actual depth when the requested level would exceed that budget. Metadata
 records both depths and `truncated_by_work_cap`. After $d$ prefix digits, a
 valid mathematical tail-radius estimate is
@@ -152,6 +179,27 @@ parameter and always uses binary64 arithmetic with the full requested search
 limits. Cross-kernel tests compare numerical results; they do not add interval
 guarantees.
 
+## Original and complementary marked-point sets
+
+The parameter views use the definitions
+
+$$
+\mathcal M_n^0=\{c:c\in E(c,n)\},\qquad
+\mathcal M_n^1=\{c:c\in A_{n-1}+c^{-1}E(c,n)\}.
+$$
+
+The first view uses $A_n$ at every inverse step. The second requires one
+first digit from $A_{n-1}$, then uses $A_n$ at every later step. A depth-zero
+original trap hit cannot bypass that complementary first step. The same
+original-alphabet membership engine supplies both searches, with a zero
+geometric pixel radius for parameter classification.
+
+`compare` displays $\mathcal M_n$ and $\mathcal M_n^0$ together. These are
+separate search results; $\mathcal M_n^0$ and $\mathcal M_n^1$ are not claimed
+to exhaust the full connectedness locus. The previous name $R_n$ survives as
+the input alias `rn`; decoding URLs, imported JSON, and old defaults produces
+canonical `mn0`, and new links always emit that name.
+
 ## Search JSON and schemas
 
 The certificate filename and `proof_status` field are retained for compatibility.
@@ -166,6 +214,10 @@ panels' actual rendering status, `selected_record_arithmetic: "binary64"`, and
 therefore describe a bounded float32 preview while the accompanying selected
 record describes a different, full-budget binary64 computation. Hidden panels
 have `null` rendering metadata rather than stale status from a previous view.
+Boundary visual metadata also records the requested base depth, adaptation,
+effective depth and work limit, pixel footprint, and self-covering condition.
+Finite survival, numerical capture, and resource-cap outcomes remain distinct
+from the selected connectedness record.
 
 `c` stores the effective parameter for replay in the language packages;
 `input_parameter` retains the original browser coordinates.

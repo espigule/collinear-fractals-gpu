@@ -15,7 +15,9 @@ self.addEventListener('message', ({ data: message }) => {
       if (preparedJobs.size > 2) preparedJobs.delete(preparedJobs.keys().next().value);
     }
     const tile = renderRasterTile(prepared, message.tile);
-    self.postMessage({ type: 'tile', jobId, tileId, ...tile }, [tile.data.buffer]);
+    const transfers = [tile.data.buffer];
+    if (tile.pieces) transfers.push(tile.pieces.buffer);
+    self.postMessage({ type: 'tile', jobId, tileId, ...tile }, transfers);
   } catch (error) {
     self.postMessage({
       type: 'error', jobId, tileId,

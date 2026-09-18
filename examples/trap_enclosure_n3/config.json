@@ -6,11 +6,13 @@
   "l_max": 1000,
   "mode": "trap-enclosure",
   "expected_status": "finite-search-record",
-  "renderer_mode": "prefix",
+  "renderer_mode": "boundary",
   "visual_renderer": {
-    "mode": "prefix",
+    "mode": "boundary",
     "depth": 7,
-    "first_level_pieces": true
+    "first_level_pieces": true,
+    "boundary_depth": 0,
+    "adaptive_boundary": true
   },
   "cases": [
     {

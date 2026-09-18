@@ -90,7 +90,7 @@ function fakeCanvasContext() {
   assert(!explorer.includes('dilatedGrid'), 'Legacy dilation grid remains in explorer.js.');
   assert(!explorer.includes('3x3'), 'Legacy dilation wording remains in explorer.js.');
   const { DEFAULT_EXPLORER_STATE } = await import('../src/state/explorer_state.mjs');
-  assert(DEFAULT_EXPLORER_STATE.rendererMode === 'prefix', 'Prefix-cylinder mode is not the default.');
+  assert(DEFAULT_EXPLORER_STATE.rendererMode === 'boundary', 'Capture-and-escape boundary mode is not the default.');
   assert(explorer.includes("state.rendererMode === 'survival'"), 'Survival renderer is not explicit.');
 
   const examples = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'examples', 'examples.json'), 'utf8'));

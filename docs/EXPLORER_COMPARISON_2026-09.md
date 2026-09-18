@@ -372,3 +372,37 @@ It does not freeze browser hardware or third-party CDN availability. The
 archive path supplies its date without modifying the preserved HTML, and
 the current About panel explains its historical role. Current numerical
 status, documentation, issues, and releases belong to the maintained project.
+
+## Sharp boundary extension — 18 September 2026
+
+This section records the subsequent working-source extension. The comparison,
+publication decisions, terminology, and QA counts above retain their original
+dates; their counts do not validate the new boundary shader or membership path.
+
+The default original-attractor image now uses adaptive capture-and-escape
+boundary rendering through the hybrid GPU-preview/CPU-worker pipeline. It
+evaluates full $E(c,n)$ coordinates, colors first-level pieces, and permits
+canonical capture only when $|c|^2+2|\mathrm{Re}\,c|<n$, including even
+alphabets. Outside that region it uses enclosure-pruned escape and finite
+survival. Work limits remain unresolved. Prefix and seeded-histogram drawings
+remain available as advanced visual modes.
+
+The maintained marked-point name is $\mathcal M_n^0=\{c:c\in E(c,n)\}$.
+The old $R_n$ spelling remains an input alias, and the archive's first panel
+bit maps to this same set. A new $\mathcal M_n^1$ view tests
+$c\in A_{n-1}+c^{-1}E(c,n)$: the first inverse digit is complementary and
+later digits are original. These views are separate from the full selected
+$\mathcal M_n$ connectedness record, with no claim that their union exhausts it.
+
+Boundary depth is independent of the selected search's `kMax` and `LMax`.
+Automatic base depth is 16 for two maps and 12 otherwise, with zoom/resolution
+adaptation capped at 100. The settings, requested/effective work limits, and
+geometric pixel footprint are reproducible state or rendering metadata.
+The footprint is used for dynamical coverage; parameter membership has zero
+geometric footprint. See the current [rendering architecture](RENDERING_ARCHITECTURE.md)
+and [validation requirements](VALIDATION.md) for the final-commit contract.
+
+The README's rendered illustrations retain their depth-eight prefix
+construction. Their interactive links and curated presets now open the sharp
+boundary view. This extension makes no physical-device performance claim;
+native shader, worker, and browser gates must pass on its final revision.

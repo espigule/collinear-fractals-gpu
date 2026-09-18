@@ -3,7 +3,9 @@
  *
  * Existing URL keys remain compatible. New links also retain the enclosure
  * tolerance, survival-overlay opacity, focused panel, custom palette, and
- * requested rendering backend. Backend preferences are portable; runtime
+ * requested rendering backend and adaptive boundary settings. The historical
+ * parameter mode rn imports as mn0; only canonical names are emitted.
+ * Backend preferences are portable; runtime
  * capability checks must not rewrite the user's requested setting.
  * Missing or invalid fields retain their defaults; finite out-of-range values
  * are clamped to browser work limits. Only explicitly supported own properties
@@ -28,7 +30,9 @@ export const DEFAULT_EXPLORER_STATE = Object.freeze({
   parameterMode: 'mn',
   backend: 'auto',
   comparisonMode: 'overlay',
-  rendererMode: 'prefix',
+  rendererMode: 'boundary',
+  boundaryDepth: 0,
+  adaptiveBoundary: true,
   attractorDepth: 7,
   histogramSeed: 20260227,
   histogramSamples: 50000,
@@ -60,6 +64,8 @@ const NUMBER_FIELDS = [
   ['cy', 'cy', -1e6, 1e6, false],
   ['paramZoom', 'pz', 1e-10, 1e6, false],
   ['dynZoom', 'dz', 1e-10, 1e6, false],
+  // Zero requests automatic depth; the renderer resolves it for the view.
+  ['boundaryDepth', 'bdepth', 0, 100, true],
   ['attractorDepth', 'adepth', 1, 12, true],
   ['histogramSeed', 'hseed', 1, 0xffffffff, true],
   ['histogramSamples', 'hsamples', 1000, 1000000, true],
@@ -74,11 +80,16 @@ const CENTER_FIELDS = [
 
 const ENUM_FIELDS = [
   ['backend', 'backend', ['auto', 'gpu', 'cpu']],
-  ['parameterMode', 'pm', ['mn', 'rn', 'compare']],
+  ['parameterMode', 'pm', ['mn', 'mn0', 'mn1', 'compare']],
   ['comparisonMode', 'mode', ['overlay', 'difference', 'collinear', 'escape']],
-  ['rendererMode', 'renderer', ['prefix', 'histogram', 'survival']],
+  ['rendererMode', 'renderer', ['boundary', 'prefix', 'histogram', 'survival']],
   ['palette', 'palette', ['research', 'print', 'contrast', 'custom']],
   ['focusedPanel', 'focus', ['both', 'parameter', 'dynamical']]
+];
+
+const BOOLEAN_FIELDS = [
+  ['firstLevelPieces', 'pieces'],
+  ['adaptiveBoundary', 'badapt']
 ];
 
 const COLOR_FIELDS = [
@@ -146,10 +157,12 @@ function sanitizeState(input, fallback) {
     };
   }
   for (const [key, , choices] of ENUM_FIELDS) {
-    const value = ownValue(input, key);
+    const supplied = ownValue(input, key);
+    // Rn is the archived name for M_n^0, including in exported JSON state.
+    const value = key === 'parameterMode' && supplied === 'rn' ? 'mn0' : supplied;
     result[key] = choices.includes(value) ? value : fallback[key];
   }
-  for (const key of [...LAYER_FIELDS, 'firstLevelPieces']) {
+  for (const key of [...LAYER_FIELDS, ...BOOLEAN_FIELDS.map(([key]) => key)]) {
     result[key] = booleanValue(ownValue(input, key), fallback[key]);
   }
   const colors = ownValue(input, 'customPalette');
@@ -187,7 +200,7 @@ export function encodeExplorerState(state) {
     params.set(yKey, numberToString(normalized[key].y));
   }
   for (const [key, urlKey] of ENUM_FIELDS) params.set(urlKey, normalized[key]);
-  params.set('pieces', normalized.firstLevelPieces ? '1' : '0');
+  for (const [key, urlKey] of BOOLEAN_FIELDS) params.set(urlKey, normalized[key] ? '1' : '0');
   params.set('layers', LAYER_FIELDS.map(key => normalized[key] ? '1' : '0').join(''));
   for (const [key, urlKey] of COLOR_FIELDS) params.set(urlKey, normalized.customPalette[key]);
   return params;
@@ -214,8 +227,10 @@ export function decodeExplorerState(hash, defaults = DEFAULT_EXPLORER_STATE) {
   for (const [key, urlKey] of ENUM_FIELDS) {
     if (params.has(urlKey)) candidate[key] = params.get(urlKey);
   }
-  const pieces = params.get('pieces');
-  if (pieces === '0' || pieces === '1') candidate.firstLevelPieces = pieces === '1';
+  for (const [key, urlKey] of BOOLEAN_FIELDS) {
+    const value = params.get(urlKey);
+    if (value === '0' || value === '1') candidate[key] = value === '1';
+  }
   const layers = params.get('layers');
   if (layers !== null && layers.length === 7 && /^[01]{7}$/.test(layers)) {
     LAYER_FIELDS.forEach((key, index) => { candidate[key] = layers[index] === '1'; });

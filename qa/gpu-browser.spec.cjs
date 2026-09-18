@@ -196,8 +196,31 @@ test('CPU fallback: native worker runtime failure finishes through the main-thre
   expect(record.rendering.parameter.fallback_reason).toMatch(/worker runtime failure/);
   await expect(page.locator('#render-backend-status')).toContainText('worker runtime failure');
   expect(record.rendering.parameter).toMatchObject({ arithmetic: 'binary64', phase: 'complete' });
+  const parameterPixels = await canvas.evaluate(element => element.width * element.height);
+  expect(record.rendering.parameter).toMatchObject({ pixels_completed: parameterPixels, total_pixels: parameterPixels });
   expect(record.verdict).toBe('Interior');
   await expect(page.locator('#btn-save-image')).toBeEnabled();
+
+  await page.goto('/#n=4&cx=0&cy=2&k=0&l=1&dcx=0&dcy=0&dz=12&focus=dynamical&mode=collinear&layers=0100000&renderer=boundary&bdepth=12&badapt=0&aop=1&backend=auto');
+  const dynamics = page.locator('#dynamical-canvas');
+  await expect(dynamics).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  await expect(dynamics).toHaveAttribute('data-render-backend', 'cpu-main-thread');
+  const samples = await dynamics.evaluate(element => {
+    const context = element.getContext('2d'), scale = element.width / 12;
+    return [3, -3, 4.25].map(x => {
+      const pixels = context.getImageData(Math.round(element.width / 2 + x * scale) - 2,
+        Math.round(element.height / 2 - 0.7 * scale) - 2, 5, 5).data;
+      let marked = 0;
+      for (let i = 0; i < pixels.length; i += 4) if (Math.min(...pixels.slice(i, i + 3)) < 220) marked++;
+      return marked;
+    });
+  });
+  expect(samples).toEqual([25, 25, 0]);
+  const dynamicRecord = await readRecord(page);
+  expect(dynamicRecord.rendering.dynamical).toMatchObject({ active_backend: 'cpu-main-thread', arithmetic: 'binary64' });
+  const dynamicalPixels = await dynamics.evaluate(element => element.width * element.height);
+  expect(dynamicRecord.rendering.dynamical).toMatchObject({ pixels_completed: dynamicalPixels, total_pixels: dynamicalPixels });
+  expect(dynamicRecord.rendering.dynamical.fallback_reason).toMatch(/worker runtime failure/);
 });
 
 test('WebGL2: production shaders satisfy independent classifications and CPU parity', async ({ page }, testInfo) => {
@@ -237,7 +260,7 @@ test('WebGL2: asymmetric original-attractor orientation survives canvas composit
     // enclosure. These exact pixel centers distinguish a GL vertical flip.
     const job = { kind: 'dynamical', width: 1, height: 3, spanX: 54 / 17,
       center: { x: 63 / 17, y: 0 }, n: 4, cx: 1.2, cy: 0.9,
-      kMax: 12, LMax: 32, tol: 1e-8, showDifference: false, showOriginalSurvival: true };
+      kMax: 12, LMax: 32, tol: 1e-8, showDifference: false, showOriginalSurvival: true, originalRenderer: 'survival' };
     const rendered = device.render(job, { ...colors, survivalOpacity: 1 });
     if (!rendered) throw new Error(device.reason);
     const copy = document.createElement('canvas'); copy.width = 1; copy.height = 3;
@@ -252,15 +275,136 @@ test('WebGL2: asymmetric original-attractor orientation survives canvas composit
   expect(result.display.filter((_, index) => index % 4 === 3)).toEqual([255, 255, 255]);
 });
 
+test('WebGL2: original parameter sets use independent depth and work budgets', async ({ page }) => {
+  await openHarness(page);
+  const result = await page.evaluate(() => {
+    const { device, colors } = window.gpuTest;
+    const base = { kind: 'parameter', width: 1, height: 1, spanX: 0.01,
+      center: { x: 1, y: 1 }, n: 2, kMax: 0, LMax: 1, tol: 1e-8,
+      escapeDepth: 16, boundaryWork: 20000, firstLevelPieces: true };
+    const jobs = [
+      { ...base, parameterMode: 'mn0' },
+      { ...base, parameterMode: 'mn1' },
+      { ...base, parameterMode: 'mn0', boundaryWork: 1 },
+      { ...base, parameterMode: 'mn0', escapeDepth: 0 },
+      { ...base, parameterMode: 'mn0', n: 3, center: { x: 0.5, y: 1.1 }, escapeDepth: 0 },
+      { ...base, parameterMode: 'mn1', n: 3, center: { x: 0.5, y: 1.1 }, escapeDepth: 0 },
+    ];
+    return jobs.map(job => {
+      const frame = device.render(job, colors);
+      if (!frame) throw new Error(device.reason);
+      return { codes: [...device.readClassification().data], pieces: [...device.readPieces().data], metadata: frame.metadata };
+    });
+  });
+  // 1+i = 1 - sum_(k>=1)(1+i)^(-k), so digits [1,-1,-1,...]
+  // survive in A2. The M21 complement digit is 0, whose image is 2i,
+  // beyond E(1+i,2)'s imaginary support 5/3.
+  expect(result[0].codes.slice(0, 2)).toEqual([3, 16]);
+  expect(result[0].pieces[0]).toBe(2);
+  expect(result[1].codes.slice(0, 2)).toEqual([0, 1]);
+  expect(result[2].codes[0]).toBe(7);
+  expect(result[2].pieces[0]).toBe(0);
+  expect(result[3].codes.slice(0, 2)).toEqual([3, 0]);
+  expect(result[4].codes.slice(0, 2)).toEqual([1, 0]); // canonical original root capture
+  expect(result[4].pieces[0]).toBe(0);
+  expect(result[5].codes.slice(0, 2)).toEqual([3, 0]); // complement cannot capture at root
+  expect(result[0].metadata.requested).toMatchObject({ depth: 0, frontier: 1, escape_depth: 16, boundary_work: 20000 });
+  expect(result[0].metadata.effective).toMatchObject({ escape_depth: 16, boundary_work: 4096 });
+  for (const entry of result) expect(entry.metadata.pixel_radius_world).toBe(0);
+});
+
+test('WebGL2: boundary fill uses independent piece indices and never colors resource caps as members', async ({ page }) => {
+  await openHarness(page);
+  const result = await page.evaluate(() => {
+    const { device, colors, colorizeRasterTile } = window.gpuTest;
+    const pieceColors = new Uint8Array([250, 10, 20, 20, 220, 30, 40, 50, 230, 170, 80, 200]);
+    const palette = { ...colors, pieceColors };
+    const base = { kind: 'dynamical', width: 1, height: 1, spanX: 0.01,
+      n: 4, cx: 0, cy: 2, kMax: 0, LMax: 1, tol: 1e-8,
+      escapeDepth: 12, boundaryWork: 20000, originalRenderer: 'boundary',
+      showDifference: false, showOriginalSurvival: true, firstLevelPieces: true, originalOpacity: 1 };
+    return [
+      { ...base, center: { x: 3, y: 0.75 } },
+      { ...base, center: { x: -3, y: -0.75 } },
+      { ...base, center: { x: 4.25, y: 0.75 } },
+      { ...base, center: { x: 3, y: 0.75 }, boundaryWork: 1 },
+      { ...base, center: { x: 0, y: 0 }, cx: 0.1, cy: 1.1, firstLevelPieces: false },
+      { ...base, center: { x: 0, y: 0 }, cx: 0.1, cy: 1.1 },
+    ].map(job => {
+      const rendered = device.render(job, palette);
+      if (!rendered) throw new Error(device.reason);
+      const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+      const context = canvas.getContext('2d'); context.drawImage(rendered.canvas, 0, 0);
+      const data = device.readClassification().data, pieces = device.readPieces().data;
+      return { data: [...data], pieces: [...pieces], color: [...context.getImageData(0, 0, 1, 1).data],
+        expected: [...colorizeRasterTile(data, job, palette, pieces)] };
+    });
+  });
+  expect(result[0].data.slice(2)).toEqual([3, 12]);
+  expect(result[0].pieces).toEqual([0, 4]);
+  expect(result[0].color).toEqual([170, 80, 200, 255]);
+  expect(result[1].pieces).toEqual([0, 1]);
+  expect(result[1].color).toEqual([250, 10, 20, 255]);
+  expect(result[2].data.slice(2)).toEqual([0, 0]);
+  expect(result[3].data[2]).toBe(7);
+  expect(result[3].pieces).toEqual([0, 0]);
+  expect(result[3].color).not.toEqual(result[0].color);
+  expect(result[4].data.slice(2)).toEqual([1, 0]); // even-n canonical original trap
+  expect(result[4].pieces).toEqual([0, 0]);
+  expect(result[5].data[2]).toBe(1);
+  expect(result[5].data[3]).toBeGreaterThan(0);
+  expect(result[5].pieces[1]).toBeGreaterThan(0);
+  for (const frame of result) for (let channel = 0; channel < 4; channel++) {
+    expect(Math.abs(frame.color[channel] - frame.expected[channel])).toBeLessThanOrEqual(1);
+  }
+});
+
+test('WebGL2: pixel footprints retain thin original attractors without filling their gaps', async ({ page }, testInfo) => {
+  await openHarness(page);
+  const report = await page.evaluate(() => {
+    const { device, colors, prepareRasterJob, renderRasterTile } = window.gpuTest;
+    const job = { kind: 'dynamical', width: 61, height: 41, spanX: 4,
+      center: { x: 0, y: 0 }, n: 2, cx: 0, cy: 2, kMax: 0, LMax: 1,
+      escapeDepth: 16, boundaryWork: 20000, originalRenderer: 'boundary', firstLevelPieces: true,
+      showDifference: false, showOriginalSurvival: true, originalOpacity: 1 };
+    const frame = device.render(job, colors);
+    if (!frame) throw new Error(device.reason);
+    const gpu = device.readClassification().data;
+    const cpu = renderRasterTile(prepareRasterJob(job), { x: 0, y: 0, width: job.width, height: job.height }).data;
+    // These are exact members: a fixed point and five levels of its IFS images.
+    // For c=2i, t+z/c=(t+y/2,-x/2), with t in {-1,1}.
+    let points = [{ x: 0.8, y: -0.4 }];
+    for (let depth = 0; depth < 5; depth++) points = points.flatMap(point => [-1, 1].map(t =>
+      ({ x: t + point.y / 2, y: -point.x / 2 })));
+    const sample = point => {
+      const x = Math.floor((point.x / job.spanX + 0.5) * job.width);
+      const bottom = Math.floor((point.y / job.spanX * job.width / job.height + 0.5) * job.height);
+      return { point, gpu: gpu[(bottom * job.width + x) * 4 + 2],
+        cpu: cpu[((job.height - bottom - 1) * job.width + x) * 4 + 2] };
+    };
+    return { members: points.map(sample), gaps: [{ x: 0, y: 0.4 }, { x: 0.8, y: 0 }, { x: 1.6, y: 0.4 }].map(sample),
+      metadata: frame.metadata };
+  });
+  for (const point of report.members) {
+    expect(point.gpu, `GPU pixel containing exact member ${JSON.stringify(point.point)}`).toBe(3);
+    expect(point.cpu, `CPU pixel containing exact member ${JSON.stringify(point.point)}`).toBe(3);
+  }
+  for (const point of report.gaps) expect([point.gpu, point.cpu]).toEqual([0, 0]);
+  expect(report.metadata).toMatchObject({ original_sample_type: 'pixel-footprint' });
+  expect(report.metadata.pixel_radius_world).toBeCloseTo(Math.SQRT1_2 * 4 / 61, 12);
+  await testInfo.attach('thin-attractor-pixel-coverage.json', { body: JSON.stringify(report, null, 2), contentType: 'application/json' });
+});
+
 test('WebGL2: complete pixel grids have no opposed CPU decisions and share palette compositing', async ({ page }, testInfo) => {
   await openHarness(page);
   const report = await page.evaluate(baseJob => {
     const { device, colors, prepareRasterJob, renderRasterTile, colorizeRasterTile } = window.gpuTest;
-    const jobs = [2, 4, 13].flatMap(n => ['mn', 'rn', 'compare'].map(parameterMode => ({
+    const jobs = [2, 4, 13].flatMap(n => ['mn', 'mn0', 'mn1', 'compare'].map(parameterMode => ({
       ...baseJob, n, parameterMode, width: 12, height: 12, spanX: 8, center: { x: 0.13, y: 0.17 },
     })));
     const dynamics = { ...baseJob, kind: 'dynamical', n: 4, cx: 0, cy: 2, width: 17, height: 13,
-      spanX: 12, center: { x: 0, y: 0 }, showDifference: true, showOriginalSurvival: true };
+      spanX: 12, center: { x: 0, y: 0 }, showDifference: true, showOriginalSurvival: true,
+      originalRenderer: 'boundary', firstLevelPieces: true };
     jobs.push(dynamics, { ...dynamics, survivalOpacity: 0.3, opacityFromJob: true },
       { ...dynamics, showDifference: false }, { ...dynamics, showOriginalSurvival: false });
     return jobs.map(job => {
@@ -272,13 +416,17 @@ test('WebGL2: complete pixel grids have no opposed CPU decisions and share palet
       const context = copy.getContext('2d'); context.drawImage(rendered.canvas, 0, 0);
       const display = context.getImageData(0, 0, job.width, job.height).data;
       const raw = device.readClassification();
+      const rawPieces = device.readPieces();
       const topDown = new Uint8Array(raw.data.length);
+      const topDownPieces = new Uint8Array(rawPieces.data.length);
       for (let row = 0; row < job.height; row++) {
         topDown.set(raw.data.subarray((job.height - row - 1) * job.width * 4,
           (job.height - row) * job.width * 4), row * job.width * 4);
+        topDownPieces.set(rawPieces.data.subarray((job.height - row - 1) * job.width * 2,
+          (job.height - row) * job.width * 2), row * job.width * 2);
       }
       const cpu = renderRasterTile(prepareRasterJob(job), { x: 0, y: 0, width: job.width, height: job.height }).data;
-      const expectedDisplay = colorizeRasterTile(topDown, job, jobColors);
+      const expectedDisplay = colorizeRasterTile(topDown, job, jobColors, topDownPieces);
       const opposed = [], invalidCodes = [], paletteDifferences = [];
       let decisive = 0, channels = 0;
       for (let offset = 0; offset < raw.data.length; offset += 4) {
@@ -335,7 +483,8 @@ test('WebGL2: precision and resource guards preserve CPU fallback and requested 
     expect(candidate.supported).toBe(true); // an ineligible view does not destroy the device
     expect(candidate.reason.length).toBeGreaterThan(10);
   }
-  expect(result.metadata.requested).toEqual({ depth: 100, frontier: 10000, tolerance: 1e-8 });
+  expect(result.metadata.requested).toMatchObject({ depth: 100, frontier: 10000, tolerance: 1e-8,
+    escape_depth: 12, boundary_work: 20000 });
   expect(result.metadata.effective).toMatchObject({ depth: 64, frontier: 32, work: 2048, tail: 48 });
   expect(result.raw[0]).toBe(1);
 });
@@ -346,6 +495,9 @@ test('WebGL2: production device recovers native context loss and disposes idempo
     const { device, colors, unavailable } = window.gpuTest;
     const before = device.render(job, colors);
     const beforeBytes = [...device.readClassification().data];
+    const pieceJob = { ...job, parameterMode: 'mn0', n: 2, center: { x: 1, y: 1 }, spanX: 0.01, escapeDepth: 16 };
+    device.render(pieceJob, colors);
+    const beforePieces = [...device.readPieces().data];
     const gl = device.canvas.getContext('webgl2');
     const extension = gl.getExtension('WEBGL_lose_context');
     const lostEvent = new Promise(resolve => device.canvas.addEventListener('webglcontextlost', resolve, { once: true }));
@@ -357,14 +509,18 @@ test('WebGL2: production device recovers native context loss and disposes idempo
     extension.restoreContext(); await restoredEvent;
     const after = device.render(job, colors);
     const afterBytes = [...device.readClassification().data];
+    device.render(pieceJob, colors);
+    const afterPieces = [...device.readPieces().data];
     device.dispose(); device.dispose();
-    return { beforeBytes, afterBytes, during, beforeGeneration: before.metadata.generation,
+    return { beforeBytes, afterBytes, beforePieces, afterPieces, during, beforeGeneration: before.metadata.generation,
       afterGeneration: after.metadata.generation, unavailable, disposed: {
         supported: device.supported, render: device.render(job, colors), read: device.readClassification() } };
   }, CORE_GPU_FIXTURES[2].job);
   expect([2, 8]).toContain(result.beforeBytes[0]);
   expect(result.beforeBytes.slice(2)).toEqual([0, 2]);
   expect(result.afterBytes).toEqual(result.beforeBytes);
+  expect(result.beforePieces).toEqual([2, 0]);
+  expect(result.afterPieces).toEqual(result.beforePieces);
   expect(result.during).toMatchObject({ supported: false, render: null, read: null });
   expect(result.during.reason).toMatch(/context.*lost/i);
   expect(result.unavailable).toHaveLength(1);

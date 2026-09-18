@@ -1,6 +1,6 @@
 # Rendering architecture
 
-**Source review:** 17 September 2026. This document describes the hybrid
+**Source review:** 18 September 2026. This document describes the hybrid
 renderer in the working source; deployed behavior is identified separately
 by the site's `deployment.json` and the validation result for that commit.
 
@@ -8,12 +8,15 @@ The default `auto` mode combines a bounded WebGL 2 preview with binary64 CPU
 refinement at the requested settings. The visible parameter and dynamical
 canvases remain Canvas 2D surfaces, so overlays, labels, image export, and
 fallback rendering share one composition path.
+The default original-attractor renderer is `boundary`: a capture-and-escape
+raster with adaptive depth and first-level piece colors. Prefix and histogram
+geometry remain explicit advanced renderers.
 
 ## Preferences, completion, and fallback
 
 | Saved `backend` preference | First image | Completed raster |
 |---|---|---|
-| `auto` | WebGL 2 float32 preview when the view and context are supported; otherwise a coarse CPU pass when appropriate. | Binary64 CPU search at the requested image size, depth, frontier cap, and tolerance. |
+| `auto` | WebGL 2 float32 preview when the view and context are supported; otherwise a coarse CPU pass when appropriate. | Binary64 CPU search at the requested image size and applicable search or boundary settings. |
 | `gpu` | Bounded WebGL 2 float32 preview. | That preview is the chosen result. A refused or lost GPU context/view falls back to CPU rendering. |
 | `cpu` | CPU raster, with a coarse initial pass for larger views. | Binary64 CPU search at the requested settings. |
 
@@ -36,7 +39,9 @@ binary64 detailed reference search with the requested limits.
 | [`hybrid_renderer.mjs`](../src/renderers/hybrid_renderer.mjs) | Coordinates one auxiliary WebGL context and a shared pool of at most two raster workers. Maintains separate parameter/dynamical jobs, frame callbacks, cancellation, and backend status. |
 | [`webgl_preview.mjs`](../src/renderers/webgl_preview.mjs) | Checks context capabilities, shader precision, view precision, and dimensions; draws classification and palette passes; releases and rebuilds resources across context loss. |
 | [`gpu_search_shader.mjs`](../src/compute/gpu_search_shader.mjs) | Bounded float32 inverse search with explicit depth, frontier, work, domain, and precision outcomes. |
-| [`raster_jobs.mjs`](../src/compute/raster_jobs.mjs) | Validates numerical raster jobs and classifies pixel centers with the binary64 kernels. Uses full-frame coordinates independently of tile boundaries. |
+| [`attractor_membership.mjs`](../src/compute/attractor_membership.mjs) | Shared binary64 original-alphabet membership context, depth-first capture/escape search, complementary first digit, and adaptive depth calculation. |
+| [`parameter_views.mjs`](../src/compute/parameter_views.mjs) | Keeps the full connectedness search separate from the marked-point views $\mathcal M_n^0$ and $\mathcal M_n^1$. |
+| [`raster_jobs.mjs`](../src/compute/raster_jobs.mjs) | Validates numerical raster jobs and evaluates pixel positions with the binary64 kernels, adding a geometric footprint only for dynamical boundaries. Uses full-frame coordinates independently of tile boundaries. |
 | [`raster_worker_pool.mjs`](../src/compute/raster_worker_pool.mjs), [`raster-worker.mjs`](../workers/raster-worker.mjs) | Schedules bounded tiles, transfers classification bytes, validates replies, and rejects stale or malformed work. |
 | [`attractor_prefix.mjs`](../src/renderers/attractor_prefix.mjs), [`attractor_histogram.mjs`](../src/renderers/attractor_histogram.mjs) | Draw original-attractor approximations on CPU Canvas; choosing a GPU pixel backend does not move these overlays into a shader. |
 | [`inverse_search_reference.mjs`](../src/compute/inverse_search_reference.mjs), [`certificate_builder.mjs`](../src/compute/certificate_builder.mjs) | Produce the selected detailed numerical search and export record independently of raster preview results. |
@@ -47,12 +52,67 @@ pending buffers. Cancelling a busy job terminates its worker because a
 synchronous numerical tile cannot process a cancellation message mid-search.
 Job identities also prevent delayed results from repainting a newer view.
 
-Normal GPU rendering keeps classification in an RGBA8 texture, then applies
-the palette in a second shader pass. The host copies the finished auxiliary
+Normal GPU rendering keeps classification and first-piece indices in separate
+RGBA8 textures, then applies the palette in a second shader pass. The host copies the finished auxiliary
 canvas before yielding because `preserveDrawingBuffer` is false. The explicit
 `readClassification()` readback is a diagnostic for QA, not a per-frame
 production step. The API used here is defined by the
 [Khronos WebGL 2 specification](https://registry.khronos.org/webgl/specs/latest/2.0/).
+
+## Sharp boundary and marked-point views
+
+For the original alphabet $A_n$, the canonical trap is enabled only for
+non-real expanding $c$ satisfying $|c|^2+2|\mathrm{Re}\,c|<n$. The same
+condition and parity-correct digit handling apply to odd and even $n$.
+This is separate from the larger difference-alphabet lens used by the
+selected $\mathcal M_n$ search.
+
+The shared original-membership search follows inverse branches depth first.
+A strict trap hit gives numerical capture; an exhausted admissible tree gives
+escape. Finding an admissible branch at the requested depth gives finite
+survival. Reaching a work, stack, precision, or domain limit leaves the pixel
+unresolved. Outside the original-alphabet lens there is no trap acceptance:
+the displayed shape comes from enclosure-pruned finite survival and escape.
+Neither depth survival nor capped work becomes a membership proof.
+
+The original dynamical image passes a geometric pixel radius to this search.
+Its footprint allows a visible pixel to intersect finite attractor coverage,
+while capture comparisons require the footprint to fit inside the trap.
+The parameter-plane views use zero geometric pixel radius: a pixel's screen
+size does not expand the marked-point membership test. Floating-point error
+guards remain separate from this geometric footprint.
+
+| Parameter mode | Definition | First inverse digit |
+|---|---|---|
+| `mn` | $\mathcal M_n=\{c:2c\in E(c,2n-1)\}$ | Difference alphabet $A_{2n-1}$ throughout. |
+| `mn0` | $\mathcal M_n^0=\{c:c\in E(c,n)\}$ | Original alphabet $A_n$ throughout. |
+| `mn1` | $\mathcal M_n^1=\{c:c\in A_{n-1}+c^{-1}E(c,n)\}$ | Complementary alphabet $A_{n-1}$ once, followed by $A_n$. |
+| `compare` | Compare $\mathcal M_n$ and $\mathcal M_n^0$. | Each search retains its own alphabet and limits. |
+
+An explicit zero-depth API search returns an inconclusive zeroth outer
+approximation. It has not tested a complementary digit and cannot capture
+before that digit. In the interface, boundary depth zero means automatic
+depth (16 or 12), rather than a zero-level search.
+
+The historical URL/JSON mode `rn` normalizes to `mn0`; new state uses the
+canonical name. The archive's first panel bit retains that meaning. No claim
+that $\mathcal M_n^0\cup\mathcal M_n^1=\mathcal M_n$ is made.
+
+`boundaryDepth=0` selects a base depth of 16 for $n=2$ and 12 otherwise.
+An explicit value 1–100 replaces that base. With `adaptiveBoundary=true`,
+the depth adds
+`ceil(log2(max(1, referenceSpan / spanX * rasterWidth / 768)))`, then caps
+the total at 100. Turning adaptation off uses the base directly. The reference
+span comes from the fitted view; `spanX` is the current horizontal world width.
+Thus magnification and raster resolution can increase detail without changing
+the selected `kMax` or `LMax`.
+
+The browser requests at most 20,000 digit evaluations per boundary point.
+GPU preview limits can reduce both depth and work. JSON records the requested
+base, adaptation setting, effective depth/work, pixel radius, first-level
+coloring, and self-covering condition. The portable keys are `bdepth` and
+`badapt`; the codec preserves zero as automatic instead of storing a
+viewport-dependent effective depth.
 
 ## Bounded GPU preview
 
@@ -61,9 +121,11 @@ The following constants are implemented limits, not benchmark results:
 | Resource | Current preview limit |
 |---|---|
 | Arity | `2 ≤ n ≤ 32`; larger browser arities use CPU rendering. |
-| Search depth | `min(requested kMax, 64)`. |
-| Retained frontier | `min(requested LMax, 32)`. |
-| Candidate work | At most 2,048 digit evaluations per pixel search. |
+| Connectedness/survival search depth | `min(requested kMax, 64)`. |
+| Retained breadth-first frontier | `min(requested LMax, 32)`. |
+| Breadth-first candidate work | At most 2,048 digit evaluations per pixel search. |
+| Original boundary depth | At most 64; a deeper request ending at the shader cap remains unresolved. |
+| Original boundary candidate work | At most 4,096 digit evaluations per point, bounded independently of the breadth-first frontier. |
 | Parameter-plane enclosure series | 48 terms plus a tail allowance. Fixed dynamical enclosures are prepared in binary64 using the requested tolerance. |
 | Raster size | At most 120,000 pixels; neither dimension exceeds 768 or the device's smaller limit. |
 | Shader capability | Fragment `highp` must provide at least 23 precision bits and exponent range 127. |
@@ -89,12 +151,12 @@ fallback reason, worker count, and timing where available.
 
 All rendering paths use the existing convention
 $f_t(z)=t+z/c$, so the first prefix digit is unscaled. Prefix sums and histogram
-iterations depict the full original $E(c,n)$. Its survival diagnostic starts
-from the displayed original coordinate and uses enclosure pruning without
-trap acceptance. The difference layer instead shows
+iterations and boundary rendering depict the full original $E(c,n)$.
+The advanced survival diagnostic starts from the displayed original coordinate
+and uses enclosure pruning without trap acceptance. The difference layer shows
 $\tfrac12E(c,2n-1)$ and tests twice the displayed point.
 
-GPU selection does not change those coordinates or turn $R_n$ finite survival
+GPU selection does not change those coordinates or turn marked-point finite survival
 into membership. It also does not change the selected $\mathcal M_n$ search's
 word, requested resource limits, or arithmetic. Binary64 remains floating
 point; the tolerance bounds the series-tail target rather than every rounding

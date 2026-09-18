@@ -1,99 +1,110 @@
-import {
-  createInverseSearchContext, inverseIterationTestFast, inverseSearchPointFast
-} from './inverse_search_kernel.mjs';
+import { inverseIterationTestFast } from './inverse_search_kernel.mjs';
 import { getEffectiveC, validateSearchLimits } from './inverse_search_reference.mjs';
-import {
-  assertArity, assertFiniteNumber, assertPositiveNumber
-} from '../math/validation.mjs';
+import { createAttractorMembershipContext, classifyAttractorPoint } from './attractor_membership.mjs';
+import { assertArity, assertFiniteNumber, assertInteger, assertPositiveNumber } from '../math/validation.mjs';
 
-export const PARAMETER_VIEW_MODES = Object.freeze(['mn', 'rn', 'compare']);
+export const PARAMETER_VIEW_MODES = Object.freeze(['mn', 'mn0', 'mn1', 'compare']);
+export const MAX_BOUNDARY_WORK = 200000;
 
-/**
- * Parameter-set definitions use the expanding c in f_t(z) = t + z/c.
- * 2*A_n is contained in A_(2n-1), so 2*E(c,n) is contained in E(c,2n-1)
- * and R_n is contained in M_n. A finite surviving branch is not membership.
- */
+/** All definitions use the expanding parameter in f_t(z)=t+z/c. */
 export const PARAMETER_VIEW_DEFINITIONS = Object.freeze({
   mn: Object.freeze({ label: 'M_n', membership: '2c in E(c,2n-1)', markedPointScale: 2 }),
-  rn: Object.freeze({ label: 'R_n', membership: 'c in E(c,n)', markedPointScale: 1 })
+  mn0: Object.freeze({ label: 'M_n^0', membership: 'c in E(c,n)', markedPointScale: 1, firstStep: 'original' }),
+  mn1: Object.freeze({ label: 'M_n^1', membership: 'c in A_(n-1)+(1/c)E(c,n)', markedPointScale: 1, firstStep: 'complement' })
 });
 
-function labelledResult(value, set, n) {
+export function normalizeParameterViewMode(mode = 'mn') {
+  const canonical = mode === 'rn' ? 'mn0' : mode;
+  if (!PARAMETER_VIEW_MODES.includes(canonical)) {
+    throw new RangeError('parameter view mode must be mn, mn0, mn1, or compare');
+  }
+  return canonical;
+}
+
+export function normalizeMembershipLimits(n, options = {}) {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    throw new TypeError('membership options must be an object');
+  }
+  const escapeDepth = options.escapeDepth ?? (n === 2 ? 16 : 12);
+  const boundaryWork = options.boundaryWork ?? 20000;
+  assertInteger(escapeDepth, 'escapeDepth', 0, 100);
+  assertInteger(boundaryWork, 'boundaryWork', 1, MAX_BOUNDARY_WORK);
+  return { escapeDepth, boundaryWork };
+}
+
+function labelledResult(value, set, n, usesTrap) {
   return {
-    ...value,
-    set,
+    ...value, set,
     label: PARAMETER_VIEW_DEFINITIONS[set].label,
     alphabetSize: set === 'mn' ? 2 * n - 1 : n,
     markedPointScale: PARAMETER_VIEW_DEFINITIONS[set].markedPointScale,
-    usesTrap: set === 'mn',
-    // Preserve the kernel's actual stop reason; survival is a display category.
-    displayReason: set === 'rn' && value.stopReason === 'depth-cap'
+    ...(set === 'mn' ? {} : { firstStep: PARAMETER_VIEW_DEFINITIONS[set].firstStep }),
+    usesTrap,
+    displayReason: set !== 'mn' && value.stopReason === 'depth-cap'
       ? 'finite-survival' : value.stopReason
   };
 }
 
-function classifyRn(x, y, n, kMax, LMax, tol) {
+function classifyMarkedPoint(x, y, n, tol, set, limits) {
   const effective = getEffectiveC(x, y);
   const rho = Math.hypot(effective.x, effective.y);
   if (!Number.isFinite(rho)) {
-    return { verdict: 'Undetermined', depth: 0, nodesExplored: 0, stopReason: 'numerical-range' };
+    return labelledResult({ verdict: 'Undetermined', depth: 0, nodesExplored: 0,
+      stopReason: 'numerical-range', status: 'numerical-range', firstDigit: null,
+      firstLevelIndex: null }, set, n, false);
   }
-  // No R_n trap theorem is assumed here. In particular, the exploratory M_n
-  // off-lens rule must not become an R_n interior classification by analogy.
-  const context = createInverseSearchContext(effective.x, effective.y, n, false, tol, { useTrap: false });
-  return inverseSearchPointFast(context, effective.x, effective.y, kMax, LMax);
+  const context = createAttractorMembershipContext(effective.x, effective.y, n, tol);
+  const result = classifyAttractorPoint(context, effective.x, effective.y, limits.escapeDepth, {
+    firstStep: PARAMETER_VIEW_DEFINITIONS[set].firstStep,
+    maxWork: limits.boundaryWork, firstLevelPieces: false, pixelRadius: 0
+  });
+  return labelledResult(result, set, n, Boolean(context.useTrap));
 }
 
-function comparisonCategory(mn, rn) {
+function comparisonCategory(mn, mn0) {
   const mnTrap = mn.stopReason === 'trap-hit';
-  const rnSurvives = rn.displayReason === 'finite-survival';
+  const mn0Survives = mn0.displayReason === 'finite-survival';
+  const mn0Captured = mn0.stopReason === 'trap-hit';
   if (mn.verdict === 'Exterior') {
-    return rn.verdict === 'Exterior' ? 'outside-both' : 'mn-exterior-rn-unresolved';
+    return mn0.verdict === 'Exterior' ? 'outside-both' : 'mn-exterior-mn0-unresolved';
   }
-  if (rn.verdict === 'Exterior') {
-    return mnTrap ? 'mn-trap-rn-exterior' : 'rn-exterior-mn-unresolved';
+  if (mn0.verdict === 'Exterior') {
+    return mnTrap ? 'mn-trap-mn0-exterior' : 'mn0-exterior-mn-unresolved';
   }
-  if (mnTrap) return rnSurvives ? 'mn-trap-rn-survival' : 'mn-trap-rn-unresolved';
-  return rnSurvives ? 'rn-survival-mn-unresolved' : 'unresolved';
+  if (mnTrap) return mn0Captured ? 'mn-trap-mn0-capture'
+    : mn0Survives ? 'mn-trap-mn0-survival' : 'mn-trap-mn0-unresolved';
+  return mn0Captured ? 'mn0-capture-mn-unresolved'
+    : mn0Survives ? 'mn0-survival-mn-unresolved' : 'unresolved';
 }
 
 /**
- * Classify a parameter for M_n, R_n, or their numerical comparison.
+ * M_n retains its reference depth/frontier contract. M_n^0 and M_n^1 have an
+ * independent finite-orbit depth/work budget. For M_n^1 only the first digit
+ * comes from A_(n-1); every subsequent digit belongs to A_n.
  *
- * Coordinates follow the explorer's existing convention: nonzero inputs inside
- * the unit disk are replaced by 1/c for BOTH views, including the marked point.
- * Real and unit-modulus effective parameters remain outside the search domain.
- *
- * The top-level search fields belong to `set`: R_n in rn mode, M_n otherwise.
- * `mn` and `rn` contain independently labelled records, or null if not requested.
- * `comparison` is a display category in compare mode, otherwise null.
- *
- * R_n uses enclosure pruning without a trap. It can return Exterior, or
- * Undetermined with displayReason='finite-survival' after a complete depth
- * budget. A node cap stays node-cap; neither outcome asserts R_n membership.
- * Fast classifications deliberately omit trees and finite certificate words.
+ * The legacy input alias rn is accepted, but all emitted fields are canonical.
+ * Compare combines M_n with M_n^0. Coordinates, including the marked point,
+ * share the browser's reciprocal normalization. Surviving a finite search is
+ * Undetermined, while strict original-alphabet trap entry is numerical capture.
  */
 export function classifyParameterView(
-  x, y, n, kMax = 37, LMax = 1000, tol = 1e-8, mode = 'mn'
+  x, y, n, kMax = 37, LMax = 1000, tol = 1e-8, mode = 'mn', options = {}
 ) {
   assertFiniteNumber(x, 'x');
   assertFiniteNumber(y, 'y');
   assertArity(n);
   validateSearchLimits(kMax, LMax);
   assertPositiveNumber(tol, 'tol');
-  if (!PARAMETER_VIEW_MODES.includes(mode)) {
-    throw new RangeError('parameter view mode must be mn, rn, or compare');
-  }
-  const mn = mode === 'rn' ? null
-    : labelledResult(inverseIterationTestFast(x, y, n, kMax, LMax, tol), 'mn', n);
-  const rn = mode === 'mn' ? null
-    : labelledResult(classifyRn(x, y, n, kMax, LMax, tol), 'rn', n);
-  const active = mode === 'rn' ? rn : mn;
+  mode = normalizeParameterViewMode(mode);
+  const limits = normalizeMembershipLimits(n, options);
+  const mn = mode === 'mn' || mode === 'compare'
+    ? labelledResult(inverseIterationTestFast(x, y, n, kMax, LMax, tol), 'mn', n, true) : null;
+  const mn0 = mode === 'mn0' || mode === 'compare'
+    ? classifyMarkedPoint(x, y, n, tol, 'mn0', limits) : null;
+  const mn1 = mode === 'mn1' ? classifyMarkedPoint(x, y, n, tol, 'mn1', limits) : null;
+  const active = mode === 'mn0' ? mn0 : mode === 'mn1' ? mn1 : mn;
   return {
-    ...active,
-    mode,
-    mn,
-    rn,
-    comparison: mode === 'compare' ? comparisonCategory(mn, rn) : null
+    ...active, mode, mn, mn0, mn1,
+    comparison: mode === 'compare' ? comparisonCategory(mn, mn0) : null
   };
 }

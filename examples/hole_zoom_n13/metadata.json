@@ -10,12 +10,15 @@
   },
   "k_max": 37,
   "L_max": 1000,
-  "renderer": "prefix-cylinder",
-  "renderer_depth": 7,
+  "renderer": "capture-escape-boundary",
   "certificate_renderer": "canvas-cpu",
   "mode": "finite-capture-zoom",
   "expected_verdict": "Exterior",
   "proof_status": "exploratory",
   "related_work": "2026 finite-capture hole magnification",
-  "limitations": "Theorem-level proof does not rely on visual inspection."
+  "limitations": "Theorem-level proof does not rely on visual inspection.",
+  "advanced_prefix_depth": 7,
+  "requested_boundary_depth": 0,
+  "adaptive_boundary": true,
+  "first_level_pieces": true
 }

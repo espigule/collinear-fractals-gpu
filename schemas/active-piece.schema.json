@@ -18,6 +18,7 @@
     },
     "renderer": {
       "enum": [
+        "capture-escape-boundary",
         "prefix-cylinder",
         "seeded-histogram",
         "inverse-survival-status"
