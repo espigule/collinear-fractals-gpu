@@ -10,7 +10,7 @@ Author: **Bernat Espigule**. Release line: **0.2.0-alpha**.
 Changes after that release are listed under [Unreleased](CHANGELOG.md).
 
 This repository contains a build-free browser explorer and reference packages
-for inverse search in the collinear connectedness loci $\mathcal M_n$.
+for inverse search in the collinear connectedness loci $\mathcal{M}_n$.
 The browser combines **WebGL 2 previews with binary64 CPU refinement**. Its
 default automatic mode displays a bounded GPU approximation, then refines the
 pixel search at the requested settings in Web Workers. Unsupported GPU views
@@ -24,6 +24,17 @@ hypotheses of the corresponding theorem.
 
 ## Quick visual summary
 
+![Three computed collinear attractors in original coordinates: E(c,4) at c=(3+i√11)/2, E(c,5) at c=1+2i, and a sparse E(c,3) at c=3+3i. Colors identify first-level pieces.](docs/figures/attractor-examples.svg)
+
+These are complete depth-eight prefix illustrations of $E(c,n)$, using
+$f_t(z)=t+z/c$. Each panel has its own fitted scale; colors identify the first
+digit. Finite resolution and visible point sizes make these illustrations,
+not mathematical certificates. [Figure data and reproduction](docs/figures/README.md)
+record the exact parameters, tails, and display settings.
+
+**Explore these examples:** [Four-piece attractor][view-e4] ·
+[Five-piece attractor][view-e5] · [Sparse three-piece attractor][view-e3].
+
 The workspace opens in **Split** view at $n=4$,
 $c=(3+i\sqrt{11})/2$: the parameter plane is linked to the original
 attractor $E(c,4)$, colored by its first-level pieces. Focus either plane or
@@ -32,8 +43,8 @@ The **Controls** drawer contains examples, Cartesian and polar parameter
 entry, search limits, renderers, layers, palettes, and exports.
 
 Switch the dynamical scene between $E(c,n)$, the half-scale difference
-$\tfrac12E(c,2n-1)$, and their overlay. The parameter plane offers
-$\mathcal M_n$, the marked-point set $R_n=\{c:c\in E(c,n)\}$, and a comparison.
+$\frac{1}{2}E(c,2n-1)$, and their overlay. The parameter plane offers
+$\mathcal{M}_n$, the marked-point set $R_n=\{c:c\in E(c,n)\}$, and a comparison.
 The $R_n$ preview distinguishes finite survival from unfinished searches;
 neither asserts membership. Search details identify which set each result concerns.
 
@@ -68,6 +79,33 @@ Deep zooms, unsupported arities, insufficient shader precision, and WebGL
 failure can trigger CPU fallback without changing `backend=gpu` in a share
 link. [Rendering architecture](docs/RENDERING_ARCHITECTURE.md) documents the
 preview limits, worker scheduling, arithmetic boundaries, and WebGPU decision.
+
+<details>
+<summary>Diagram: image rendering and the independent search record</summary>
+
+```mermaid
+flowchart TD
+    S["Explorer state"] -->|Parameter and search limits| R["Binary64 reference search"]
+    R --> J["Search JSON and inverse word"]
+    S -->|Visible raster layers| B{"Image backend"}
+    S -->|Prefix or histogram| G["CPU geometry"]
+    B -->|auto or gpu| P["WebGL 2 preview"]
+    B -->|cpu| W["Binary64 worker raster"]
+    P -->|Show preview| C["Canvas image"]
+    P -->|auto only: refine| W
+    P -.->|GPU unavailable or lost| W
+    W -->|Refined raster| C
+    W -.->|Worker unavailable or failed| F["Progressive main-thread raster"]
+    F --> C
+    G --> C
+```
+
+In automatic mode, the preview appears first and workers refine the raster at
+the requested limits. In GPU mode, a successful preview remains the displayed
+raster. Prefix and histogram geometry can render alone or be composited over
+raster layers. The selected search record follows its separate reference path.
+
+</details>
 
 ## Browser quick start
 
@@ -106,6 +144,7 @@ real-axis and unit-circle inputs are not classified by it. See
 | `swift/` | Swift Package Manager reference implementation and tests. |
 | `mathematica/`, `matlab/`, `maple/` | Reference ports requiring validation in their native runtimes. |
 | `examples/` | Presets, parameters, search records, and reproduction notes. |
+| `docs/figures/` | Rendered README figures, parameters, and reproduction notes. |
 | `gallery/` | Metadata for planned curated assets; no rendered gallery yet. |
 | `paper_figures/` | Figure-job manifest and listing script; no batch figure renderer yet. |
 | `schemas/` | JSON Schemas for search exports, examples, and figure metadata. |
@@ -131,13 +170,29 @@ $t_j\in A_m$. In particular, the first digit is **unscaled**. For
 $N=2n-1$, the difference set is $E(c,n)-E(c,n)=E(c,N)$ and
 
 $$
-c\in\mathcal M_n\quad\Longleftrightarrow\quad 2c\in E(c,N).
+c\in\mathcal{M}_n\quad\Longleftrightarrow\quad 2c\in E(c,N).
 $$
+
+The **half-difference** scene displays $E(c,N)/2$; the **original attractor**
+scene displays $E(c,n)$ with the unscaled first digit above. Overlay compares
+these two sets in the same coordinates.
 
 The search follows the marked point $2c$ under inverse branches
 $g_t(z)=c(z-t)$, prunes against an enclosure, and tests for entry into a trap.
-The non-real parameter lens is characterized by
-$|c|>1$ and $|c|^2+2|\operatorname{Re}c|<2n-1$.
+Writing $c=x+iy$ with nonzero imaginary part $y$, the canonical parameter
+lens is characterized by
+
+$$
+1 < x^2+y^2 < 2n-1-2|x|.
+$$
+
+![The n=3 parameter lens: the intersection of the disks centered at minus one and plus one with radius square root of six, outside the unit disk and off the real axis. All boundaries are excluded.](docs/figures/parameter-lens.svg)
+
+For $n=3$, the upper inequality means being inside **both** disks
+$(x+1)^2+y^2<6$ and $(x-1)^2+y^2<6$. The lower inequality removes the unit
+disk; $y\ne0$ removes the real axis. The shaded region shows this parameter
+lens, rather than a computed connectedness locus.
+
 These conventions and the finite-capture filtration are developed in the
 [finite-capture paper](https://arxiv.org/abs/2603.07397).
 
@@ -148,10 +203,10 @@ does not independently verify those theorems or their full certificate corpus.
 
 ## Verdicts: Interior, Interior-offLens, Exterior, Undetermined
 
-These are the selected $\mathcal M_n$ search labels. The optional $R_n$
+These are the selected $\mathcal{M}_n$ search labels. The optional $R_n$
 marked-point search uses enclosure pruning without a trap; surviving its full
 depth budget remains `Undetermined`. Its label is distinct from the countable
-restricted-polynomial root set denoted $\mathcal R_n$ in the finite-capture paper.
+restricted-polynomial root set denoted $\mathcal{R}_n$ in the finite-capture paper.
 
 | Verdict | Meaning of the numerical search result |
 |---|---|
@@ -185,9 +240,11 @@ geometric tail, not a bound on all floating-point rounding errors.
 | `level2_boundary_atlas` | A preset for future atlas work; no completed atlas is supplied. |
 
 See [the example guide](examples/README.md) for exact parameters, limits, and
-status. Gallery and figure metadata are manifests for future assets. Save
-Image exports the completed browser view with parameter and search captions; `paper_figures/make_all_figures.py`
-only lists planned jobs.
+status. The [README figures](docs/figures/README.md) are rendered and
+reproducible. The separate `gallery/` and `paper_figures/` manifests describe
+future curated assets. Save Image exports the completed browser view with
+parameter and search captions; `paper_figures/make_all_figures.py` only lists
+planned jobs.
 
 ## Share URLs and reproducible states
 
@@ -324,3 +381,7 @@ Source code is distributed under the **Apache License 2.0**; see [LICENSE](LICEN
 Documentation and non-code repository materials use **Creative Commons
 Attribution 4.0 International** unless otherwise stated; see
 [LICENSE-docs.md](LICENSE-docs.md) and [the full license](LICENSES/CC-BY-4.0.txt).
+
+[view-e4]: https://complextrees.com/collinear-fractals-gpu/#n=4&k=37&l=1000&tol=1e-8&q=3&cx=1.5&cy=1.6583123951777&pz=2.414&dz=9.730607775891547&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=prefix&palette=research&focus=dynamical&pieces=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
+[view-e5]: https://complextrees.com/collinear-fractals-gpu/#n=5&k=37&l=1000&tol=1e-8&q=3&cx=1&cy=2&pz=2.414&dz=12.923663597204854&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=prefix&palette=research&focus=dynamical&pieces=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
+[view-e3]: https://complextrees.com/collinear-fractals-gpu/#n=3&k=37&l=1000&tol=1e-8&q=3&cx=3&cy=3&pz=2.414&dz=5.284458204387503&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=prefix&palette=research&focus=dynamical&pieces=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff

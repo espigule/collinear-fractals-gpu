@@ -28,6 +28,8 @@ for (const file of ['explorer.js', ...['src', 'workers', 'qa'].flatMap(dir => ja
 }
 run('Static bundle and publication checks', python, ['tools/validate_bundle.py']);
 run('JSON schemas and curated data', python, ['tools/validate_schemas.py']);
+run('Reproducible README attractor figures', process.execPath, ['tools/docs/generate_attractor_examples.mjs', '--check']);
+run('Reproducible README parameter lens', python, ['tools/docs/generate_parameter_lens.py', '--check']);
 run('Curated finite-search records', process.execPath, ['examples/verify_search_records.mjs']);
 run('JavaScript reference package', process.execPath, ['test.js'], path.join(root, 'javascript'));
 run('Python reference package and cross-language regressions', python, ['-m', 'unittest', 'discover', '-v'], path.join(root, 'python'));

@@ -45,6 +45,9 @@
 
 ### Maintenance and documentation
 
+- Rewrote the README lens inequality without the unsupported named-operator
+  macro, and added reproducible attractor examples, a parameter-lens diagram,
+  and a diagram of hybrid rendering and the independent reference search.
 - Added a consistent local/CI validation workflow, real Chromium checks,
   JSON Schema validation, and a gated static Pages artifact.
 - Documented direct versus reciprocal parameter input, the per-depth width

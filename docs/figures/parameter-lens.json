@@ -1,0 +1,65 @@
+{
+  "generator": "tools/docs/generate_parameter_lens.py",
+  "generator_version": 1,
+  "diagram": "open-non-real-parameter-lens",
+  "n": 3,
+  "definition": "c=x+iy; 1 < x^2+y^2 < 5-2*abs(x); y != 0",
+  "equivalent_definition": "abs(c-1)<sqrt(6) and abs(c+1)<sqrt(6) and abs(c)>1 and Im(c)!=0",
+  "outer_circle_centers": [
+    {
+      "re": -1,
+      "im": 0
+    },
+    {
+      "re": 1,
+      "im": 0
+    }
+  ],
+  "outer_circle_radius_exact": "sqrt(6)",
+  "outer_arc_endpoints_exact": [
+    {
+      "re": "0",
+      "im": "sqrt(5)"
+    },
+    {
+      "re": "0",
+      "im": "-sqrt(5)"
+    }
+  ],
+  "real_intercepts_of_outer_boundary_exact": [
+    "1-sqrt(6)",
+    "sqrt(6)-1"
+  ],
+  "excluded": [
+    "abs(c)<=1",
+    "Im(c)=0",
+    "outer-circle boundaries"
+  ],
+  "boundary_style": "dashed; the real axis has a white underlay for legibility",
+  "geometry": "analytic circular arcs; no polygon sampling or search classification",
+  "coordinate_rounding_decimal_places": 9,
+  "viewport": {
+    "width": 880,
+    "height": 500,
+    "origin_x": 219,
+    "origin_y": 288,
+    "x_pixels_per_unit": 71,
+    "y_pixels_per_unit": 71
+  },
+  "example": {
+    "c": {
+      "re": 0.5,
+      "im": 1.1
+    },
+    "c_exact": {
+      "re": "1/2",
+      "im": "11/10"
+    },
+    "norm_squared_exact": "73/50",
+    "upper_bound_exact": "4",
+    "in_lens": true
+  },
+  "connectedness_locus_drawn": false,
+  "connectedness_verdict": null,
+  "svg_sha256": "eea0b144bb712462ccce8a3db6177b9cc8d49cd31e40cd59450cc680af3515d3"
+}
