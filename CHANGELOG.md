@@ -11,8 +11,15 @@
 - Name the original marked-point view `M_n^0` and add `M_n^1`, whose first
   digit comes from `A_(n-1)` and later digits from `A_n`. Preserve `rn` as an
   input alias for `mn0`; new URLs and imported state use the canonical name.
-- Apply geometric pixel footprints only to dynamical coverage. Parameter
-  membership tests do not acquire a screen-sized geometric tolerance.
+- Render parameter cells with their variation in both the marked point and
+  the maps. Propagate an inverse word's parameter derivative and remainder,
+  enlarge the pruning enclosure for the whole cell, and require strict trap
+  containment across the cell for capture. Selected point records keep zero
+  geometric radius. This replaces pixel-center sampling in the marked-point
+  raster, which could miss fine structure between samples.
+- Expose all `2n-1` first-digit subsets `F_(n,t)` for `t` in `D_n`, each with
+  the original `A_n` tail. Keep `M_n^0` and `M_n^1` as the original- and
+  complementary-digit unions, contained in `M_n` without claiming equality.
 - Corrected prefix and histogram rendering to use the documented IFS
   `z -> t + z/c`, including the unscaled first digit and matching tail radius.
   Previously those visual renderers showed a scaled/rotated attractor.
@@ -31,6 +38,12 @@
   boundary depth starts at 16 for two maps and 12 otherwise, adapts to zoom and
   raster resolution, and is shared through `bdepth` and `badapt`. First-level
   coloring remains enabled; prefix, histogram, and survival are advanced choices.
+- Allow several aggregate parameter layers and individual digit subsets to
+  remain visible together. Preserve their independent selections in share
+  links and history, while importing the earlier exclusive modes.
+- Trace the displayed boundary of each first-level attractor piece from its
+  own coverage mask. Preserve black outlines inside overlaps and use a
+  coordinated piece palette; unresolved searches do not become invented edges.
 - Added a hybrid rendering pipeline: bounded WebGL 2 previews for parameter
   and dynamical inverse-search images, followed by double-precision refinement
   in background workers. Direct prefix and histogram attractor drawing remains
@@ -70,8 +83,10 @@
 - Aligned example metadata with actual search outcomes and distinguished
   implemented features from planned gallery and atlas work.
 - Updated curated presets and README interactive links to sharp boundary
-  rendering. The reproducible README illustrations retain their explicit
-  depth-eight prefix construction.
+  rendering. Regenerated the README figures with the actual binary64
+  capture-and-escape raster and per-piece contour compositor, replacing their
+  former depth-eight prefix illustrations. Metadata records the rendering
+  settings and source/image fingerprints.
 - Marked prior QA reports as historical and kept the released `0.2.0-alpha`
   version unchanged while these changes are under review.
 

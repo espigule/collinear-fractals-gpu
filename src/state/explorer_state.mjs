@@ -28,6 +28,8 @@ export const DEFAULT_EXPLORER_STATE = Object.freeze({
   showPath: true,
   showEscapeStrata: false,
   parameterMode: 'mn',
+  parameterLayers: Object.freeze(['mn']),
+  parameterDigits: Object.freeze([]),
   backend: 'auto',
   comparisonMode: 'overlay',
   rendererMode: 'boundary',
@@ -37,7 +39,7 @@ export const DEFAULT_EXPLORER_STATE = Object.freeze({
   histogramSeed: 20260227,
   histogramSamples: 50000,
   firstLevelPieces: true,
-  originalAttractorOpacity: 0.72,
+  originalAttractorOpacity: 1,
   survivalOverlayOpacity: 0.45,
   palette: 'research',
   customPalette: Object.freeze({
@@ -113,6 +115,44 @@ const LAYER_FIELDS = [
 const DECIMAL_NUMBER = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
+export const PARAMETER_LAYER_NAMES = Object.freeze(['mn', 'mn0', 'mn1']);
+
+/** The historical comparison contained M_n and M_n^0 only. */
+export function parameterLayersForMode(mode) {
+  if (mode === 'compare') return ['mn', 'mn0'];
+  if (mode === 'rn') return ['mn0'];
+  return [PARAMETER_LAYER_NAMES.includes(mode) ? mode : 'mn'];
+}
+
+/** Compatibility field for older consumers; the arrays retain every selection. */
+export function parameterModeForSelection(layers, digits = []) {
+  return layers.length === 1 && digits.length === 0 ? layers[0] : 'compare';
+}
+
+function arrayValues(value, maximumLength) {
+  if (!Array.isArray(value)) return undefined;
+  const values = [];
+  for (let index = 0; index < Math.min(value.length, maximumLength); index++) {
+    const property = Object.getOwnPropertyDescriptor(value, String(index));
+    // Imported JavaScript objects receive the same accessor protection as state.
+    if (property && Object.hasOwn(property, 'value')) values.push(property.value);
+  }
+  return values;
+}
+
+/** Stable ordering keeps links, worker jobs, and visual compositing reproducible. */
+export function normalizeParameterLayers(value, fallback = ['mn']) {
+  const values = arrayValues(value, 199);
+  return PARAMETER_LAYER_NAMES.filter(layer => (values ?? fallback).includes(layer));
+}
+
+/** Independent first digits belong to D_n = {1-n, ..., n-1}; no bit-width limit. */
+export function normalizeParameterDigits(value, n, fallback = []) {
+  const values = arrayValues(value, 199) ?? fallback;
+  return [...new Set(values.filter(digit => Number.isInteger(digit) && digit >= 1 - n && digit <= n - 1))]
+    .sort((a, b) => a - b);
+}
+
 function ownValue(object, key) {
   if (object === null || typeof object !== 'object' || Array.isArray(object)) return undefined;
   const property = Object.getOwnPropertyDescriptor(object, key);
@@ -162,6 +202,16 @@ function sanitizeState(input, fallback) {
     const value = key === 'parameterMode' && supplied === 'rn' ? 'mn0' : supplied;
     result[key] = choices.includes(value) ? value : fallback[key];
   }
+  const layers = ownValue(input, 'parameterLayers');
+  const digits = ownValue(input, 'parameterDigits');
+  const suppliedMode = ownValue(input, 'parameterMode');
+  const hasLegacyMode = ['mn', 'mn0', 'mn1', 'compare', 'rn'].includes(suppliedMode);
+  const legacyLayers = hasLegacyMode && !Array.isArray(layers);
+  const legacySelection = legacyLayers && !Array.isArray(digits);
+  result.parameterLayers = normalizeParameterLayers(layers, legacyLayers
+    ? parameterLayersForMode(suppliedMode) : fallback.parameterLayers);
+  result.parameterDigits = normalizeParameterDigits(digits, result.n, legacySelection ? [] : fallback.parameterDigits);
+  result.parameterMode = parameterModeForSelection(result.parameterLayers, result.parameterDigits);
   for (const key of [...LAYER_FIELDS, ...BOOLEAN_FIELDS.map(([key]) => key)]) {
     result[key] = booleanValue(ownValue(input, key), fallback[key]);
   }
@@ -200,6 +250,8 @@ export function encodeExplorerState(state) {
     params.set(yKey, numberToString(normalized[key].y));
   }
   for (const [key, urlKey] of ENUM_FIELDS) params.set(urlKey, normalized[key]);
+  params.set('pl', normalized.parameterLayers.join(','));
+  params.set('pd', normalized.parameterDigits.join(','));
   for (const [key, urlKey] of BOOLEAN_FIELDS) params.set(urlKey, normalized[key] ? '1' : '0');
   params.set('layers', LAYER_FIELDS.map(key => normalized[key] ? '1' : '0').join(''));
   for (const [key, urlKey] of COLOR_FIELDS) params.set(urlKey, normalized.customPalette[key]);
@@ -226,6 +278,17 @@ export function decodeExplorerState(hash, defaults = DEFAULT_EXPLORER_STATE) {
   }
   for (const [key, urlKey] of ENUM_FIELDS) {
     if (params.has(urlKey)) candidate[key] = params.get(urlKey);
+  }
+  if (params.has('pl')) candidate.parameterLayers = params.get('pl').split(',').filter(Boolean);
+  if (params.has('pd')) {
+    const value = params.get('pd');
+    if (value === '') candidate.parameterDigits = [];
+    else {
+      const digits = value.split(',');
+      if (digits.length <= 199 && digits.every(digit => /^[+-]?\d+$/.test(digit))) {
+        candidate.parameterDigits = digits.map(Number);
+      }
+    }
   }
   for (const [key, urlKey] of BOOLEAN_FIELDS) {
     const value = params.get(urlKey);

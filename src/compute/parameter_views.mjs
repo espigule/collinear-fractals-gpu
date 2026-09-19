@@ -1,6 +1,6 @@
 import { inverseIterationTestFast } from './inverse_search_kernel.mjs';
 import { getEffectiveC, validateSearchLimits } from './inverse_search_reference.mjs';
-import { createAttractorMembershipContext, classifyAttractorPoint } from './attractor_membership.mjs';
+import { createAttractorMembershipContext, classifyAttractorPoint, classifyAttractorParameterCell } from './attractor_membership.mjs';
 import { assertArity, assertFiniteNumber, assertInteger, assertPositiveNumber } from '../math/validation.mjs';
 
 export const PARAMETER_VIEW_MODES = Object.freeze(['mn', 'mn0', 'mn1', 'compare']);
@@ -27,9 +27,12 @@ export function normalizeMembershipLimits(n, options = {}) {
   }
   const escapeDepth = options.escapeDepth ?? (n === 2 ? 16 : 12);
   const boundaryWork = options.boundaryWork ?? 20000;
+  const parameterRadius = options.parameterRadius ?? 0;
+  assertFiniteNumber(parameterRadius, 'parameterRadius');
+  if (parameterRadius < 0) throw new RangeError('parameterRadius must be nonnegative');
   assertInteger(escapeDepth, 'escapeDepth', 0, 100);
   assertInteger(boundaryWork, 'boundaryWork', 1, MAX_BOUNDARY_WORK);
-  return { escapeDepth, boundaryWork };
+  return { escapeDepth, boundaryWork, parameterRadius };
 }
 
 function labelledResult(value, set, n, usesTrap) {
@@ -40,25 +43,108 @@ function labelledResult(value, set, n, usesTrap) {
     markedPointScale: PARAMETER_VIEW_DEFINITIONS[set].markedPointScale,
     ...(set === 'mn' ? {} : { firstStep: PARAMETER_VIEW_DEFINITIONS[set].firstStep }),
     usesTrap,
-    displayReason: set !== 'mn' && value.stopReason === 'depth-cap'
+    displayReason: (set !== 'mn' || value.sampleType === 'parameter-cell') && value.stopReason === 'depth-cap'
       ? 'finite-survival' : value.stopReason
   };
 }
 
-function classifyMarkedPoint(x, y, n, tol, set, limits) {
+function parameterGeometry(x, y, n, tol, limits) {
   const effective = getEffectiveC(x, y);
   const rho = Math.hypot(effective.x, effective.y);
-  if (!Number.isFinite(rho)) {
-    return labelledResult({ verdict: 'Undetermined', depth: 0, nodesExplored: 0,
-      stopReason: 'numerical-range', status: 'numerical-range', firstDigit: null,
-      firstLevelIndex: null }, set, n, false);
+  let radius = limits.parameterRadius;
+  let domainBoundary = false;
+  // In the reciprocal view use a disk around 1/c0 covering every 1/c in the
+  // input disk: |1/c-1/c0| <= r/(|c0| (|c0|-r)). Cells crossing the unit circle
+  // have no single expanding chart and remain outside-domain, never exterior.
+  const inputRho = Math.hypot(x, y);
+  if (radius > 0 && inputRho < 1) {
+    if (inputRho <= radius || inputRho + radius >= 1) domainBoundary = true;
+    else radius = radius / inputRho / (inputRho - radius) * (1 + 32 * Number.EPSILON);
   }
-  const context = createAttractorMembershipContext(effective.x, effective.y, n, tol);
-  const result = classifyAttractorPoint(context, effective.x, effective.y, limits.escapeDepth, {
-    firstStep: PARAMETER_VIEW_DEFINITIONS[set].firstStep,
-    maxWork: limits.boundaryWork, firstLevelPieces: false, pixelRadius: 0
-  });
-  return labelledResult(result, set, n, Boolean(context.useTrap));
+  if (radius > 0 && rho * (1 - 8 * Number.EPSILON) - radius <= 1) domainBoundary = true;
+  let originalContext = null, differenceContext = null;
+  return {
+    effective, radius, domainBoundary,
+    context(set) {
+      if (set === 'mn') {
+        return differenceContext ??= createAttractorMembershipContext(effective.x, effective.y, 2 * n - 1, tol);
+      }
+      return originalContext ??= createAttractorMembershipContext(effective.x, effective.y, n, tol);
+    },
+    invalidResult() {
+      const reason = !Number.isFinite(rho) || !Number.isFinite(radius) ? 'numerical-range'
+        : domainBoundary ? 'outside-domain' : null;
+      return reason ? { verdict: 'Undetermined', depth: 0, nodesExplored: 0, work: 0,
+        stopReason: reason, status: reason === 'outside-domain' ? 'out-of-domain' : reason,
+        firstDigit: null, firstLevelIndex: null,
+        ...(limits.parameterRadius > 0 ? { sampleType: 'parameter-cell', parameterRadius: radius,
+          coverage: 'parameter-taylor-disk' } : {}) } : null;
+    }
+  };
+}
+
+function classifyMembership(geometry, n, set, limits, digit = null) {
+  const invalid = geometry.invalidResult();
+  if (invalid) return { value: invalid, usesTrap: false };
+  const context = geometry.context(set);
+  const firstStep = digit !== null
+    ? ((digit + n - 1) % 2 === 0 ? 'original' : 'complement')
+    : PARAMETER_VIEW_DEFINITIONS[set].firstStep ?? 'original';
+  const searchOptions = { firstStep, firstDigit: digit, maxWork: limits.boundaryWork,
+    firstLevelPieces: false };
+  const value = limits.parameterRadius > 0
+    ? classifyAttractorParameterCell(context, limits.escapeDepth, {
+      ...searchOptions, parameterRadius: geometry.radius, markedPointScale: set === 'mn' ? 2 : 1
+    })
+    : classifyAttractorPoint(context, geometry.effective.x, geometry.effective.y, limits.escapeDepth,
+      searchOptions);
+  const r = geometry.radius;
+  const usesTrap = Boolean(context.useTrap) && (r === 0 || (
+    context.rho * (1 - 8 * Number.EPSILON) - r > 1 && Math.abs(context.y) > r
+      && (context.rhoUpper + r) ** 2
+      + 2 * (Math.abs(context.x) + r) < context.m));
+  return { value, usesTrap };
+}
+
+function labelledDigitResult(value, digit, n, usesTrap) {
+  return {
+    ...value, set: `digit:${digit}`, label: `F_{${n},${digit}}`, digit,
+    digitIndex: digit + n - 1, alphabetSize: n, markedPointScale: 1,
+    firstStep: (digit + n - 1) % 2 === 0 ? 'original' : 'complement', usesTrap,
+    displayReason: value.stopReason === 'depth-cap' ? 'finite-survival' : value.stopReason
+  };
+}
+
+/** Independently selectable F_(n,t): only its first digit is fixed to t. */
+export function classifyParameterDigit(x, y, n, digit, tol = 1e-8, options = {}) {
+  assertFiniteNumber(x, 'x');
+  assertFiniteNumber(y, 'y');
+  assertArity(n);
+  assertInteger(digit, 'digit', -n + 1, n - 1);
+  assertPositiveNumber(tol, 'tol');
+  const limits = normalizeMembershipLimits(n, options);
+  const geometry = parameterGeometry(x, y, n, tol, limits);
+  const { value, usesTrap } = classifyMembership(geometry, n, 'mn0', limits, digit);
+  return labelledDigitResult(value, digit, n, usesTrap);
+}
+
+/** Undefined selections preserve old links; explicit empty arrays hide layers. */
+function normalizeSelection(n, mode, options) {
+  const defaults = mode === 'compare' ? ['mn', 'mn0'] : [mode];
+  const inputLayers = options.parameterLayers ?? defaults;
+  const inputDigits = options.parameterDigits ?? [];
+  if (!Array.isArray(inputLayers) || !Array.isArray(inputDigits)) {
+    throw new TypeError('parameterLayers and parameterDigits must be arrays');
+  }
+  const allowed = ['mn', 'mn0', 'mn1'];
+  for (const layer of inputLayers) {
+    if (!allowed.includes(layer)) throw new RangeError('invalid parameter layer');
+  }
+  for (const digit of inputDigits) assertInteger(digit, 'parameter digit', -n + 1, n - 1);
+  return {
+    parameterLayers: allowed.filter(layer => inputLayers.includes(layer)),
+    parameterDigits: [...new Set(inputDigits)].sort((a, b) => a - b)
+  };
 }
 
 function comparisonCategory(mn, mn0) {
@@ -78,14 +164,15 @@ function comparisonCategory(mn, mn0) {
 }
 
 /**
- * M_n retains its reference depth/frontier contract. M_n^0 and M_n^1 have an
- * independent finite-orbit depth/work budget. For M_n^1 only the first digit
- * comes from A_(n-1); every subsequent digit belongs to A_n.
+ * Radius-zero M_n retains its reference depth/frontier contract. The original
+ * subsets use an independent depth/work budget and A_n after the first digit.
+ * Positive parameterRadius selects a varying-parameter cell outer approximation
+ * for every displayed layer, including M_n through 2c in E(c,2n-1).
  *
- * The legacy input alias rn is accepted, but all emitted fields are canonical.
- * Compare combines M_n with M_n^0. Coordinates, including the marked point,
- * share the browser's reciprocal normalization. Surviving a finite search is
- * Undetermined, while strict original-alphabet trap entry is numerical capture.
+ * parameterLayers selects any combination of mn/mn0/mn1; parameterDigits selects
+ * any D_n first digits independently. Legacy mode-only inputs retain their old
+ * selection. Both aggregate and individual results are returned separately so
+ * overlapping layers never overwrite one another's classification.
  */
 export function classifyParameterView(
   x, y, n, kMax = 37, LMax = 1000, tol = 1e-8, mode = 'mn', options = {}
@@ -97,14 +184,29 @@ export function classifyParameterView(
   assertPositiveNumber(tol, 'tol');
   mode = normalizeParameterViewMode(mode);
   const limits = normalizeMembershipLimits(n, options);
-  const mn = mode === 'mn' || mode === 'compare'
-    ? labelledResult(inverseIterationTestFast(x, y, n, kMax, LMax, tol), 'mn', n, true) : null;
-  const mn0 = mode === 'mn0' || mode === 'compare'
-    ? classifyMarkedPoint(x, y, n, tol, 'mn0', limits) : null;
-  const mn1 = mode === 'mn1' ? classifyMarkedPoint(x, y, n, tol, 'mn1', limits) : null;
-  const active = mode === 'mn0' ? mn0 : mode === 'mn1' ? mn1 : mn;
+  const selection = normalizeSelection(n, mode, options);
+  const geometry = parameterGeometry(x, y, n, tol, limits);
+  const layers = {}, digits = {};
+  for (const set of selection.parameterLayers) {
+    if (set === 'mn' && limits.parameterRadius === 0) {
+      layers.mn = labelledResult(inverseIterationTestFast(x, y, n, kMax, LMax, tol), 'mn', n, true);
+    } else {
+      const { value, usesTrap } = classifyMembership(geometry, n, set, limits);
+      layers[set] = labelledResult(value, set, n, usesTrap);
+    }
+  }
+  for (const digit of selection.parameterDigits) {
+    const { value, usesTrap } = classifyMembership(geometry, n, 'mn0', limits, digit);
+    digits[String(digit)] = labelledDigitResult(value, digit, n, usesTrap);
+  }
+  const mn = layers.mn ?? null, mn0 = layers.mn0 ?? null, mn1 = layers.mn1 ?? null;
+  const preferred = mode === 'compare' ? 'mn' : mode;
+  const active = layers[preferred] ?? layers[selection.parameterLayers[0]]
+    ?? digits[String(selection.parameterDigits[0])]
+    ?? { verdict: 'Exterior', depth: 0, stopReason: 'enclosure-escape', status: 'escaped',
+      nodesExplored: 0, work: 0, firstDigit: null, firstLevelIndex: null };
   return {
-    ...active, mode, mn, mn0, mn1,
-    comparison: mode === 'compare' ? comparisonCategory(mn, mn0) : null
+    ...active, mode, mn, mn0, mn1, layers, digits, ...selection,
+    comparison: mode === 'compare' && mn && mn0 ? comparisonCategory(mn, mn0) : null
   };
 }

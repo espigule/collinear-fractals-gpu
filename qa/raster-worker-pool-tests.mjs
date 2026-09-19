@@ -413,3 +413,47 @@ test('malformed piece attachments cannot enter the compositor or complete a fram
     assert.ok(h.workers.every(value => value.terminated));
   }
 });
+
+test('independent layer and halo-mask buffers reach the compositor without copying', async t => {
+  for (const kind of ['parameter', 'dynamical']) {
+    const h = harness({ maxWorkers: 1 });
+    t.after(() => h.pool.dispose());
+    const observed = recorder();
+    h.pool.render(job(kind, { width: 2, height: 2, parameterLayers: ['mn0', 'mn1'], parameterDigits: [1] }), observed.callbacks);
+    await turn();
+    const worker = h.workers.find(value => value.pending);
+    const response = worker.response();
+    if (kind === 'parameter') response.layerData = new Uint8Array(24).fill(3);
+    else {
+      response.pieceMasks = new Uint32Array(16).fill(3);
+      response.pieceUncertainMasks = new Uint32Array(16);
+    }
+    worker.pending = null;
+    worker.emit('message', { data: response });
+    await turn();
+    assert.equal(observed.errors.length, 0);
+    assert.equal(observed.completed.length, 1);
+    for (const key of ['layerData', 'pieceMasks', 'pieceUncertainMasks']) {
+      assert.equal(observed.tiles[0][key], response[key]);
+    }
+  }
+});
+
+test('a truncated layer or halo mask triggers fallback before it can erase geometry', async t => {
+  for (const attachment of [
+    { layerData: new Uint8Array(7) }, { pieceMasks: new Uint32Array(15) },
+    { pieceUncertainMasks: new Uint8Array(16) }
+  ]) {
+    const h = harness({ maxWorkers: 1 });
+    t.after(() => h.pool.dispose());
+    const observed = recorder();
+    h.pool.render(job('parameter', { width: 2, height: 2 }), observed.callbacks);
+    await turn();
+    const worker = h.workers.find(value => value.pending);
+    worker.emit('message', { data: { ...worker.response(), ...attachment } });
+    await turn();
+    assert.equal(observed.tiles.length + observed.completed.length, 0);
+    assert.equal(observed.errors.length, 1);
+    assert.equal(h.pool.supported, false);
+  }
+});

@@ -165,11 +165,11 @@
               <div class="control-group">
                 <label for="original-attractor-opacity">Collinear attractor opacity</label>
                 <div class="slider-container">
-                  <input type="range" id="original-attractor-opacity" min="0" max="100" value="72" step="1">
-                  <output class="slider-val" id="original-attractor-opacity-val" for="original-attractor-opacity">72%</output>
+                  <input type="range" id="original-attractor-opacity" min="0" max="100" value="100" step="1">
+                  <output class="slider-val" id="original-attractor-opacity-val" for="original-attractor-opacity">100%</output>
                 </div>
               </div>
-              <p class="control-help" id="attractor-renderer-help">Sharp boundary evaluates the attractor at pixel scale. Piece colors follow the first digit. These visual settings do not change the selected search limits.</p>
+              <p class="control-help" id="attractor-renderer-help">Sharp boundary evaluates the attractor at pixel scale and outlines each colored first-level piece in black. Piece colors follow the first digit. These visual settings do not change the selected search limits.</p>
             </div>
           </details>
 
@@ -188,31 +188,32 @@
           </details>
 
           <details class="control-section">
-            <summary>Color &amp; depth bands</summary>
+            <summary>Search colors &amp; depth bands</summary>
             <div class="section-content">
               <div class="control-group">
-                <label for="param-modulo">Depth color cycle <span class="math">q</span></label>
+                <label for="param-modulo">Capture-depth cycle <span class="math">q</span></label>
                 <div class="slider-container">
                   <input type="range" id="param-modulo" min="1" max="12" value="3" step="1" aria-describedby="modulo-help">
                   <output class="slider-val" id="modulo-val" for="param-modulo">3</output>
                 </div>
-                <p class="control-help" id="modulo-help">Capture depth colors repeat modulo <span class="math">q</span>.</p>
+                <p class="control-help" id="modulo-help">On the difference attractor, capture-depth colors repeat modulo <span class="math">q</span>.</p>
               </div>
               <div class="control-group">
-                <label for="palette-mode">Palette</label>
-                <select id="palette-mode">
+                <label for="palette-mode">Search palette</label>
+                <select id="palette-mode" aria-describedby="palette-scope-help">
                   <option value="research">Research grayscale</option>
                   <option value="print">Print contrast</option>
                   <option value="contrast">High contrast</option>
                   <option value="custom">Custom</option>
                 </select>
               </div>
-              <fieldset class="palette-grid" id="custom-palette-controls">
-                <legend>Custom colors</legend>
+              <p class="control-help" id="palette-scope-help">This palette colors the difference-attractor search, single-color attractors, unresolved results and background. Parameter sets and colored first-level pieces use their identifying colors; overlaps blend those colors.</p>
+              <fieldset class="palette-grid" id="custom-palette-controls" aria-describedby="palette-scope-help">
+                <legend>Search and background colors</legend>
                 <label for="palette-interior">In-lens capture<input type="color" id="palette-interior" value="#059669"></label>
                 <label for="palette-offlens">Off-lens capture<input type="color" id="palette-offlens" value="#2563eb"></label>
                 <label for="palette-undetermined">Undetermined<input type="color" id="palette-undetermined" value="#fbbf24"></label>
-                <label for="palette-exterior">Exterior<input type="color" id="palette-exterior" value="#ffffff"></label>
+                <label for="palette-exterior">Exterior / background<input type="color" id="palette-exterior" value="#ffffff"></label>
               </fieldset>
             </div>
           </details>
@@ -244,11 +245,31 @@
             <button type="button" class="panel-btn" id="btn-focus-param" title="Focus the parameter panel">Focus</button>
           </div>
         </div>
-        <div class="panel-mode-switch" role="group" aria-label="Parameter set">
-          <button type="button" id="btn-locus-mn" data-parameter-mode="mn" aria-pressed="true" title="Connectedness locus M_n"><span class="math">M</span><sub>n</sub></button>
-          <button type="button" id="btn-locus-mn0" data-parameter-mode="mn0" aria-pressed="false" title="M_n^0: c belongs to E(c,n)" aria-label="M n zero: original digits"><span class="indexed-math"><span class="math">M</span><span class="math-indices"><sup>0</sup><sub>n</sub></span></span></button>
-          <button type="button" id="btn-locus-mn1" data-parameter-mode="mn1" aria-pressed="false" title="M_n^1: c belongs to (D_n minus A_n) + (1/c)E(c,n)" aria-label="M n one: complementary first digit"><span class="indexed-math"><span class="math">M</span><span class="math-indices"><sup>1</sup><sub>n</sub></span></span></button>
-          <button type="button" id="btn-locus-compare" data-parameter-mode="compare" aria-pressed="false" title="Compare M_n and M_n^0">Compare</button>
+        <div class="panel-mode-switch parameter-set-switch" role="group" aria-label="Visible parameter sets: toggle independently">
+          <button type="button" id="btn-locus-mn" data-parameter-mode="mn" aria-pressed="true" title="Show or hide the connectedness locus M_n"><span class="parameter-layer-swatch" aria-hidden="true"></span><span class="math">M</span><sub>n</sub></button>
+          <button type="button" id="btn-locus-mn0" data-parameter-mode="mn0" aria-pressed="false" title="Show or hide M_n^0: c belongs to E(c,n)" aria-label="M n zero: original digits"><span class="parameter-layer-swatch" aria-hidden="true"></span><span class="indexed-math"><span class="math">M</span><span class="math-indices"><sup>0</sup><sub>n</sub></span></span></button>
+          <button type="button" id="btn-locus-mn1" data-parameter-mode="mn1" aria-pressed="false" title="Show or hide M_n^1: complementary first digits" aria-label="M n one: complementary first digit"><span class="parameter-layer-swatch" aria-hidden="true"></span><span class="indexed-math"><span class="math">M</span><span class="math-indices"><sup>1</sup><sub>n</sub></span></span></button>
+          <button type="button" id="btn-locus-compare" data-parameter-mode="compare" aria-pressed="false" title="Show all three aggregate sets together">Compare</button>
+          <details class="parameter-digit-settings" id="parameter-digit-settings">
+            <summary>Digits <span id="parameter-digit-count">0/5</span></summary>
+            <div class="parameter-digit-card">
+              <p class="parameter-digit-equation"><span class="math">F</span><sub>n,t</sub> = {<span class="math">c</span> : <span class="math">c</span> ∈ <span class="math">t</span> + <span class="math">c</span><sup>−1</sup><span class="math">E</span>(<span class="math">c</span>,<span class="math">n</span>)}</p>
+              <p class="control-help">Overlay any first-digit subsets. Every later digit uses <span class="math">A</span><sub>n</sub>.</p>
+              <div class="parameter-digit-actions" role="group" aria-label="Select individual digit subsets">
+                <button type="button" id="btn-digits-all">All digits</button>
+                <button type="button" id="btn-digits-none" disabled>No digits</button>
+              </div>
+              <fieldset class="parameter-digit-group">
+                <legend>Original digits <span class="math">A</span><sub>n</sub> · together <span class="indexed-math"><span class="math">M</span><span class="math-indices"><sup>0</sup><sub>n</sub></span></span></legend>
+                <div class="parameter-digit-grid" id="parameter-original-digits"></div>
+              </fieldset>
+              <fieldset class="parameter-digit-group">
+                <legend>Complementary digits · together <span class="indexed-math"><span class="math">M</span><span class="math-indices"><sup>1</sup><sub>n</sub></span></span></legend>
+                <div class="parameter-digit-grid" id="parameter-complement-digits"></div>
+              </fieldset>
+              <p class="control-help">Each checkbox is independent. The <span class="math">M</span> buttons above remain separate overlays. Overlapping selections blend their colors.</p>
+            </div>
+          </details>
         </div>
         <div class="canvas-container">
           <canvas id="parameter-canvas" tabindex="0" aria-label="Parameter-plane plot" aria-describedby="parameter-hint">Choose a parameter set and use the selected parameter fields to explore a point. The current search result appears in the bottom strip.</canvas>

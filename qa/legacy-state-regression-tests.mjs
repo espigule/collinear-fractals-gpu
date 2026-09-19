@@ -98,7 +98,7 @@ test('shader depth, beam queue and thickness never become current search bounds'
   assert.equal(imported.state.kMax, 37);
   assert.equal(imported.state.LMax, 1000);
   assert.equal(imported.state.modulo, 3);
-  assert.equal(imported.state.originalAttractorOpacity, 0.72);
+  assert.equal(imported.state.originalAttractorOpacity, DEFAULT_EXPLORER_STATE.originalAttractorOpacity);
   assert.equal(imported.state.palette, 'research');
   assert.equal(imported.state.rendererMode, 'boundary');
   assert.equal(imported.state.boundaryDepth, 0);
@@ -228,6 +228,24 @@ test('legacy signature hashes override queries while force flags disambiguate co
     assert.equal(legacy.state.cy, Math.sqrt(11) / 2);
     assert.equal(legacy.state.focusedPanel, 'parameter');
   }
+});
+
+test('independent layer and digit hashes override legacy panel selections', () => {
+  const query = '?legacy=1&n=99&panels=1111&cx=22';
+  for (const hash of ['#pl=mn0,mn1&pd=-1,1', '#pl=&pd=', '#pd=0']) {
+    const result = decode(query, hash);
+    assert.equal(result.importedLegacy, false);
+    assert.equal(result.source, 'hash');
+    assert.equal(result.state.n, DEFAULT_EXPLORER_STATE.n);
+    assert.equal(result.state.cx, DEFAULT_EXPLORER_STATE.cx);
+  }
+  const multiple = decode(query, '#pl=mn0,mn1&pd=-1,1').state;
+  assert.deepEqual(multiple.parameterLayers, ['mn0', 'mn1']);
+  assert.deepEqual(multiple.parameterDigits, [-1, 1]);
+  assert.equal(multiple.parameterMode, 'compare');
+  const empty = decode(query, '#pl=&pd=').state;
+  assert.deepEqual(empty.parameterLayers, []);
+  assert.deepEqual(empty.parameterDigits, []);
 });
 
 test('unknown anchors and tracking parameters cannot masquerade as explorer state', () => {

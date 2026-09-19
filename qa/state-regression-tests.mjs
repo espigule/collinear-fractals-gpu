@@ -5,7 +5,11 @@ import {
   DEFAULT_EXPLORER_STATE,
   decodeExplorerState,
   encodeExplorerState,
-  normalizeExplorerState
+  normalizeExplorerState,
+  normalizeParameterDigits,
+  normalizeParameterLayers,
+  parameterLayersForMode,
+  parameterModeForSelection
 } from '../src/state/explorer_state.mjs';
 
 const defaults = {
@@ -99,6 +103,7 @@ test('deep zooms, scientific notation and all view settings roundtrip losslessly
     rendererMode: 'histogram',
     backend: 'gpu',
     parameterMode: 'compare',
+    parameterLayers: ['mn', 'mn0'],
     comparisonMode: 'collinear',
     boundaryDepth: 73,
     adaptiveBoundary: false,
@@ -169,18 +174,21 @@ test('enum, layer, boolean and color validation rejects unsupported values', () 
 test('parameter-mode links default to Mn and preserve each canonical mode', () => {
   assert.equal(decodeExplorerState('#n=4&cx=1.5&cy=1.658312395').parameterMode, 'mn');
   for (const parameterMode of ['mn', 'mn0', 'mn1', 'compare']) {
-    const state = { ...defaults, parameterMode };
+    const state = { ...defaults, parameterMode, parameterLayers: parameterLayersForMode(parameterMode) };
     const params = encodeExplorerState(state);
     assert.equal(params.get('pm'), parameterMode);
     assert.deepEqual(decodeExplorerState(params), state);
   }
   assert.equal(decodeExplorerState('#pm=Rn').parameterMode, 'mn');
-  assert.equal(decodeExplorerState('#n=5', { ...defaults, parameterMode: 'mn1' }).parameterMode, 'mn1');
+  assert.equal(decodeExplorerState('#n=5', { ...defaults, parameterMode: 'mn1', parameterLayers: ['mn1'] }).parameterMode, 'mn1');
 });
 
 test('historical Rn URLs and JSON import as Mn0 and only emit the canonical name', () => {
   const oldState = JSON.parse(JSON.stringify({ ...defaults, parameterMode: 'rn' }));
-  const canonical = { ...defaults, parameterMode: 'mn0' };
+  // Archived JSON has the historical mode and no independent selection arrays.
+  delete oldState.parameterLayers;
+  delete oldState.parameterDigits;
+  const canonical = { ...defaults, parameterMode: 'mn0', parameterLayers: ['mn0'] };
   assert.deepEqual(decodeExplorerState('#pm=rn', defaults), canonical);
   assert.deepEqual(normalizeExplorerState(oldState), canonical);
   assert.equal(oldState.parameterMode, 'rn');
@@ -189,6 +197,70 @@ test('historical Rn URLs and JSON import as Mn0 and only emit the canonical name
   // Old imported state can also supply defaults for a later partial link.
   assert.deepEqual(decodeExplorerState('#n=5', oldState), { ...canonical, n: 5 });
   assert.equal(decodeExplorerState('#pm=unsupported', oldState).parameterMode, 'mn0');
+});
+
+test('parameter overlays retain independent aggregates and arbitrary first-digit selections', () => {
+  const state = normalizeExplorerState({
+    n: 5, parameterMode: 'mn', parameterLayers: ['mn1', 'mn', 'mn0', 'mn0'],
+    parameterDigits: [4, -4, 0, 1, 0, -1]
+  });
+  assert.deepEqual(state.parameterLayers, ['mn', 'mn0', 'mn1']);
+  assert.deepEqual(state.parameterDigits, [-4, -1, 0, 1, 4]);
+  assert.equal(state.parameterMode, 'compare');
+  const params = encodeExplorerState(state);
+  assert.equal(params.get('pl'), 'mn,mn0,mn1');
+  assert.equal(params.get('pd'), '-4,-1,0,1,4');
+  assert.deepEqual(decodeExplorerState(params), state);
+  assert.deepEqual(decodeExplorerState('#pm=compare').parameterLayers, ['mn', 'mn0']);
+  assert.deepEqual(decodeExplorerState('#pm=mn1&pl=mn,mn0&pd=-1,1').parameterLayers, ['mn', 'mn0']);
+  assert.deepEqual(decodeExplorerState('#pm=mn1&pd=0').parameterLayers, ['mn1']);
+  assert.deepEqual(decodeExplorerState('#pm=mn1&pd=0').parameterDigits, [0]);
+  assert.equal(parameterModeForSelection(['mn0'], []), 'mn0');
+  assert.equal(parameterModeForSelection(['mn0'], [0]), 'compare');
+});
+
+test('an explicit empty parameter selection survives links and partial updates', () => {
+  const hidden = decodeExplorerState('#pl=&pd=');
+  assert.deepEqual(hidden.parameterLayers, []);
+  assert.deepEqual(hidden.parameterDigits, []);
+  assert.equal(hidden.parameterMode, 'compare');
+  assert.deepEqual(decodeExplorerState(encodeExplorerState(hidden)), hidden);
+  assert.deepEqual(decodeExplorerState('#n=4', hidden).parameterLayers, []);
+  const digitsOnly = decodeExplorerState('#n=4&pl=&pd=-3,0,3');
+  assert.deepEqual(digitsOnly.parameterLayers, []);
+  assert.deepEqual(digitsOnly.parameterDigits, [-3, 0, 3]);
+  const legacyModeOverride = decodeExplorerState('#pm=mn1', digitsOnly);
+  assert.deepEqual(legacyModeOverride.parameterLayers, ['mn1']);
+  assert.deepEqual(legacyModeOverride.parameterDigits, []);
+});
+
+test('digit choices use the full supported alphabet and shrink safely with arity', () => {
+  const all = Array.from({ length: 199 }, (_, index) => index - 99);
+  const state = normalizeExplorerState({ n: 100, parameterLayers: [], parameterDigits: all });
+  assert.deepEqual(decodeExplorerState(encodeExplorerState(state)).parameterDigits, all);
+  const smaller = decodeExplorerState('#n=2', state);
+  assert.deepEqual(smaller.parameterDigits, [-1, 0, 1]);
+  assert.deepEqual(state.parameterDigits, all);
+  assert.deepEqual(normalizeParameterDigits([-9, -2, -1, 0, 0, 1, 2, 9, 0.5, '1', NaN], 2), [-1, 0, 1]);
+  assert.deepEqual(normalizeParameterLayers(['__proto__', 'constructor', 'mn1', 'mn']), ['mn', 'mn1']);
+});
+
+test('malformed digit input and accessor arrays cannot inject selections', () => {
+  const selected = normalizeExplorerState({ n: 4, parameterLayers: ['mn0'], parameterDigits: [-3, 3] });
+  for (const pd of ['NaN', 'Infinity', '0x1', '1.5', '1e0', '1,,2']) {
+    assert.deepEqual(decodeExplorerState(new URLSearchParams({ pd }), selected).parameterDigits, [-3, 3], pd);
+  }
+  const digits = [-1, 0, 1];
+  Object.defineProperty(digits, '1', { get() { throw new Error('must not invoke array accessor'); } });
+  assert.deepEqual(normalizeParameterDigits(digits, 2), [-1, 1]);
+  const layers = ['mn0'];
+  Object.defineProperty(layers, '0', { get() { throw new Error('must not invoke array accessor'); } });
+  assert.deepEqual(normalizeParameterLayers(layers), []);
+  const copied = normalizeExplorerState(selected);
+  copied.parameterLayers.push('mn');
+  copied.parameterDigits.push(0);
+  assert.deepEqual(selected.parameterLayers, ['mn0']);
+  assert.deepEqual(selected.parameterDigits, [-3, 3]);
 });
 
 test('new and partial links use boundary rendering while explicit historical renderers survive', () => {
@@ -205,6 +277,14 @@ test('new and partial links use boundary rendering while explicit historical ren
     assert.deepEqual(decodeExplorerState(encodeExplorerState(state)), state);
     assert.equal(decodeExplorerState('#n=5', state).rendererMode, rendererMode);
   }
+});
+
+test('fresh attractors use opaque piece colors while old explicit opacity remains portable', () => {
+  assert.equal(decodeExplorerState('').originalAttractorOpacity, 1);
+  assert.equal(decodeExplorerState('#n=4').originalAttractorOpacity, 1);
+  const transparent = decodeExplorerState('#aop=0.72');
+  assert.equal(transparent.originalAttractorOpacity, 0.72);
+  assert.equal(decodeExplorerState(encodeExplorerState(transparent)).originalAttractorOpacity, 0.72);
 });
 
 test('automatic boundary depth stays zero across zooms while explicit depths are bounded integers', () => {

@@ -15,7 +15,8 @@ The browser combines **WebGL 2 previews with binary64 CPU refinement**. Its
 default automatic mode displays a bounded GPU approximation, then refines the
 pixel search at the requested settings in Web Workers. The default original
 attractor view uses adaptive capture-and-escape boundary rendering, with
-first-level piece colors. Unsupported GPU views
+coordinated first-level piece colors and black outlines for each piece,
+including boundaries inside overlaps. Unsupported GPU views
 use CPU rendering; the existing progressive main-thread renderer is retained
 for environments without working workers.
 
@@ -26,18 +27,23 @@ hypotheses of the corresponding theorem.
 
 ## Quick visual summary
 
-![Three computed collinear attractors in original coordinates: E(c,4) at c=(3+i√11)/2, E(c,5) at c=1+2i, and a sparse E(c,3) at c=3+3i. Colors identify first-level pieces.](docs/figures/attractor-examples.svg)
+![Three computed collinear attractors in original coordinates: E(c,4) at c=(3+i√11)/2, E(c,5) at c=1+2i, and the overlapping rectangular pieces of E(2i,5). Colors and black contours distinguish first-level pieces.](docs/figures/attractor-examples.svg)
 
-These are complete depth-eight prefix illustrations of $E(c,n)$, using
-$f_t(z)=t+z/c$. Each panel has its own fitted scale; colors identify the first
-digit. Finite resolution and visible point sizes make these illustrations,
-not mathematical certificates. [Figure data and reproduction](docs/figures/README.md)
-record the exact parameters, tails, and display settings.
-Their interactive links open the sharper boundary renderer at the same
-parameters and coordinate spans; the static figures retain their prefix construction.
+These finite capture-and-escape images of $E(c,n)$ use the explorer's
+binary64 raster and first-piece contour compositor, with $f_t(z)=t+z/c$.
+Each panel has its own fitted scale. Colors identify the first digit; black
+contours trace each displayed piece, including boundaries inside overlaps.
+Finite resolution and escape depth make these visual approximations, not
+mathematical certificates. [Figure data and reproduction](docs/figures/README.md)
+record the exact parameters, depths, pixel footprints, and display settings.
+Their interactive links restore the same parameters, coordinate spans, and
+piece settings, then increase boundary depth as you zoom. The figures use a
+fixed depth; interactive depth and pixel resolution adapt to the viewport.
 
 **Explore these examples:** [Four-piece attractor][view-e4] ·
-[Five-piece attractor][view-e5] · [Sparse three-piece attractor][view-e3].
+[Five-piece attractor][view-e5] · [Overlapping rectangular pieces][view-overlap].
+The [sparse three-piece attractor][view-e3] remains available as a separate
+off-lens example.
 
 The workspace opens in **Split** view at $n=4$,
 $c=(3+i\sqrt{11})/2$: the parameter plane is linked to the original
@@ -47,22 +53,39 @@ The **Controls** drawer contains examples, Cartesian and polar parameter
 entry, search limits, renderers, layers, palettes, and exports.
 
 Switch the dynamical scene between $E(c,n)$, the half-scale difference
-$\frac{1}{2}E(c,2n-1)$, and their overlay. The parameter plane offers
-$\mathcal{M}_n$, $\mathcal{M}_n^0=\{c:c\in E(c,n)\}$,
-$\mathcal{M}_n^1=\{c:c\in A_{n-1}+c^{-1}E(c,n)\}$, and a comparison.
-The old name $R_n$ imports as $\mathcal{M}_n^0$. In $\mathcal{M}_n^1$,
-only the first digit comes from the complementary alphabet $A_{n-1}$;
-all later digits come from $A_n$. These two views are not presented as a
-decomposition of the full connectedness locus.
+$\frac{1}{2}E(c,2n-1)$, and their overlay. The parameter plane has independently
+selectable $\mathcal{M}_n$, $\mathcal{M}_n^0$, and $\mathcal{M}_n^1$ layers,
+together with one subset for each digit of
+$D_n=\{-n+1,-n+2,\ldots,n-1\}$. Their definitions are
+
+$$
+F_{n,t}=\{c:c\in t+c^{-1}E(c,n)\},\qquad t\in D_n,
+$$
+
+$$
+\mathcal M_n^0=\bigcup_{t\in A_n}F_{n,t}=\{c:c\in E(c,n)\},\qquad
+\mathcal M_n^1=\bigcup_{t\in D_n\setminus A_n}F_{n,t}.
+$$
+
+Several layers or individual digits can be visible together. Every digit
+subset uses the selected $t$ once and $A_n$ at all later inverse steps.
+Since $D_n\setminus A_n=A_{n-1}$, this also gives
+$\mathcal M_n^1=\{c:c\in A_{n-1}+c^{-1}E(c,n)\}$.
+The old name $R_n$ imports as $\mathcal M_n^0$. The union of these two
+marked-point sets is contained in $\mathcal M_n$; it is not presented as the
+whole connectedness locus.
 
 **Sharp boundary** evaluates the original attractor at pixel scale. It uses
 capture only where the original alphabet has a canonical self-covering trap,
 and otherwise follows inverse branches until escape, finite-depth survival,
-or a work limit. Finite survivors describe visual coverage; unfinished work
-remains unresolved. Automatic depth starts at 16 for two maps and 12 otherwise,
-and adapts to zoom and raster resolution. Prefix, seeded histogram, and
-survival rendering remain available as advanced views. The selected
-$\mathcal M_n$ search keeps its independent depth and frontier-width limits.
+or a work limit. Parameter layers follow the same capture-and-escape approach
+over the whole pixel cell: the marked point, maps, and pruning bounds vary
+with $c$. This reveals thin structure that pixel-center sampling can miss.
+Finite survivors describe visual coverage; unfinished work remains unresolved.
+Automatic depth starts at 16 for two maps and 12 otherwise, and adapts to zoom
+and raster resolution. Prefix, seeded histogram, and survival rendering remain
+available as advanced views. The selected $\mathcal M_n$ search keeps its
+independent depth and frontier-width limits.
 
 Share links, captioned image export, search JSON, and undo/redo retain the
 reproducible research workflow. The drawer becomes a modal on narrow screens;
@@ -165,7 +188,9 @@ real-axis and unit-circle inputs are not classified by it. See
 CPU pixel rendering uses a scalar kernel with reusable typed-array frontiers,
 scheduled in bounded worker tiles; original-attractor boundaries use a bounded
 depth-first search. GPU preview classification and palette
-mapping run in two WebGL 2 passes. The selected-parameter search retains its
+composition run in separate WebGL 2 passes, with independent evaluations for
+the selected parameter layers and first-level pieces. The selected-parameter
+search retains its
 detailed reference tree and inverse word. A per-pixel certificate inspector,
 completed boundary atlas, and WebGPU backend remain future work.
 
@@ -269,9 +294,15 @@ parameter-set and scene modes, backend preference, layers, renderer, boundary
 depth and adaptation, advanced prefix depth, histogram seed/sample count,
 piece coloring, and opacity in the URL fragment. The boundary keys are
 `bdepth=0` for automatic base depth and `badapt=1` for adaptation; explicit base
-depths range from 1 to 100. Old `pm=rn` links become canonical `pm=mn0` when
-shared again. A share link restores the
-view; a search JSON export records the numerical result.
+depths range from 1 to 100. Parameter selections use `pl` for aggregate layers
+and `pd` for first digits, as comma-separated lists. For example,
+`pl=mn,mn1&pd=-1,1` keeps the full locus, the complementary aggregate, and
+two digit subsets visible together. Empty lists deliberately hide those
+layers. The older `pm` field remains a compatibility projection; explicit
+`pl`/`pd` selections take precedence. Old `pm=rn` links import as `mn0`,
+and old `pm=compare` links retain their original two-layer selection.
+A share link restores the view; a search JSON export records the numerical
+result.
 
 For a reproducible issue or figure, retain both, together with the git commit
 or release used. Floating-point behavior near decision boundaries can depend
@@ -404,6 +435,7 @@ Documentation and non-code repository materials use **Creative Commons
 Attribution 4.0 International** unless otherwise stated; see
 [LICENSE-docs.md](LICENSE-docs.md) and [the full license](LICENSES/CC-BY-4.0.txt).
 
-[view-e4]: https://complextrees.com/collinear-fractals-gpu/#n=4&k=37&l=1000&tol=1e-8&q=3&cx=1.5&cy=1.6583123951777&pz=2.414&dz=9.730607775891547&bdepth=0&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
-[view-e5]: https://complextrees.com/collinear-fractals-gpu/#n=5&k=37&l=1000&tol=1e-8&q=3&cx=1&cy=2&pz=2.414&dz=12.923663597204854&bdepth=0&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
+[view-e4]: https://complextrees.com/collinear-fractals-gpu/#n=4&k=37&l=1000&tol=1e-8&q=3&cx=1.5&cy=1.6583123951777&pz=2.414&dz=9.730607775891547&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pl=mn&pd=&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
+[view-e5]: https://complextrees.com/collinear-fractals-gpu/#n=5&k=37&l=1000&tol=1e-8&q=3&cx=1&cy=2&pz=2.414&dz=12.923663597204854&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pl=mn&pd=&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
 [view-e3]: https://complextrees.com/collinear-fractals-gpu/#n=3&k=37&l=1000&tol=1e-8&q=3&cx=3&cy=3&pz=2.414&dz=5.284458204387503&bdepth=0&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
+[view-overlap]: https://complextrees.com/collinear-fractals-gpu/#n=5&k=37&l=1000&tol=1e-8&q=3&cx=0&cy=2&pz=2.414&dz=11.946666668061772&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pl=mn&pd=&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff

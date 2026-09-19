@@ -132,10 +132,15 @@ export function createRasterWorkerPool(options = {}) {
       failPool(error);
       return;
     }
+    const layerBytes = 2 * (job.job.parameterLayers.length + job.job.parameterDigits.length) * tile.width * tile.height;
+    const maskLength = (tile.width + 2) * (tile.height + 2) * Math.ceil(job.job.n / 32);
     if (message.type !== 'tile' || !(message.data instanceof Uint8Array) ||
         message.data.byteLength !== 4 * tile.width * tile.height ||
         (message.pieces !== undefined && (!(message.pieces instanceof Uint8Array) ||
           message.pieces.byteLength !== 2 * tile.width * tile.height)) ||
+        (message.layerData !== undefined && (!(message.layerData instanceof Uint8Array) || message.layerData.byteLength !== layerBytes)) ||
+        ['pieceMasks', 'pieceUncertainMasks'].some(key => message[key] !== undefined &&
+          (!(message[key] instanceof Uint32Array) || message[key].length !== maskLength)) ||
         ['x', 'y', 'width', 'height'].some(key => message[key] !== tile[key])) {
       failPool(new Error('Raster worker returned a malformed tile'));
       return;
@@ -148,6 +153,8 @@ export function createRasterWorkerPool(options = {}) {
       job.callbacks.onTile?.({
         jobId: job.id, ...tile, data: message.data,
         ...(message.pieces === undefined ? {} : { pieces: message.pieces }),
+        ...Object.fromEntries(['layerData', 'pieceMasks', 'pieceUncertainMasks']
+          .filter(key => message[key] !== undefined).map(key => [key, message[key]])),
         pixelsCompleted: job.pixelsCompleted, totalPixels: job.totalPixels
       });
     } catch (error) {

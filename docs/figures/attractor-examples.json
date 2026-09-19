@@ -1,7 +1,7 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "2.0.0",
   "artifact": "docs/figures/attractor-examples.svg",
-  "artifact_sha256": "4bb6695dfa141a08ad44aeaacb5564e86ae8403bdc4eb8b747bae399056ba6dd",
+  "artifact_sha256": "af2c21754b7b672bf157c554da07228b3a945720bc66fbcc251cd6114adc109c",
   "title": "Three collinear attractors in their original coordinates",
   "generator": "tools/docs/generate_attractor_examples.mjs",
   "regenerate": "node tools/docs/generate_attractor_examples.mjs",
@@ -10,25 +10,37 @@
     "src/math/alphabets.mjs": "2c8c131eafb353a2dab4b26214494b87defa95b3d38a3321fb2977797b49ccad",
     "src/math/attractor_bounds.mjs": "c50be5f717be0324254a2032b3121a3bd5e3a9be6fb079119d8444fbe646652d",
     "src/math/complex.mjs": "5c507c04375c27d7a2a5c4241379f54726217f226b484b1b7dfca738f29f0650",
-    "src/math/prefix_cylinders.mjs": "094567856fb73caabba86ce5bec152d108cb8cf71f66758b277fb68d0fd03dca",
     "src/math/validation.mjs": "19ed9444507f93799359ad1849ed8dfc28eac741be14a0fc4537622d0b4cedc9",
-    "src/renderers/palettes.mjs": "36c2a4cac522d069725675a0190e872b318511d0cb43f330bc9cb2612f07229f",
-    "src/state/explorer_state.mjs": "3df13d9b24506f810c83248aa540b405ce4e7cd27148da131912131b4222a03e"
+    "src/compute/attractor_membership.mjs": "cc29be0b60d5869aacf9c820bace119256464d4d8af32cedc24b69adfcbeff85",
+    "src/compute/inverse_search_kernel.mjs": "e7189fafcf12677f0413533447fdec76b576a51e61faa8765708af0fb1f0a2dc",
+    "src/compute/inverse_search_reference.mjs": "d46561795d3317644b801676f59111e693d979a09f5340963c81c0da5644c861",
+    "src/compute/parameter_views.mjs": "d3a55f0ef79ffff3dc1009570208360563a1126a3c6f106460c500c1d66aa48d",
+    "src/compute/raster_jobs.mjs": "2d901319519d950c7680625ad1f03977b3a15df3dc63ea0e56c18b5746243221",
+    "src/renderers/palettes.mjs": "dd237ea585d85147a935f8d9814b930c109615cb0f91221aff75d35b6b82ba5f",
+    "src/renderers/hybrid_renderer.mjs": "b4925ea14a374d74a422326ad264bb20d434bc1f45d7fffd1b059b6c30305197",
+    "src/state/explorer_state.mjs": "4d8d7085b758f421c8fcb883c41f9d7b2d690d0a7c141dbb914fa2708bd5a360"
   },
+  "generator_sha256": "9b3c08ca08e9289eac2f2063203f67c9b8d07dbcf9ae90918ef40e1840d76922",
   "svg_size": {
     "width": 1200,
     "height": 525
   },
   "arithmetic": "binary64",
-  "sampling": "complete-prefix-enumeration",
+  "sampling": "capture-escape-pixel-footprints",
   "rasterization": {
     "png": "RGBA8, PNG filter 0, zlib level 9",
     "resolution_scale": 2,
-    "subpixel_samples": 4,
-    "disk_rule": "max(geometric tail radius, minimum display radius)",
-    "default_minimum_display_radius_raster_pixels": 0.6,
-    "compositing": "union within each first-level piece, then ascending-digit source-over on white",
-    "first_level_piece_opacity": 0.92
+    "pixel_rule": "disk enclosing each raster pixel; radius equals its half-diagonal",
+    "compositing": "mean colors of all occupied first-level pieces, then black contours on each piece",
+    "outline_color": [
+      18,
+      18,
+      18
+    ],
+    "outline_width_raster_pixels": 1,
+    "outline_rule": "occupied piece absent in a cardinal neighbor, except unresolved neighbors",
+    "tile_halo_raster_pixels": 1,
+    "first_level_piece_opacity": 1
   },
   "proof_status": "visual-approximation",
   "rounding_verified": false,
@@ -37,17 +49,16 @@
       "id": "e_c4_overlap",
       "label": "OVERLAP PRESET",
       "source_example": "examples/e_c4_overlap/config.json",
-      "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=4&k=37&l=1000&tol=1e-8&q=3&cx=1.5&cy=1.6583123951777&pz=2.414&dz=9.730607775891547&bdepth=0&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
+      "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=4&k=37&l=1000&tol=1e-8&q=3&cx=1.5&cy=1.6583123951777&pz=2.414&dz=9.730607775891547&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pl=mn&pd=&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
       "interactive_rendering": {
         "corresponding_view_only": true,
         "renderer_mode": "boundary",
-        "requested_boundary_depth": 0,
-        "automatic_base_depth": 12,
+        "requested_boundary_depth": 12,
         "adaptive_boundary": true,
         "maximum_effective_boundary_depth": 100,
-        "advanced_prefix_depth": 8,
+        "boundary_work_per_piece": 20000,
         "resource_cap_result": "unresolved",
-        "note": "This URL opens the corresponding original-attractor view using adaptive capture-and-escape boundary rendering. Its effective depth depends on viewport zoom and raster resolution; GPU previews have separate depth/work caps before automatic CPU refinement. The committed figure remains a complete depth-eight prefix illustration, reproduced by this generator."
+        "note": "This URL opens the same original-attractor view, palette and piece contours, with the figure depth as its starting depth. Interactive depth increases with zoom and raster resolution. The committed figure uses fixed-depth production CPU rendering; the explorer first attempts a GPU preview and then refines with the CPU renderer. Pixel footprints depend on the live viewport resolution."
       },
       "set": "E(c,n)",
       "n": 4,
@@ -65,17 +76,17 @@
         3
       ],
       "maps": "z -> t + z/c",
-      "prefix_sum": "sum_{j=0}^{depth-1} t_j / c^j",
-      "prefix_depth": 8,
-      "prefix_count": 65536,
-      "complete_prefix_level": true,
-      "maximum_prefixes": 400000,
+      "inverse_maps": "z -> c(z-t)",
+      "renderer": "capture-escape-boundary",
+      "escape_depth": 12,
+      "boundary_work_per_piece": 20000,
+      "self_covering_trap_enabled": false,
+      "pixel_radius_world": 0.010362317384637745,
+      "first_level_piece_masks": true,
+      "uncertain_neighbor_guard": true,
+      "raster_halo": 1,
       "random_sampling": false,
       "seed": null,
-      "geometric_tail_radius": 0.008683281572999742,
-      "display_radius_world": 0.008792717869781518,
-      "minimum_display_radius_raster_pixels": 0.6,
-      "minimum_display_radius_applied": true,
       "viewport": {
         "center": {
           "re": 0,
@@ -102,44 +113,59 @@
       "first_level_colors": [
         {
           "digit": -3,
-          "color": "#0f766e"
+          "color": "#edc866"
         },
         {
           "digit": -1,
-          "color": "#7c3aed"
+          "color": "#91a5ed"
         },
         {
           "digit": 1,
-          "color": "#b45309"
+          "color": "#75c7b3"
         },
         {
           "digit": 3,
-          "color": "#2563eb"
+          "color": "#df9cae"
         }
       ],
-      "occupied_raster_pixels": 47002,
-      "raster_sha256": "ac15fee202e2a280831ce146a3ddc6499f198148f96bbebe20c32121a2889318",
+      "pixel_counts": {
+        "captured": 0,
+        "finite_survivor": 51706,
+        "exterior": 240454,
+        "unresolved": 0,
+        "occupied": 51706,
+        "outlined": 14434,
+        "overlap": 30
+      },
+      "geometric_checks": [
+        "full-E witness beyond E/c support disk",
+        "affine fixed point in its first-level piece",
+        "no work or arithmetic caps",
+        "clear fitted margins",
+        "independent piece contours",
+        "E4 main holes at -2, 0, 2 remain exterior"
+      ],
+      "raster_sha256": "faade9836962b94e5ffba3df244d9d3ec6cabce8a1f36a39525fe460257f9e8c",
       "visual_status": "visual-approximation",
       "proof_status": "visual-approximation",
       "connectedness_verdict": null,
       "interior_verdict": null,
-      "limitations": "Finite prefixes and minimum-sized display marks do not certify overlap, connectedness, interior, or boundary membership. Color overlaps also depend on raster resolution."
+      "limitations": "Finite-depth pixel coverage and piece contours approximate geometry at the stated resolution. They are not exact set boundaries or connectedness/interior certificates. Resource and arithmetic caps remain unresolved, and overlaps depend on raster resolution."
     },
     {
       "id": "e_c5_plane_filling",
       "label": "PLANE-FILLING PRESET",
       "source_example": "examples/e_c5_plane_filling/config.json",
-      "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=5&k=37&l=1000&tol=1e-8&q=3&cx=1&cy=2&pz=2.414&dz=12.923663597204854&bdepth=0&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
+      "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=5&k=37&l=1000&tol=1e-8&q=3&cx=1&cy=2&pz=2.414&dz=12.923663597204854&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pl=mn&pd=&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
       "interactive_rendering": {
         "corresponding_view_only": true,
         "renderer_mode": "boundary",
-        "requested_boundary_depth": 0,
-        "automatic_base_depth": 12,
+        "requested_boundary_depth": 12,
         "adaptive_boundary": true,
         "maximum_effective_boundary_depth": 100,
-        "advanced_prefix_depth": 8,
+        "boundary_work_per_piece": 20000,
         "resource_cap_result": "unresolved",
-        "note": "This URL opens the corresponding original-attractor view using adaptive capture-and-escape boundary rendering. Its effective depth depends on viewport zoom and raster resolution; GPU previews have separate depth/work caps before automatic CPU refinement. The committed figure remains a complete depth-eight prefix illustration, reproduced by this generator."
+        "note": "This URL opens the same original-attractor view, palette and piece contours, with the figure depth as its starting depth. Interactive depth increases with zoom and raster resolution. The committed figure uses fixed-depth production CPU rendering; the explorer first attempts a GPU preview and then refines with the CPU renderer. Pixel footprints depend on the live viewport resolution."
       },
       "set": "E(c,n)",
       "n": 5,
@@ -158,17 +184,17 @@
         4
       ],
       "maps": "z -> t + z/c",
-      "prefix_sum": "sum_{j=0}^{depth-1} t_j / c^j",
-      "prefix_depth": 8,
-      "prefix_count": 390625,
-      "complete_prefix_level": true,
-      "maximum_prefixes": 400000,
+      "inverse_maps": "z -> c(z-t)",
+      "renderer": "capture-escape-boundary",
+      "escape_depth": 12,
+      "boundary_work_per_piece": 20000,
+      "self_covering_trap_enabled": false,
+      "pixel_radius_world": 0.013762665914694704,
+      "first_level_piece_masks": true,
+      "uncertain_neighbor_guard": true,
+      "raster_halo": 1,
       "random_sampling": false,
       "seed": null,
-      "geometric_tail_radius": 0.011577708763999658,
-      "display_radius_world": 0.0116780092745827,
-      "minimum_display_radius_raster_pixels": 0.6,
-      "minimum_display_radius_applied": true,
       "viewport": {
         "center": {
           "re": 0,
@@ -195,119 +221,163 @@
       "first_level_colors": [
         {
           "digit": -4,
-          "color": "#0f766e"
+          "color": "#edc866"
         },
         {
           "digit": -2,
-          "color": "#7c3aed"
+          "color": "#91a5ed"
         },
         {
           "digit": 0,
-          "color": "#b45309"
+          "color": "#75c7b3"
         },
         {
           "digit": 2,
-          "color": "#2563eb"
+          "color": "#df9cae"
         },
         {
           "digit": 4,
-          "color": "#be123c"
+          "color": "#b49bdd"
         }
       ],
-      "occupied_raster_pixels": 108752,
-      "raster_sha256": "a6b5f74377d2fc1bd5d5f8063646cb2b3948f5464822323c5d75972856e0e670",
+      "pixel_counts": {
+        "captured": 0,
+        "finite_survivor": 109606,
+        "exterior": 182554,
+        "unresolved": 0,
+        "occupied": 109606,
+        "outlined": 5760,
+        "overlap": 3278
+      },
+      "geometric_checks": [
+        "full-E witness beyond E/c support disk",
+        "affine fixed point in its first-level piece",
+        "no work or arithmetic caps",
+        "clear fitted margins",
+        "independent piece contours",
+        "central E5 tile covered"
+      ],
+      "raster_sha256": "0ffd6f671454ca4256ca6011c86e62842ff1c78376b4df808e457402a628331b",
       "visual_status": "visual-approximation",
       "proof_status": "visual-approximation",
       "connectedness_verdict": null,
       "interior_verdict": null,
-      "limitations": "Finite prefixes and minimum-sized display marks do not certify overlap, connectedness, interior, or boundary membership. Color overlaps also depend on raster resolution."
+      "limitations": "Finite-depth pixel coverage and piece contours approximate geometry at the stated resolution. They are not exact set boundaries or connectedness/interior certificates. Resource and arithmetic caps remain unresolved, and overlaps depend on raster resolution."
     },
     {
-      "id": "e_c3_sparse",
-      "label": "SPARSE EXAMPLE",
+      "id": "e_c5_piece_overlap",
+      "label": "OVERLAPPING PIECES",
       "source_example": null,
-      "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=3&k=37&l=1000&tol=1e-8&q=3&cx=3&cy=3&pz=2.414&dz=5.284458204387503&bdepth=0&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
+      "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=5&k=37&l=1000&tol=1e-8&q=3&cx=0&cy=2&pz=2.414&dz=11.946666668061772&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pl=mn&pd=&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
       "interactive_rendering": {
         "corresponding_view_only": true,
         "renderer_mode": "boundary",
-        "requested_boundary_depth": 0,
-        "automatic_base_depth": 12,
+        "requested_boundary_depth": 12,
         "adaptive_boundary": true,
         "maximum_effective_boundary_depth": 100,
-        "advanced_prefix_depth": 8,
+        "boundary_work_per_piece": 20000,
         "resource_cap_result": "unresolved",
-        "note": "This URL opens the corresponding original-attractor view using adaptive capture-and-escape boundary rendering. Its effective depth depends on viewport zoom and raster resolution; GPU previews have separate depth/work caps before automatic CPU refinement. The committed figure remains a complete depth-eight prefix illustration, reproduced by this generator."
+        "note": "This URL opens the same original-attractor view, palette and piece contours, with the figure depth as its starting depth. Interactive depth increases with zoom and raster resolution. The committed figure uses fixed-depth production CPU rendering; the explorer first attempts a GPU preview and then refines with the CPU renderer. Pixel footprints depend on the live viewport resolution."
       },
       "set": "E(c,n)",
-      "n": 3,
+      "n": 5,
       "parameter": {
-        "re": 3,
-        "im": 3,
-        "exact": "3 + 3i"
+        "re": 0,
+        "im": 2,
+        "exact": "2i"
       },
       "parameter_convention": "expanding-parameter",
       "displayed_coordinate_scale": 1,
       "digits": [
+        -4,
         -2,
         0,
-        2
+        2,
+        4
       ],
       "maps": "z -> t + z/c",
-      "prefix_sum": "sum_{j=0}^{depth-1} t_j / c^j",
-      "prefix_depth": 8,
-      "prefix_count": 6561,
-      "complete_prefix_level": true,
-      "maximum_prefixes": 400000,
+      "inverse_maps": "z -> c(z-t)",
+      "renderer": "capture-escape-boundary",
+      "escape_depth": 12,
+      "boundary_work_per_piece": 20000,
+      "self_covering_trap_enabled": true,
+      "pixel_radius_world": 0.01272224249030388,
+      "first_level_piece_masks": true,
+      "uncertain_neighbor_guard": true,
+      "raster_halo": 1,
       "random_sampling": false,
       "seed": null,
-      "geometric_tail_radius": 0.000024927423956982053,
-      "display_radius_world": 0.009550225670579825,
-      "minimum_display_radius_raster_pixels": 1.2,
-      "minimum_display_radius_applied": true,
       "viewport": {
         "center": {
           "re": 0,
           "im": 0
         },
-        "x_min": -2.6422291021937516,
-        "x_max": 2.6422291021937516,
-        "y_min": -1.750874706272968,
-        "y_max": 1.750874706272968,
+        "x_min": -5.973333334030886,
+        "x_max": 5.973333334030886,
+        "y_min": -3.9582329321891416,
+        "y_max": 3.9582329321891416,
         "svg_width": 332,
         "svg_height": 220,
         "raster_width": 664,
         "raster_height": 440,
-        "pixels_per_world_unit": 125.6514810636034
+        "pixels_per_world_unit": 55.580357136366594
       },
       "support_bounds": {
-        "xMax": 2.3591331269587066,
-        "yMax": 0.4643962850253794,
-        "tailRadius": 2.374583138715745e-10,
-        "terms": 16,
+        "xMax": 5.333333333956148,
+        "yMax": 2.66666666697904,
+        "tailRadius": 9.31322574615481e-10,
+        "terms": 33,
         "tailCapHit": false,
-        "roundoffPadding": 3.41060513162582e-13
+        "roundoffPadding": 1.9326762412674725e-12
       },
       "first_level_colors": [
         {
+          "digit": -4,
+          "color": "#edc866"
+        },
+        {
           "digit": -2,
-          "color": "#0f766e"
+          "color": "#91a5ed"
         },
         {
           "digit": 0,
-          "color": "#7c3aed"
+          "color": "#75c7b3"
         },
         {
           "digit": 2,
-          "color": "#b45309"
+          "color": "#df9cae"
+        },
+        {
+          "digit": 4,
+          "color": "#b49bdd"
         }
       ],
-      "occupied_raster_pixels": 1040,
-      "raster_sha256": "8a251dbb2a2693ffa3ba097064af2c3f86718911f8527808f0f52f2746647363",
+      "pixel_counts": {
+        "captured": 171390,
+        "finite_survivor": 5622,
+        "exterior": 115148,
+        "unresolved": 0,
+        "occupied": 177012,
+        "outlined": 4148,
+        "overlap": 45892
+      },
+      "geometric_checks": [
+        "full-E witness beyond E/c support disk",
+        "affine fixed point in its first-level piece",
+        "no work or arithmetic caps",
+        "clear fitted margins",
+        "independent piece contours",
+        "E(2i,5) outer corner visible",
+        "canonical self-covering capture exercised",
+        "both overlapping rectangle pieces retained",
+        "internal contours at 2/3 and 4/3 visible"
+      ],
+      "raster_sha256": "73905f88edc3768ff4fa1e587994609504d7694d0d5f7cc1345bd92c52929d01",
       "visual_status": "visual-approximation",
       "proof_status": "visual-approximation",
       "connectedness_verdict": null,
       "interior_verdict": null,
-      "limitations": "Finite prefixes and minimum-sized display marks do not certify overlap, connectedness, interior, or boundary membership. Color overlaps also depend on raster resolution."
+      "limitations": "Finite-depth pixel coverage and piece contours approximate geometry at the stated resolution. They are not exact set boundaries or connectedness/interior certificates. Resource and arithmetic caps remain unresolved, and overlaps depend on raster resolution."
     }
   ]
 }

@@ -135,25 +135,37 @@ results are not implied by these browser counts. The earlier
 [release QA report](QA_REPORT.md) and [upgrade review](UPGRADE_REVIEW_2026-09.md)
 remain historical records of their own revisions.
 
-## Sharp boundary validation — 18 September 2026
+## Parameter-cell and piece-boundary validation — 19 September 2026
 
-The sharp boundary and marked-point extension changes numerical raster paths,
-so the earlier hybrid counts do not validate this later source. Run all three
-current gates against its final commit. Acceptance checks should cover:
+The current extension changes numerical raster paths and multi-layer
+composition. The earlier hybrid counts and the 18 September sharp-boundary
+checks do not validate this later source. In particular, the prior parameter
+raster tested pixel centers; its zero-radius fixtures could not establish
+coverage of thin components between centers. Run all three current gates
+against the final commit. Acceptance checks should cover:
 
 - original-alphabet capture only in $|c|^2+2|\mathrm{Re}\,c|<n$, including
   even alphabets, and no off-lens trap acceptance;
 - exhaustive escape, finite-depth survival, and work/stack exhaustion as
   distinct outcomes;
-- full $E(c,n)$ coordinates and first-level piece identity;
-- the complementary first digit of $\mathcal M_n^1$, followed only by
-  original digits, with no depth-zero capture bypassing that first step;
-- a geometric pixel footprint for dynamical coverage and zero footprint for
-  marked-point parameter classification;
+- full $E(c,n)$ coordinates, independent first-level piece coverage, and black
+  boundaries that remain visible within overlaps and across worker tile seams;
+- every $t\in D_n$ fixed first-digit subset with an $A_n$ tail, and the
+  original/complementary unions for $\mathcal M_n^0$ and $\mathcal M_n^1$,
+  with no depth-zero capture bypassing a required first step;
+- a geometric pixel footprint for dynamical coverage and a varying-$c$
+  parameter cell for each parameter layer, with derivative/remainder
+  propagation and pruning bounds checked against explicit orbit samples;
+- reciprocal cell coverage and unresolved cells crossing the unit circle;
+- whole-cell capture within the original-alphabet lens, including even
+  alphabets, and retained finite escape coverage outside it;
+- multiple aggregate and individual-digit selections, deterministic overlap
+  composition, empty selections, and digit pruning when $n$ changes;
 - automatic depth, explicit base depth, zoom/resolution adaptation, and
   requested versus effective GPU work/depth limits;
-- `bdepth`/`badapt` sharing and history, canonical `mn0`/`mn1` links,
-  old `pm=rn` migration, and forced-legacy query precedence;
+- `pl`/`pd` and `bdepth`/`badapt` sharing and history, canonical `mn0`/`mn1`
+  links, old `pm=rn` and two-layer `pm=compare` migration, and forced-legacy
+  query precedence;
 - unchanged binary64 selected $\mathcal M_n$ records when visual depth,
   renderer, or backend changes.
 
@@ -170,8 +182,9 @@ Automation complements a visual review of the final Pages artifact:
    focus visibility, dialogs, and both canvases.
 2. Compare the $E(c,4)$ and $E(c,5)$ presets in sharp boundary, prefix,
    histogram, and survival modes. Zoom into boundary detail, toggle adaptation,
-   and inspect effective depth. A picture can be useful while its selected
-   search is `Undetermined`.
+   and inspect effective depth. Confirm every visible first-level piece has
+   its own black boundary, including interfaces inside an overlap. A picture
+   can be useful while its selected search is `Undetermined`.
 3. Move the parameter locator and confirm the displayed parameter, search
    result, and exported JSON agree. Check a reciprocal input and a real input.
 4. Reload a shared URL, exercise undo/redo, and confirm layers and limits return.
@@ -182,9 +195,14 @@ Automation complements a visual review of the final Pages artifact:
    Check a precision-guarded deep zoom and CPU fallback with WebGL disabled.
 7. Check Safari and Firefox when available; Chromium automation does not
    establish cross-browser compatibility.
-8. Compare $\mathcal M_n$, $\mathcal M_n^0$, and $\mathcal M_n^1$ at a fixed
-   parameter. Confirm the set definition and exported auxiliary result match
-   the chosen mode, while the selected connectedness record keeps its own limits.
+8. Show $\mathcal M_n$, $\mathcal M_n^0$, and $\mathcal M_n^1$ together, then
+   toggle individual digits. Inspect fine structure at several zoom levels;
+   coverage should follow the cells rather than a dust of center samples.
+   Confirm the set definitions, retained selections, and exported auxiliary
+   results, while the selected connectedness record keeps its own limits.
+9. Disable all parameter layers, restore a subset through history, and change
+   $n$ while some digits are selected. Check that Compare and the digit-group
+   controls affect exactly the groups described by their labels.
 
 Record the revision, runtime/browser versions, commands and exit statuses,
 material observations, and remaining limitations. Keep generated screenshots,

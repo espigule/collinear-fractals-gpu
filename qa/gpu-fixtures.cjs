@@ -12,6 +12,7 @@ const PARAMETER_JOB = {
   kind: 'parameter', width: 1, height: 1, spanX: 12,
   n: 3, cx: 0, cy: 2, kMax: 12, LMax: 32, tol: 1e-8,
   escapeDepth: 12, boundaryWork: 20000,
+  parameterRadius: 0,
   parameterMode: 'compare', showDifference: true,
   showOriginalSurvival: true, showEscapeStrata: true, survivalOpacity: 0.45
 };

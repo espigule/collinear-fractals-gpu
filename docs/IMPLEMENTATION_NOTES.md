@@ -111,6 +111,11 @@ inverse search. It permits canonical trap capture only when
 $|c|^2+2|\mathrm{Re}\,c|<n$, in the non-real expanding domain. This
 original-alphabet rule is valid for both alphabet parities; it does not reuse
 the difference-alphabet trap or an off-lens acceptance rule.
+It corresponds to strict containment in both disks
+$|c\pm1|^2<n+1$, the interior of the original covering lens
+$X_{(n+1)/2}$ after excluding the unit disk and real axis. Numerical capture
+uses strict inequalities even when a mathematical covering statement
+includes its lens boundary; finite escape coverage remains available there.
 
 An exhausted inverse tree is escape. An admissible branch reaching the
 requested depth is finite survival, while a work or stack cap is unresolved.
@@ -121,17 +126,36 @@ coverage rather than an interval-certified boundary.
 
 The dynamical raster uses a pixel footprint: its radius is
 $\mathrm{spanX}/(\sqrt{2}\,\mathrm{rasterWidth})$ for square pixels.
-The parameter raster uses zero geometric footprint, so screen resolution does
-not thicken $\mathcal M_n^0$ or $\mathcal M_n^1$. Numerical error guards
-remain a separate concern.
+Parameter pixels use a different construction: their radius describes a
+disk of parameter values. Both the marked point and every inverse map vary
+over that disk. The renderer propagates this dependence and adjusts its
+enclosure and trap comparisons for the full cell. A cell surviving the finite
+search is visual coverage; it is not a point-membership claim about its
+center. Numerical error guards remain a separate concern. Selected point
+records use zero geometric radius.
+
+For a parameter disk $c=c_0+\delta$, the orbit representation
+$z(c)=a+b\delta+R(\delta)$ retains the derivative $b$ and a bounded
+second-order remainder. The inverse update is $a'=c_0(a-t)$,
+$b'=a-t+c_0b$. An enlarged target enclosure covers the change in $E(c,m)$
+over the disk, and capture requires containment in the varying traps across
+the entire cell. This also handles the full $\mathcal M_n$ raster with
+$z(c)=2c$ and $m=2n-1$, while its selected point record continues to use the
+original reference search. Reciprocal-input cells are enclosed after
+inversion; a cell crossing the unit circle is unresolved. See the
+[cell propagation and bounds](RENDERING_ARCHITECTURE.md#parameter-cells-and-fine-structure)
+for the radius formulas and numerical limitations.
 
 Automatic boundary depth starts at 16 for two maps and 12 otherwise. A nonzero
 `boundaryDepth` overrides that base. Adaptation adds
 `ceil(log2(max(1, referenceSpan / spanX * rasterWidth / 768)))` and caps the
 result at 100. With adaptation disabled, depth stays at the selected base.
-The browser's boundary work budget is 20,000 digit evaluations per point;
-the GPU preview has smaller depth/work limits. None of these visual controls
-changes the selected $\mathcal M_n$ search's `kMax`, `LMax`, or tolerance.
+The browser's boundary work budget is 20,000 digit evaluations per selected
+parameter layer, digit subset, or first-level piece at a pixel; the base
+original-attractor search has its own budget. More visible layers therefore
+increase total work. The GPU preview has smaller depth/work limits. None of
+these visual controls changes the selected $\mathcal M_n$ search's `kMax`,
+`LMax`, or tolerance.
 
 The advanced prefix renderer draws complete levels up to its point budget, reducing the
 actual depth when the requested level would exceed that budget. Metadata
@@ -179,26 +203,83 @@ parameter and always uses binary64 arithmetic with the full requested search
 limits. Cross-kernel tests compare numerical results; they do not add interval
 guarantees.
 
-## Original and complementary marked-point sets
+First-level outlines in sharp boundary mode use independent occupied and
+unresolved masks for every piece. A black rim marks a covered piece sample
+next to an explicitly absent neighbor for that same piece. Tile halos retain
+neighbor information across worker boundaries. Rims are composited after
+piece fills, so a boundary inside another piece remains visible. Overlapping
+fills average the relevant piece colors. The first-level-pieces control
+toggles this combined color-and-outline view; sampled prefix and histogram
+renderers retain their separate visual interpretation.
 
-The parameter views use the definitions
+## First-digit parameter subsets
+
+Write $D_n=\{-n+1,-n+2,\ldots,n-1\}$. It contains $2n-1$ digits and
+splits into the original alphabet $A_n$ and the complementary alphabet
+$A_{n-1}$. Define
 
 $$
-\mathcal M_n^0=\{c:c\in E(c,n)\},\qquad
-\mathcal M_n^1=\{c:c\in A_{n-1}+c^{-1}E(c,n)\}.
+F_{n,t}=\{c:c\in t+c^{-1}E(c,n)\},\qquad t\in D_n.
 $$
 
-The first view uses $A_n$ at every inverse step. The second requires one
-first digit from $A_{n-1}$, then uses $A_n$ at every later step. A depth-zero
-original trap hit cannot bypass that complementary first step. The same
-original-alphabet membership engine supplies both searches, with a zero
-geometric pixel radius for parameter classification.
+The selected first digit is applied exactly once. Testing $F_{n,t}$ starts
+at $z=c$, applies $g_t(z)=c(z-t)$, and then tests the resulting point in the
+original $E(c,n)$ with digits from $A_n$. Changing the first digit does not
+change the tail alphabet. The two aggregate marked-point sets are
 
-`compare` displays $\mathcal M_n$ and $\mathcal M_n^0$ together. These are
-separate search results; $\mathcal M_n^0$ and $\mathcal M_n^1$ are not claimed
-to exhaust the full connectedness locus. The previous name $R_n$ survives as
-the input alias `rn`; decoding URLs, imported JSON, and old defaults produces
-canonical `mn0`, and new links always emit that name.
+$$
+\mathcal M_n^0=\bigcup_{t\in A_n}F_{n,t}=\{c:c\in E(c,n)\},
+$$
+
+$$
+\mathcal M_n^1=\bigcup_{t\in D_n\setminus A_n}F_{n,t}
+=\{c:c\in A_{n-1}+c^{-1}E(c,n)\}.
+$$
+
+For example, at $n=4$ the controls represent these seven subsets:
+
+| First digit $t$ | −3 | −2 | −1 | 0 | 1 | 2 | 3 |
+|---|---|---|---|---|---|---|---|
+| Aggregate | $\mathcal M_4^0$ | $\mathcal M_4^1$ | $\mathcal M_4^0$ | $\mathcal M_4^1$ | $\mathcal M_4^0$ | $\mathcal M_4^1$ | $\mathcal M_4^0$ |
+| Subsequent digits | $A_4$ | $A_4$ | $A_4$ | $A_4$ | $A_4$ | $A_4$ | $A_4$ |
+
+A depth-zero original trap hit cannot bypass a required first digit. At API
+depth zero, an original aggregate can capture from its initial trap test,
+and any search can reject through its initial enclosure test. A fixed-digit
+or complementary-first search that remains admissible is inconclusive until
+it applies that first digit. The interface's boundary depth zero means an
+automatic positive depth. The original-alphabet membership engine supplies
+both aggregate searches and individual subsets.
+
+Every address in one of these subsets has all its digits in $D_n$. Because
+$A_{2n-1}=2D_n$, doubling the address gives $2c\in E(c,2n-1)$, and hence
+
+$$
+\mathcal M_n^0\cup\mathcal M_n^1
+=\bigcup_{t\in D_n}F_{n,t}\subseteq\mathcal M_n.
+$$
+
+No equality with the full connectedness locus is asserted. Its unrestricted
+$D_n$ tail differs from the original $A_n$ tail used by the displayed digit
+subsets. Several aggregate layers and individual subsets can be active at
+once; each retains its own search result. The previous name $R_n$ survives
+as the input alias `rn`, which normalizes to `mn0`.
+
+The state codec stores aggregate selections in `parameterLayers` and selected
+integers in `parameterDigits`. Their portable URL keys are `pl` and `pd`.
+The layer order is `mn`, `mn0`, `mn1`; digits are unique and sorted. Empty
+arrays are valid and remain empty through sharing and history. Changing $n$
+removes digits outside the new $D_n$, without replacing the remaining
+selection. The Compare control activates all three aggregate layers and
+retains the selected digits. All digits and No digits affect only digit
+subsets.
+
+Explicit arrays take precedence over the historical `parameterMode` / `pm`
+field. An old `pm=compare` link imports its original `mn` and `mn0` pair;
+the newer Compare control can then add `mn1`. The compatibility mode projects
+a single aggregate with no individual digits to that aggregate's name, and
+other selections to `compare`. Exported arrays therefore carry the complete
+selection when several layers are visible.
 
 ## Search JSON and schemas
 
@@ -218,6 +299,18 @@ Boundary visual metadata also records the requested base depth, adaptation,
 effective depth and work limit, pixel footprint, and self-covering condition.
 Finite survival, numerical capture, and resource-cap outcomes remain distinct
 from the selected connectedness record.
+
+`parameter_view.layers` and `parameter_view.digits` retain the complete
+parameter selection. Its `mn`, `mn0`, `mn1`, and `digit_results` fields are
+auxiliary selected-point searches; `selected_point_sampling: "point"`
+distinguishes them from the image's `raster_sampling: "parameter-cell"`.
+`raster_parameter_radius` describes the active raster's cell before any
+reciprocal conversion, including a bounded GPU preview's effective resolution.
+It is `null` when the parameter canvas has no visible dimensions, with
+`raster_visible: false`. Backend metadata gives the corresponding
+preview/refinement raster. Thus a colored cell does not silently turn
+the separate point result into a capture. A `mode` value of `compare` alone
+cannot encode the whole selection; consumers should read the arrays.
 
 `c` stores the effective parameter for replay in the language packages;
 `input_parameter` retains the original browser coordinates.

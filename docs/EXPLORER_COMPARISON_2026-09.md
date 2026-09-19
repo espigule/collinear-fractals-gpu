@@ -19,6 +19,11 @@ is an interval-verified proof system. The dated update below supersedes the
 earlier implementation's CPU-only rendering description; the historical
 baseline comparison remains intact.
 
+The [19 September correction](#parameter-cells-multiple-subsets-and-piece-boundaries--19-september-2026)
+supersedes the earlier exclusive comparison controls and pixel-center
+marked-point rendering. Its scope is cell coverage, simultaneous subsets, and
+the separate boundaries of overlapping first-level pieces.
+
 ## Review basis and publication state
 
 | Item | Version inspected | What this review establishes |
@@ -399,10 +404,50 @@ Automatic base depth is 16 for two maps and 12 otherwise, with zoom/resolution
 adaptation capped at 100. The settings, requested/effective work limits, and
 geometric pixel footprint are reproducible state or rendering metadata.
 The footprint is used for dynamical coverage; parameter membership has zero
-geometric footprint. See the current [rendering architecture](RENDERING_ARCHITECTURE.md)
+geometric footprint in this 18 September implementation. The next section
+records the subsequent correction. See the current [rendering architecture](RENDERING_ARCHITECTURE.md)
 and [validation requirements](VALIDATION.md) for the final-commit contract.
 
 The README's rendered illustrations retain their depth-eight prefix
 construction. Their interactive links and curated presets now open the sharp
 boundary view. This extension makes no physical-device performance claim;
 native shader, worker, and browser gates must pass on its final revision.
+
+## Parameter cells, multiple subsets, and piece boundaries — 19 September 2026
+
+The 18 September renderer corrected full attractor coordinates and supplied
+finite escape coverage in the dynamical plane, but its marked-point parameter
+views still sampled pixel centers. Thin components could fall between those
+centers and appear as isolated dots. Its comparison was exclusive, and one
+winning first-piece index could not describe all boundaries in an overlap.
+Those limitations are distinct from the selected numerical record's
+correctness and required changes to the image model itself.
+
+| Area | Previous combined implementation | Current correction | Tradeoff |
+|---|---|---|---|
+| Parameter boundary | One marked-point membership sample per pixel. | Propagate a parameter cell through the inverse word, including variation in the marked point, maps, and pruning enclosure. | Finite coverage retains possible components between samples; it is still an outer approximation and can retain extra coverage where bounds are broad. |
+| Fast acceptance | Strict canonical trap for the original alphabet. | Require the full parameter cell and orbit image to meet the varying trap conditions; use escape pruning elsewhere. | Cell capture is more demanding than center capture, while deep zoom reduces the cell variation. |
+| Set comparison | One of `mn`, `mn0`, `mn1`, or the fixed two-set comparison. | Independently toggle the three aggregate layers and any of the `2n-1` first-digit subsets. | Dense overlays can require hiding some layers to inspect their geometry; every layer also adds computation. |
+| First-digit meaning | Aggregate original or complementary first digit. | $F_{n,t}=\{c:c\in t+c^{-1}E(c,n)\}$ for each $t\in D_n$, with $A_n$ at every later step. | More controls, organized by the original/complementary alphabets with explicit formulas. |
+| Piece boundaries | Color from one successful first-level branch. | Retain separate piece coverage and draw each piece's boundary, including edges lying inside another piece. | More mask data and boundary work, with unresolved neighbors kept distinct from escaped ones. |
+| Color | A first-piece color could also conceal another piece's edge. | Coordinate piece colors and composite black boundaries after the fills. | Colors identify pieces while edges carry geometric separation; no extra mathematical classification is inferred from color. |
+| README examples | Depth-eight prefix illustrations linked to a different interactive renderer. | Generate the figures through the same binary64 boundary search and first-piece contour compositor as the explorer. | Raster dimensions and finite depth remain part of the figure's reproducible definition. |
+| Reproduction | Exclusive `pm` state and selected point record. | Explicit `pl`/`pd` selections, separate cell-rendering metadata, and unchanged point-search provenance. | Older links still import their original meaning, while complete new state is required to encode arbitrary combinations. |
+
+The resulting recommendation remains one maintained community explorer at
+the project Pages address. It keeps the legacy experience's large linked
+plots, immediate exploration, and ability to compare sets, while the current
+engine retains explicit definitions, bounded work, reproducible state, and
+independent numerical records. The earlier explorer remains useful as a
+historical reference; its sampled or heuristic rendering rules are not the
+acceptance criteria for the new cell search.
+
+The aggregate identities are
+$\mathcal M_n^0=\bigcup_{t\in A_n}F_{n,t}$ and
+$\mathcal M_n^1=\bigcup_{t\in D_n\setminus A_n}F_{n,t}$.
+Their union is contained in $\mathcal M_n$, whose digit tail is less
+restricted. Finite survival does not prove membership in any of these sets.
+The [current architecture](RENDERING_ARCHITECTURE.md) gives the propagation
+and pruning bounds; the [validation guide](VALIDATION.md) identifies the
+checks needed for the final published revision. This addendum makes no
+physical-device performance or interval-certification claim.

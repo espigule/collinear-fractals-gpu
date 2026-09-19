@@ -134,6 +134,65 @@
       "additionalProperties": true,
       "description": "Optional visual-renderer metadata. This is not a proof field."
     },
+    "parameter_view": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": ["mn", "mn0", "mn1", "compare", "rn"]
+        },
+        "layers": {
+          "type": "array",
+          "items": { "enum": ["mn", "mn0", "mn1"] },
+          "uniqueItems": true,
+          "maxItems": 3,
+          "description": "Independently selected aggregate layers. An empty selection is valid."
+        },
+        "digits": {
+          "type": "array",
+          "items": { "type": "integer" },
+          "uniqueItems": true,
+          "description": "Selected first digits t in D_n. Every corresponding subset uses A_n for all later digits."
+        },
+        "search_record_set": {
+          "const": "M_n"
+        },
+        "escape_depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "work_limit": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "mn": { "type": ["object", "null"] },
+        "mn0": { "type": ["object", "null"] },
+        "mn1": { "type": ["object", "null"] },
+        "digit_results": {
+          "type": "object",
+          "propertyNames": { "pattern": "^-?[0-9]+$" },
+          "additionalProperties": { "type": "object" },
+          "description": "Point-search results keyed by the selected integer first digit."
+        },
+        "raster_sampling": {
+          "const": "parameter-cell"
+        },
+        "raster_visible": {
+          "type": "boolean"
+        },
+        "raster_parameter_radius": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Actual pixel-cell radius in the displayed parameter coordinates before reciprocal conversion. Null when the parameter canvas is hidden."
+        },
+        "selected_point_sampling": {
+          "const": "point"
+        },
+        "finite_survival": { "type": "string" }
+      },
+      "additionalProperties": true,
+      "description": "Independent layer selections and auxiliary point-search results, separate from parameter-cell image coverage and the main connectedness record."
+    },
     "proof_status": {
       "enum": [
         "finite-search-certificate",
