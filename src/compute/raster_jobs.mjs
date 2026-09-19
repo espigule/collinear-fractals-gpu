@@ -19,6 +19,7 @@ export const RASTER_CODES = Object.freeze({
 
 export const MAX_RASTER_DIMENSION = 16384;
 export const MAX_RASTER_TILE_PIXELS = 16384;
+export const MAX_RASTER_ARITY = 100;
 const EMPTY_RESULT = Object.freeze({ verdict: 'Exterior', depth: 0, stopReason: 'enclosure-escape' });
 const RANGE_RESULT = Object.freeze({ verdict: 'Undetermined', depth: 0, stopReason: 'numerical-range' });
 const STOP_CODES = Object.freeze({
@@ -53,6 +54,9 @@ export function normalizeRasterJob(input) {
   assertFiniteNumber(input.center?.y, 'center.y');
   assertPositiveNumber(input.spanX, 'spanX');
   assertArity(input.n);
+  // Piece masks and per-digit buffers scale with arity, independently of the
+  // pixel count. Match the explorer ceiling before allocating either buffer.
+  assertInteger(input.n, 'raster arity n', 2, MAX_RASTER_ARITY);
   const kMax = input.kMax ?? 37;
   const LMax = input.LMax ?? 1000;
   const tol = input.tol ?? 1e-8;
@@ -63,6 +67,19 @@ export function normalizeRasterJob(input) {
   assertInteger(LMax, 'raster LMax', 1, 10000);
   assertPositiveNumber(tol, 'tol');
   const parameterMode = normalizeParameterViewMode(input.parameterMode);
+  const parameterLayers = input.parameterLayers ?? (parameterMode === 'compare' ? ['mn', 'mn0'] : [parameterMode]);
+  const parameterDigits = input.parameterDigits ?? [];
+  if (!Array.isArray(parameterLayers) || parameterLayers.some(value => !['mn', 'mn0', 'mn1'].includes(value)) ||
+      new Set(parameterLayers).size !== parameterLayers.length) throw new TypeError('invalid parameterLayers');
+  if (!Array.isArray(parameterDigits) || new Set(parameterDigits).size !== parameterDigits.length) {
+    throw new TypeError('invalid parameterDigits');
+  }
+  for (const digit of parameterDigits) assertInteger(digit, 'parameter digit', 1 - input.n, input.n - 1);
+  // Zero remains available for point diagnostics; normal display jobs cover a
+  // whole pixel in the parameter plane, including variation in c itself.
+  const parameterRadius = input.parameterRadius ?? Math.SQRT1_2 * input.spanX / input.width;
+  assertFiniteNumber(parameterRadius, 'parameterRadius');
+  if (parameterRadius < 0) throw new RangeError('parameterRadius must be nonnegative');
   const { escapeDepth, boundaryWork } = normalizeMembershipLimits(input.n, input);
   const originalRenderer = input.originalRenderer ?? 'boundary';
   if (!['boundary', 'survival'].includes(originalRenderer)) throw new RangeError('invalid originalRenderer');
@@ -82,6 +99,8 @@ export function normalizeRasterJob(input) {
     kind: input.kind, width: input.width, height: input.height,
     center: Object.freeze({ x: input.center.x, y: input.center.y }), spanX: input.spanX,
     n: input.n, cx, cy, kMax, LMax, tol, parameterMode,
+    parameterLayers: Object.freeze([...parameterLayers]),
+    parameterDigits: Object.freeze([...parameterDigits].sort((a, b) => a - b)), parameterRadius,
     showDifference: input.showDifference === true,
     showOriginalSurvival: input.showOriginalSurvival === true,
     showEscapeStrata: input.showEscapeStrata === true,
@@ -156,10 +175,14 @@ export function renderRasterTile(prepared, tile) {
   const output = { x: tile.x, y: tile.y, width: tile.width, height: tile.height, data };
   const pieces = job.firstLevelPieces ? new Uint8Array(2 * tile.width * tile.height) : null;
   if (pieces) output.pieces = pieces;
+  const layerKeys = job.parameterLayers.concat(job.parameterDigits.map(digit => `digit:${digit}`));
+  const layerData = job.kind === 'parameter' ? new Uint8Array(2 * layerKeys.length * tile.width * tile.height) : null;
+  if (layerData) output.layerData = layerData;
   if (job.kind === 'dynamical' && !differenceContext && !originalContext) return output;
   const { center, spanX, width, height, n, kMax, LMax, tol, parameterMode, escapeDepth, boundaryWork } = job;
   const pixelRadius = Math.SQRT1_2 * spanX / width;
-  const membershipOptions = { escapeDepth, boundaryWork };
+  const membershipOptions = { escapeDepth, boundaryWork, parameterRadius: job.parameterRadius,
+    parameterLayers: job.parameterLayers, parameterDigits: job.parameterDigits };
   const boundaryOptions = { firstStep: 'original', maxWork: boundaryWork,
     firstLevelPieces: job.firstLevelPieces, pixelRadius };
   for (let row = 0; row < tile.height; row++) {
@@ -174,14 +197,22 @@ export function renderRasterTile(prepared, tile) {
         if (!finite) {
           writeResult(data, offset, RANGE_RESULT);
           if (parameterMode === 'compare') writeResult(data, offset + 2, RANGE_RESULT);
+          for (let layer = 0; layer < layerKeys.length; layer++) {
+            writeResult(layerData, (offset / 4 * layerKeys.length + layer) * 2, RANGE_RESULT);
+          }
           continue;
         }
         const result = classifyParameterView(x, y, n, kMax, LMax, tol, parameterMode, membershipOptions);
         writeResult(data, offset, result);
         writePiece(pieces, offset / 2, result);
         if (parameterMode === 'compare') {
-          writeResult(data, offset + 2, result.mn0);
-          writePiece(pieces, offset / 2 + 1, result.mn0);
+          writeResult(data, offset + 2, result.mn0 ?? EMPTY_RESULT);
+          writePiece(pieces, offset / 2 + 1, result.mn0 ?? EMPTY_RESULT);
+        }
+        for (let layer = 0; layer < layerKeys.length; layer++) {
+          const key = layerKeys[layer];
+          const value = key.startsWith('digit:') ? result.digits?.[key.slice(6)] : result.layers?.[key];
+          writeResult(layerData, (offset / 4 * layerKeys.length + layer) * 2, value ?? RANGE_RESULT);
         }
       } else {
         if (differenceContext) {
@@ -195,6 +226,33 @@ export function renderRasterTile(prepared, tile) {
             : classifyAttractorPoint(originalContext, x, y, escapeDepth, boundaryOptions);
           writeResult(data, offset + 2, result);
           writePiece(pieces, offset / 2 + 1, result);
+        }
+      }
+    }
+  }
+  if (originalContext && job.originalRenderer === 'boundary' && job.firstLevelPieces) {
+    // A halo keeps every independently rendered tile's contours continuous.
+    // Each bit is a whole first-level piece, so overlaps keep both boundaries.
+    const words = Math.ceil(n / 32);
+    const stride = tile.width + 2;
+    const length = stride * (tile.height + 2) * words;
+    const masks = new Uint32Array(length);
+    const uncertain = new Uint32Array(length);
+    output.pieceMasks = masks;
+    output.pieceUncertainMasks = uncertain;
+    const options = { ...boundaryOptions, firstLevelPieces: false };
+    for (let row = -1; row <= tile.height; row++) {
+      const y = center.y + (0.5 - (tile.y + row + 0.5) / height) * spanX * height / width;
+      for (let column = -1; column <= tile.width; column++) {
+        const x = center.x + ((tile.x + column + 0.5) / width - 0.5) * spanX;
+        const index = ((row + 1) * stride + column + 1) * words;
+        for (let piece = 0; piece < n; piece++) {
+          options.firstDigit = 1 - n + 2 * piece;
+          const result = classifyAttractorPoint(originalContext, x, y, escapeDepth, options);
+          const code = rasterResultCode(result);
+          const bit = (1 << (piece % 32)) >>> 0;
+          if (code === RASTER_CODES.INTERIOR || code === RASTER_CODES.DEPTH_CAP) masks[index + (piece >>> 5)] |= bit;
+          else if (code !== RASTER_CODES.EXTERIOR && code !== RASTER_CODES.OUTSIDE_DOMAIN) uncertain[index + (piece >>> 5)] |= bit;
         }
       }
     }

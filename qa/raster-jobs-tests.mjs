@@ -9,7 +9,7 @@ const base = Object.freeze({
   kind: 'parameter', width: 1, height: 1, center: { x: 1, y: 1 }, spanX: 4,
   n: 3, cx: 0, cy: 2, kMax: 8, LMax: 128, tol: 1e-8,
   parameterMode: 'compare', showDifference: true, showOriginalSurvival: true,
-  originalRenderer: 'survival', firstLevelPieces: false, escapeDepth: 8
+  originalRenderer: 'survival', firstLevelPieces: false, escapeDepth: 8, parameterRadius: 0
 });
 
 function image(input) {
@@ -135,6 +135,11 @@ test('reciprocal parameters, domain exclusions, and numerical range retain their
     assert.ok(image({ ...dynamics, originalRenderer: 'boundary', cx, cy }).every(value => value === 0),
       'invalid boundary contexts remain clear without manufacturing finite survival');
   }
+  const overflow = prepareRasterJob({ ...base, width: 1, height: 5, spanX: 1e308,
+    center: { x: 0, y: 1e308 }, parameterLayers: ['mn0', 'mn1'], parameterDigits: [1] });
+  const tile = renderRasterTile(overflow, { x: 0, y: 0, width: 1, height: 1 });
+  assert.deepEqual([...tile.layerData], [6, 0, 6, 0, 6, 0],
+    'overflow is unresolved in every selected layer, never cleared as exterior');
 });
 
 test('dynamical contexts are reusable and agree with direct searches at nontrivial camera coordinates', () => {
@@ -158,7 +163,7 @@ test('job and tile validation bounds allocations and refuses depth-byte truncati
   for (const invalid of [
     { width: 0 }, { height: 16385 }, { kMax: 256 }, { LMax: 10001 },
     { spanX: Infinity }, { center: { x: NaN, y: 0 } }, { survivalOpacity: -1 },
-    { parameterMode: 'unknown' }, { n: 1 }, { escapeDepth: 101 }, { boundaryWork: 200001 },
+    { parameterMode: 'unknown' }, { n: 1 }, { n: 101 }, { escapeDepth: 101 }, { boundaryWork: 200001 },
     { boundaryWork: 0 }, { originalOpacity: 1.01 }, { originalRenderer: 'unknown' }, { firstLevelPieces: 1 }
   ]) assert.throws(() => normalizeRasterJob({ ...base, ...invalid }));
   const prepared = prepareRasterJob({ ...base, width: 16384, height: 16384 });
@@ -182,12 +187,16 @@ test('worker wire messages transfer tile ownership, cache preparation, and repor
     addEventListener(type, listener) { assert.equal(type, 'message'); onMessage = listener; },
     postMessage(message, transfer = []) {
       if (message.type === 'tile') {
-        assert.deepEqual(transfer, [message.data.buffer, ...(message.pieces ? [message.pieces.buffer] : [])]);
+        assert.deepEqual(transfer, ['data', 'pieces', 'layerData', 'pieceMasks', 'pieceUncertainMasks']
+          .filter(key => message[key]).map(key => message[key].buffer));
       }
       const copy = structuredClone(message, { transfer });
       if (message.type === 'tile') {
         assert.equal(message.data.byteLength, 0, 'worker relinquishes the output buffer');
         if (message.pieces) assert.equal(message.pieces.byteLength, 0, 'piece ownership is transferred too');
+        for (const key of ['layerData', 'pieceMasks', 'pieceUncertainMasks']) {
+          if (message[key]) assert.equal(message[key].byteLength, 0, `${key} ownership is transferred too`);
+        }
       }
       replies.push(copy);
     }
@@ -260,4 +269,38 @@ test('boundary pixel footprints use full-frame pixel size across partial tiles',
   assert.equal(pointJob.parameterMode, 'mn0');
   assert.equal(normalizeRasterJob({ ...base, n: 2, escapeDepth: undefined }).escapeDepth, 16);
   assert.equal(normalizeRasterJob({ ...base, escapeDepth: undefined }).escapeDepth, 12);
+});
+
+test('parameter pixels retain a periodic-address boundary missed by their centers', () => {
+  // c*=2+i√2 obeys (c*−3)(c*−1)=−3: first digit 3, then −3 forever.
+  // The shifted pixel center escapes, but the pixel contains this exact point.
+  const input = { ...base, n: 4, center: { x: 2.002, y: Math.sqrt(2) },
+    parameterMode: 'compare', parameterLayers: [], parameterDigits: [3],
+    parameterRadius: undefined, spanX: 0.003 * Math.SQRT2, escapeDepth: 32 };
+  const bounds = { x: 0, y: 0, width: 1, height: 1 };
+  const covered = renderRasterTile(prepareRasterJob(input), bounds);
+  const point = renderRasterTile(prepareRasterJob({ ...input, parameterRadius: 0 }), bounds);
+  assert.equal(point.layerData[0], 0, 'the center is exterior');
+  assert.equal(covered.layerData[0], 3, 'finite cell survival preserves the known boundary address');
+  const clear = renderRasterTile(prepareRasterJob({ ...input, center: { x: 2.02, y: Math.sqrt(2) } }), bounds);
+  assert.equal(clear.layerData[0], 0, 'a separated exterior pixel still escapes');
+  const zoomed = renderRasterTile(prepareRasterJob({ ...input, spanX: input.spanX / 20 }), bounds);
+  assert.equal(zoomed.layerData[0], 0, 'coverage narrows with the pixel rather than permanently dilating the set');
+});
+
+test('first-piece masks preserve both copies in the exact E(2i,5) overlap', () => {
+  // E(2i,5)=[−16/3,16/3]×[−8/3,8/3]. E_t has horizontal interval
+  // [t−4/3,t+4/3]; x=1 therefore belongs to t=0 AND t=2.
+  const prepared = prepareRasterJob({ ...base, kind: 'dynamical', n: 5,
+    cx: 0, cy: 2, width: 3, height: 1, spanX: 0.03, center: { x: 1, y: 0 },
+    originalRenderer: 'boundary', firstLevelPieces: true, showDifference: false,
+    escapeDepth: 16 });
+  const tile = renderRasterTile(prepared, { x: 0, y: 0, width: 3, height: 1 });
+  assert.equal(tile.pieceMasks[(1 * 5 + 2)], 0b01100);
+  assert.equal(tile.pieceUncertainMasks[(1 * 5 + 2)], 0);
+  const partial = renderRasterTile(prepared, { x: 1, y: 0, width: 1, height: 1 });
+  for (let row = 0; row < 3; row++) for (let column = 0; column < 3; column++) {
+    assert.equal(partial.pieceMasks[row * 3 + column], tile.pieceMasks[row * 5 + column + 1],
+      'neighbor masks use the same world lattice across tile boundaries');
+  }
 });

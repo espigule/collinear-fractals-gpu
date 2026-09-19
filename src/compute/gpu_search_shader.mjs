@@ -7,10 +7,12 @@
  * selected record and idle refinement continue to use the binary64 kernel.
  *
  * The numeric RGBA8 target stores (primary code, depth, secondary code, depth).
- * Parameter comparison uses M_n then M_n0. Dynamical mode uses half-difference
- * then full E(c,n); a disabled layer receives DOMAIN with depth zero. A second
- * RGBA8 target stores primary/secondary first-piece index+1 in R/G; zero means
- * no piece. Depth bytes therefore retain their original meaning.
+ * The legacy comparison pair uses M_n then M_n0. Selected parameter layers
+ * use independent passes retained in a texture array. Dynamical mode uses
+ * half-difference then full E(c,n); a disabled layer receives DOMAIN. A second
+ * RGBA8 target retains first-piece indices. Two further byte targets encode
+ * every occupied/uncertain first-level piece as bit masks, so interfaces inside
+ * overlaps remain visible. Depth bytes retain their original meaning.
  */
 export const GPU_SEARCH_LIMITS = Object.freeze({
   frontier: 32,
@@ -60,8 +62,13 @@ uniform bool u_firstLevelPieces;
 uniform int u_escapeDepth;
 uniform int u_boundaryWork;
 uniform float u_pixelRadius;
+uniform float u_parameterRadius;
+uniform int u_firstDigit;
+uniform int u_rasterHalo;
 layout(location = 0) out vec4 outClassification;
 layout(location = 1) out vec4 outPieces;
+layout(location = 2) out vec4 outOccupied;
+layout(location = 3) out vec4 outUncertain;
 
 const int FRONTIER = ${GPU_SEARCH_LIMITS.frontier};
 const int MAX_DEPTH = ${GPU_SEARCH_LIMITS.depth};
@@ -85,6 +92,7 @@ struct Parameter {
   float da;
   vec2 unitC;
   vec2 dUnitC;
+  float cellRadius;
   int errorCode;
 };
 
@@ -111,6 +119,7 @@ Parameter prepareParameter(vec2 c, vec2 dc) {
   p.unitC = vec2(0.0);
   p.dUnitC = vec2(0.0);
   p.errorCode = 0;
+  p.cellRadius = 0.0;
   if (invalidPair(c) || invalidPair(dc)) {
     p.errorCode = 6;
     return p;
@@ -150,8 +159,8 @@ Parameter parameterAtPixel(vec2 raw, vec2 dRaw) {
     return prepareParameter(raw, dRaw);
   }
   float dNorm = length(dRaw) + 8.0 * UNIT * rhoRaw;
-  if (rhoRaw < 0.0078125 || rhoRaw > 128.0 ||
-      abs(rhoRaw - 1.0) <= dNorm) {
+  if (rhoRaw < 0.0078125 || rhoRaw > 128.0 || rhoRaw <= dNorm + u_parameterRadius ||
+      abs(rhoRaw - 1.0) <= dNorm + u_parameterRadius) {
     Parameter bad = prepareParameter(vec2(0.0), vec2(0.0));
     bad.errorCode = 8;
     return bad;
@@ -161,9 +170,15 @@ Parameter parameterAtPixel(vec2 raw, vec2 dRaw) {
     vec2 c = vec2(raw.x, -raw.y) / dot(raw, raw);
     float e = dNorm / (rhoRaw * (rhoRaw - dNorm));
     vec2 dc = vec2(e) + 16.0 * UNIT * abs(c) + vec2(TINY_ERROR);
-    return prepareParameter(c, dc);
+    Parameter p = prepareParameter(c, dc);
+    float rhoLower = rhoRaw - dNorm;
+    p.cellRadius = u_parameterRadius == 0.0 ? 0.0 : u_parameterRadius /
+      (rhoLower * (rhoLower - u_parameterRadius)) * (1.0 + 16.0 * UNIT) + TINY_ERROR;
+    return p;
   }
-  return prepareParameter(raw, dRaw);
+  Parameter p = prepareParameter(raw, dRaw);
+  p.cellRadius = u_parameterRadius;
+  return p;
 }
 
 // Enclosure for one unit of digit radius. No trigonometric functions are used:
@@ -359,24 +374,84 @@ bool outsideOriginal(vec4 cartesian, vec4 canonical, vec2 enclosure, float disk,
     length(cartesian.xy) - length(cartesian.zw) > disk + radius;
 }
 
+bool insideOriginalCellTrap(Parameter p, vec4 point, float footprint, int m) {
+  float parameterRadius = p.cellRadius + length(p.dc);
+  float rhoUpper = p.rho + p.drho + p.cellRadius;
+  float xUpper = abs(p.c.x) + parameterRadius;
+  float yLower = abs(p.c.y) - parameterRadius;
+  float guard = 32.0 * UNIT * (1.0 + float(m) + rhoUpper * rhoUpper);
+  if (yLower <= 0.0 || rhoUpper * rhoUpper + 2.0 * xUpper + guard >= float(m)) return false;
+  float radius = footprint + point.z;
+  float canonical = abs(p.c.y * point.x + p.c.x * point.y) +
+    (p.rho + p.drho) * radius + parameterRadius * (length(point.xy) + radius);
+  float vertical = max(0.0, float(m) - 2.0 * xUpper) * yLower / (rhoUpper * rhoUpper);
+  return canonical + guard < float(m) * yLower && abs(point.y) + radius + guard < vertical;
+}
+
+ivec2 originalDigitInterval(Parameter p, vec4 point, float footprint, int alphabet, vec2 enclosure) {
+  // Prune with the vertical enclosure before evaluating individual children.
+  // This disk bound deliberately ignores Taylor cancellation and therefore
+  // encloses every candidate in the full alphabet. One extra digit at either
+  // end protects integer conversion in addition to the float error expansion.
+  float parameterRadius = p.cellRadius;
+  float digitRadius = float(alphabet - 1);
+  float shiftedBound = length(point.xy) + digitRadius;
+  float futureRadius = (p.rho + p.drho + parameterRadius) * (footprint + point.z) +
+    (parameterRadius + length(p.dc)) * shiftedBound;
+  float base = p.c.y * point.x + p.c.x * point.y;
+  float rounding = 32.0 * UNIT * (1.0 + (p.rho + p.drho) * shiftedBound + futureRadius) + TINY_ERROR;
+  float middle = base / p.c.y;
+  float halfWidth = (enclosure.y + futureRadius + rounding) / abs(p.c.y);
+  if (invalidFloat(middle) || invalidFloat(halfWidth)) return ivec2(0, alphabet - 1);
+  float endpointError = 32.0 * UNIT * (1.0 + abs(middle) + halfWidth + digitRadius);
+  float low = 0.5 * (middle - halfWidth - endpointError + digitRadius);
+  float high = 0.5 * (middle + halfWidth + endpointError + digitRadius);
+  int first = int(clamp(ceil(low) - 1.0, 0.0, float(alphabet)));
+  int last = int(clamp(floor(high) + 1.0, -1.0, float(alphabet - 1)));
+  return ivec2(first, last);
+}
+
+// The c-cell is a Taylor disk, separate from binary32 arithmetic uncertainty:
+// z(c+delta)=a+b*delta+R, |delta|<=r. Keeping the derivative preserves
+// cancellation that is lost when c is treated independently at every level.
 ivec3 originalSearch(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
-                     vec2 trap, bool useTrap, bool complement) {
+                     vec2 trap, bool useTrap, int firstMode, int fixedDigit, float markedScale) {
   if (p.errorCode != 0) return ivec3(p.errorCode, 0, -1);
   if (m < 2 || m > MAX_ALPHABET) return ivec3(8, 0, -1);
   if (invalidPair(enclosure) || any(lessThanEqual(enclosure, vec2(0.0))) ||
       invalidPair(trap) || invalidPair(z) || invalidPair(dz)) return ivec3(6, 0, -1);
   vec4 root = initialNode(p, z, dz);
   float rootRadius = u_kind == 3 ? u_pixelRadius : 0.0;
-  float disk = float(m - 1) * (p.rho + p.drho) / (p.rho - p.drho - 1.0) * (1.0 + 16.0 * UNIT);
+  float parameterRadius = u_kind == 3 ? 0.0 : p.cellRadius;
+  float rhoCellLower = p.rho - p.drho - parameterRadius;
+  if (rhoCellLower <= 1.0) return ivec3(8, 0, -1);
+  // Hausdorff distance between E(c,m) and every E(c+delta,m) in this cell.
+  float enlargement = float(m - 1) * parameterRadius /
+    ((rhoCellLower - 1.0) * (rhoCellLower - 1.0)) * (1.0 + 16.0 * UNIT);
+  enclosure += vec2(enlargement);
+  rootRadius += markedScale * parameterRadius;
+  float disk = float(m - 1) * rhoCellLower / (rhoCellLower - 1.0) * (1.0 + 16.0 * UNIT);
   if (outsideOriginal(vec4(z, dz), root, enclosure, disk, rootRadius)) return ivec3(0, 0, -1);
-  if (!complement && !u_firstLevelPieces && useTrap && insideTrap(root, trap - vec2(rootRadius))) return ivec3(1, 0, -1);
+  if (firstMode == 0 && !u_firstLevelPieces && useTrap &&
+      (parameterRadius > 0.0 ? insideOriginalCellTrap(p, vec4(z, length(dz), 0.0), rootRadius, m) :
+       insideTrap(root, trap - vec2(rootRadius)))) return ivec3(1, 0, -1);
   if (u_escapeDepth == 0) return ivec3(3, 0, -1);
   vec4 path[MAX_DEPTH + 1];
   int nextDigit[MAX_DEPTH + 1];
+  int lastDigit[MAX_DEPTH + 1];
   float radii[MAX_DEPTH + 1];
+  vec2 derivatives[MAX_DEPTH + 1];
+  float remainders[MAX_DEPTH + 1];
+  float derivativeErrors[MAX_DEPTH + 1];
   path[0] = vec4(z, length(dz) * (1.0 + 8.0 * UNIT), 0.0);
-  nextDigit[0] = 0;
   radii[0] = rootRadius;
+  int rootAlphabet = firstMode == 1 ? m - 1 : m;
+  ivec2 rootDigits = firstMode == 2 ? ivec2(0) : originalDigitInterval(p, path[0], rootRadius, rootAlphabet, enclosure);
+  nextDigit[0] = rootDigits.x;
+  lastDigit[0] = rootDigits.y;
+  derivatives[0] = parameterRadius > 0.0 ? vec2(markedScale, 0.0) : vec2(0.0);
+  remainders[0] = 0.0;
+  derivativeErrors[0] = 0.0;
   int level = 0;
   int firstPiece = -1;
   int work = 0;
@@ -385,9 +460,13 @@ ivec3 originalSearch(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
   // Each candidate push can cause at most one later pop; the independent loop
   // bound is a safety ceiling, separate from the requested candidate budget.
   for (int step = 0; step < 2 * MAX_BOUNDARY_WORK + MAX_DEPTH + 1; ++step) {
-    int alphabet = level == 0 && complement ? m - 1 : m;
+    int alphabet = level == 0 && firstMode == 1 ? m - 1 : m;
+    if (level == 0 && firstMode == 2) alphabet = 1;
     int digit = nextDigit[level];
-    if (digit >= alphabet) {
+    if (digit > lastDigit[level]) {
+      // An empty admissible interval already exhausts the next inverse level,
+      // even when pruning avoids evaluating any individual child there.
+      deepest = max(deepest, level + 1);
       if (level == 0) return ivec3(0, deepest, -1);
       --level;
       continue;
@@ -395,28 +474,56 @@ ivec3 originalSearch(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
     if (work >= workLimit) return ivec3(7, deepest, -1);
     ++work;
     nextDigit[level] = digit + 1;
-    float t = float(2 * digit - (alphabet - 1));
+    float t = level == 0 && firstMode == 2 ? float(fixedDigit) : float(2 * digit - (alphabet - 1));
     vec4 childCartesian = originalInverseNode(p, path[level], t);
     vec4 child = initialNode(p, childCartesian.xy, vec2(childCartesian.z));
-    float radius = radii[level] == 0.0 ? 0.0 :
-      radii[level] * (p.rho + p.drho) * (1.0 + 8.0 * UNIT) + TINY_ERROR;
+    vec2 derivative = vec2(0.0);
+    float derivativeError = 0.0;
+    float remainder = 0.0;
+    float radius;
+    if (parameterRadius > 0.0) {
+      vec2 shifted = path[level].xy - vec2(t, 0.0);
+      derivative = shifted + complexProduct(p.c, derivatives[level]);
+      derivativeError = (p.rho + p.drho) * derivativeErrors[level] +
+        length(p.dc) * length(derivatives[level]) + path[level].z +
+        16.0 * UNIT * (length(shifted) + p.rho * length(derivatives[level])) + TINY_ERROR;
+      remainder = (p.rho + p.drho + parameterRadius) * remainders[level] +
+        (length(derivatives[level]) + derivativeErrors[level]) * parameterRadius * parameterRadius;
+      remainder = remainder * (1.0 + 16.0 * UNIT) + TINY_ERROR;
+      radius = (length(derivative) + derivativeError) * parameterRadius + remainder;
+      radius = radius * (1.0 + 16.0 * UNIT) + TINY_ERROR;
+    } else {
+      radius = radii[level] == 0.0 ? 0.0 :
+        radii[level] * (p.rho + p.drho) * (1.0 + 8.0 * UNIT) + TINY_ERROR;
+    }
     int depth = level + 1;
     deepest = max(deepest, depth);
     if (invalidPair(childCartesian.xy) || invalidPair(childCartesian.zw) ||
         invalidPair(child.xy) || invalidPair(child.zw) || invalidFloat(radius)) return ivec3(6, depth, -1);
     if (outsideOriginal(childCartesian, child, enclosure, disk, radius)) continue;
-    int piece = level == 0 ? digit : firstPiece;
-    if (useTrap && insideTrap(child, trap - vec2(radius))) return ivec3(1, depth, piece);
+    int piece = level == 0 ? (firstMode == 2 ? (fixedDigit + m - 1) / 2 : digit) : firstPiece;
+    if (useTrap && (parameterRadius > 0.0 ? insideOriginalCellTrap(p, childCartesian, radius, m) :
+        insideTrap(child, trap - vec2(radius)))) return ivec3(1, depth, piece);
     if (max(child.z, child.w) > 0.25 * (max(enclosure.x, enclosure.y) + radius)) return ivec3(8, depth, -1);
     if (depth >= u_escapeDepth) return ivec3(3, depth, piece);
     if (depth >= MAX_DEPTH) return ivec3(7, depth, -1);
-    if (level == 0) firstPiece = digit;
+    if (level == 0) firstPiece = piece;
     level = depth;
     path[level] = childCartesian;
-    nextDigit[level] = 0;
+    ivec2 childDigits = originalDigitInterval(p, childCartesian, radius, m, enclosure);
+    nextDigit[level] = childDigits.x;
+    lastDigit[level] = childDigits.y;
     radii[level] = radius;
+    derivatives[level] = derivative;
+    derivativeErrors[level] = derivativeError;
+    remainders[level] = remainder;
   }
   return ivec3(7, deepest, -1);
+}
+
+vec4 encodeMask(uint mask) {
+  return vec4(float(mask & 255u), float((mask >> 8u) & 255u),
+    float((mask >> 16u) & 255u), float((mask >> 24u) & 255u)) / 255.0;
 }
 
 void main() {
@@ -424,13 +531,15 @@ void main() {
   ivec2 secondary = ivec2(5, 0);
   ivec2 pieces = ivec2(0);
   outPieces = vec4(0.0);
+  outOccupied = vec4(0.0);
+  outUncertain = vec4(0.0);
   if (u_n < 2 || u_n > 32 || u_kMax < 0 || u_lMax < 1 ||
       any(lessThanEqual(u_resolution, vec2(0.0)))) {
     outClassification = vec4(6.0, 0.0, 6.0, 0.0) / 255.0;
     return;
   }
   // gl_FragCoord has an upward y axis, as do the mathematical world coordinates.
-  vec2 offset = (gl_FragCoord.xy / u_resolution - vec2(0.5)) * u_span;
+  vec2 offset = ((gl_FragCoord.xy - vec2(float(u_rasterHalo))) / u_resolution - vec2(0.5)) * u_span;
   vec2 world = u_center + offset;
   vec2 dWorld = 8.0 * UNIT *
     (abs(u_center) + abs(offset) + abs(u_span) + vec2(1.0));
@@ -452,15 +561,38 @@ void main() {
           max(vec2(1.0), abs(u_fixedOriginalTrap)));
         bool originalLensReliable;
         originalTrapBounds = min(originalTrapBounds, originalTrap(p, u_n, originalLensReliable));
-        ivec3 original = originalSearch(p, world, dWorld, u_n, enclosure,
-          originalTrapBounds, u_fixedOriginalLens && originalLensReliable, false);
+        ivec3 original;
+        if (u_firstLevelPieces) {
+          // Search every actual first-level piece. The union's first witness
+          // cannot reveal boundaries hidden inside overlaps.
+          uint occupied = 0u;
+          uint uncertain = 0u;
+          original = ivec3(0, 0, -1);
+          for (int index = 0; index < 32; ++index) {
+            if (index >= u_n) break;
+            ivec3 candidate = originalSearch(p, world, dWorld, u_n, enclosure,
+              originalTrapBounds, u_fixedOriginalLens && originalLensReliable, 2, 2 * index - (u_n - 1), 0.0);
+            if (candidate.x == 1 || candidate.x == 3) {
+              occupied |= 1u << uint(index);
+              if (original.x != 1 && (candidate.x == 1 || original.x != 3)) original = candidate;
+            } else if (candidate.x != 0 && candidate.x != 5) {
+              uncertain |= 1u << uint(index);
+              if (original.x == 0) original = candidate;
+            }
+          }
+          outOccupied = encodeMask(occupied);
+          outUncertain = encodeMask(uncertain);
+        } else {
+          original = originalSearch(p, world, dWorld, u_n, enclosure,
+            originalTrapBounds, u_fixedOriginalLens && originalLensReliable, 0, 0, 0.0);
+        }
         secondary = original.xy;
         pieces.y = original.z + 1;
       } else {
         secondary = search(p, world, dWorld, u_n, enclosure, vec2(0.0), false, false);
       }
     }
-  } else if ((u_kind >= 0 && u_kind <= 2) || u_kind == 4) {
+  } else if ((u_kind >= 0 && u_kind <= 2) || u_kind == 4 || u_kind == 5) {
     Parameter p = parameterAtPixel(world, dWorld);
     if (p.errorCode != 0) {
       primary = ivec2(p.errorCode, 0);
@@ -471,16 +603,27 @@ void main() {
         bool isLens;
         bool reliable;
         vec2 trap = parameterTrap(p, 2 * u_n - 1, isLens, reliable);
-        primary = search(p, 2.0 * p.c, 2.0 * p.dc, 2 * u_n - 1,
-          float(2 * u_n - 2) * base * (1.0 + 8.0 * UNIT),
-          trap, reliable, isLens);
+        if (p.cellRadius > 0.0) {
+          // Cell display uses the same bounded-orbit machinery as the digit
+          // subsets. The separately exported marked-point record retains BFS.
+          bool differenceLens;
+          vec2 differenceTrap = originalTrap(p, 2 * u_n - 1, differenceLens);
+          primary = originalSearch(p, 2.0 * p.c, 2.0 * p.dc, 2 * u_n - 1,
+            float(2 * u_n - 2) * base * (1.0 + 8.0 * UNIT), differenceTrap,
+            differenceLens, 0, 0, 2.0).xy;
+        } else {
+          primary = search(p, 2.0 * p.c, 2.0 * p.dc, 2 * u_n - 1,
+            float(2 * u_n - 2) * base * (1.0 + 8.0 * UNIT),
+            trap, reliable, isLens);
+        }
       }
-      if (u_kind == 1 || u_kind == 2 || u_kind == 4) {
+      if (u_kind == 1 || u_kind == 2 || u_kind == 4 || u_kind == 5) {
         bool originalLens;
         vec2 originalTrapBounds = originalTrap(p, u_n, originalLens);
         ivec3 original = originalSearch(p, p.c, p.dc, u_n,
-          float(u_n - 1) * base * (1.0 + 8.0 * UNIT), originalTrapBounds, originalLens, u_kind == 4);
-        if (u_kind == 1 || u_kind == 4) { primary = original.xy; pieces.x = original.z + 1; }
+          float(u_n - 1) * base * (1.0 + 8.0 * UNIT), originalTrapBounds, originalLens,
+          u_kind == 5 ? 2 : (u_kind == 4 ? 1 : 0), u_firstDigit, 1.0);
+        if (u_kind == 1 || u_kind == 4 || u_kind == 5) { primary = original.xy; pieces.x = original.z + 1; }
         else { secondary = original.xy; pieces.y = original.z + 1; }
       }
     }

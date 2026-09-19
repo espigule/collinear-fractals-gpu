@@ -1,6 +1,6 @@
 # Rendering architecture
 
-**Source review:** 18 September 2026. This document describes the hybrid
+**Source review:** 19 September 2026. This document describes the hybrid
 renderer in the working source; deployed behavior is identified separately
 by the site's `deployment.json` and the validation result for that commit.
 
@@ -39,9 +39,9 @@ binary64 detailed reference search with the requested limits.
 | [`hybrid_renderer.mjs`](../src/renderers/hybrid_renderer.mjs) | Coordinates one auxiliary WebGL context and a shared pool of at most two raster workers. Maintains separate parameter/dynamical jobs, frame callbacks, cancellation, and backend status. |
 | [`webgl_preview.mjs`](../src/renderers/webgl_preview.mjs) | Checks context capabilities, shader precision, view precision, and dimensions; draws classification and palette passes; releases and rebuilds resources across context loss. |
 | [`gpu_search_shader.mjs`](../src/compute/gpu_search_shader.mjs) | Bounded float32 inverse search with explicit depth, frontier, work, domain, and precision outcomes. |
-| [`attractor_membership.mjs`](../src/compute/attractor_membership.mjs) | Shared binary64 original-alphabet membership context, depth-first capture/escape search, complementary first digit, and adaptive depth calculation. |
-| [`parameter_views.mjs`](../src/compute/parameter_views.mjs) | Keeps the full connectedness search separate from the marked-point views $\mathcal M_n^0$ and $\mathcal M_n^1$. |
-| [`raster_jobs.mjs`](../src/compute/raster_jobs.mjs) | Validates numerical raster jobs and evaluates pixel positions with the binary64 kernels, adding a geometric footprint only for dynamical boundaries. Uses full-frame coordinates independently of tile boundaries. |
+| [`attractor_membership.mjs`](../src/compute/attractor_membership.mjs) | Shared binary64 membership context, depth-first capture/escape search, fixed or complementary first digits, parameter-cell propagation, and adaptive depth calculation. |
+| [`parameter_views.mjs`](../src/compute/parameter_views.mjs) | Keeps the full connectedness search, aggregate marked-point layers, and individually selected first-digit subsets separate. |
+| [`raster_jobs.mjs`](../src/compute/raster_jobs.mjs) | Validates numerical raster jobs and evaluates pixel cells with the binary64 kernels. Uses full-frame coordinates independently of tile boundaries and records independent first-piece coverage for composition. |
 | [`raster_worker_pool.mjs`](../src/compute/raster_worker_pool.mjs), [`raster-worker.mjs`](../workers/raster-worker.mjs) | Schedules bounded tiles, transfers classification bytes, validates replies, and rejects stale or malformed work. |
 | [`attractor_prefix.mjs`](../src/renderers/attractor_prefix.mjs), [`attractor_histogram.mjs`](../src/renderers/attractor_histogram.mjs) | Draw original-attractor approximations on CPU Canvas; choosing a GPU pixel backend does not move these overlays into a shader. |
 | [`inverse_search_reference.mjs`](../src/compute/inverse_search_reference.mjs), [`certificate_builder.mjs`](../src/compute/certificate_builder.mjs) | Produce the selected detailed numerical search and export record independently of raster preview results. |
@@ -52,11 +52,13 @@ pending buffers. Cancelling a busy job terminates its worker because a
 synchronous numerical tile cannot process a cancellation message mid-search.
 Job identities also prevent delayed results from repainting a newer view.
 
-Normal GPU rendering keeps classification and first-piece indices in separate
-RGBA8 textures, then applies the palette in a second shader pass. The host copies the finished auxiliary
-canvas before yielding because `preserveDrawingBuffer` is false. The explicit
-`readClassification()` readback is a diagnostic for QA, not a per-frame
-production step. The API used here is defined by the
+GPU rendering keeps classification, occupied-piece masks, and unresolved-piece
+masks in separate RGBA8 attachments. Independently selected parameter layers
+use separate slices of a classification texture array. A composition pass
+combines the active layers or piece fills and boundaries. The host copies the
+finished auxiliary canvas before yielding because `preserveDrawingBuffer` is
+false. Explicit `readClassification()`, `readLayers()`, and `readPieceMasks()`
+readbacks are diagnostics for QA, not per-frame production steps. The API used here is defined by the
 [Khronos WebGL 2 specification](https://registry.khronos.org/webgl/specs/latest/2.0/).
 
 ## Sharp boundary and marked-point views
@@ -66,6 +68,10 @@ non-real expanding $c$ satisfying $|c|^2+2|\mathrm{Re}\,c|<n$. The same
 condition and parity-correct digit handling apply to odd and even $n$.
 This is separate from the larger difference-alphabet lens used by the
 selected $\mathcal M_n$ search.
+Equivalently, both $|c-1|^2$ and $|c+1|^2$ are less than $n+1$:
+the strict interior of the covering lens $X_{(n+1)/2}$, outside the unit
+disk and real axis. Lens-boundary cells remain on the finite escape path
+unless the full-cell strict capture conditions are met.
 
 The shared original-membership search follows inverse branches depth first.
 A strict trap hit gives numerical capture; an exhausted admissible tree gives
@@ -75,28 +81,89 @@ unresolved. Outside the original-alphabet lens there is no trap acceptance:
 the displayed shape comes from enclosure-pruned finite survival and escape.
 Neither depth survival nor capped work becomes a membership proof.
 
+### Parameter cells and fine structure
+
+Pixel-center membership sampling can miss thin components between sample
+locations. Every visible parameter layer now evaluates a disk containing its
+pixel cell. For the marked-point layers it starts from $z(c)=c$; for the full
+$\mathcal M_n$ layer it starts from $z(c)=2c$ with alphabet $A_{2n-1}$.
+All use the adaptive boundary depth for the image. The selected full
+connectedness record retains its independent breadth-first reference search,
+requested `kMax`/`LMax`, and original verdict semantics.
+
+For a disk $c=c_0+\delta$, $|\delta|\leq r$, each inverse word is represented
+by
+
+$$
+z(c_0+\delta)=a+b\delta+R(\delta),\qquad |R(\delta)|\leq q.
+$$
+
+An inverse digit updates the center and derivative as
+$a'=c_0(a-t)$ and $b'=a-t+c_0b$. Its remainder is bounded by
+$(|c_0|+r)q+|b|r^2$, with separate numerical padding. Keeping the derivative
+preserves cancellation in the parameter dependence; propagating only an
+expanding disk around the current point would lose it.
+
+The fixed-parameter enclosure of $E(c_0,m)$ is enlarged by the
+parameter-variation bound
+
+$$
+H=(m-1)\frac{r}{(|c_0|-r-1)^2},\qquad |c_0|-r>1.
+$$
+
+Vertical digit pruning and disk/canonical enclosure tests include the cell's
+orbit radius and this enlarged target. A branch is pruned only when those
+bounds exclude it. Capture requires the full parameter disk to satisfy the
+strict self-covering condition and the full orbit image to lie inside the
+corresponding traps, including the change in canonical coordinates with $c$.
+Finite survival still means that the bounds admit an orbit through the
+requested depth; it does not establish an actual bounded orbit for every
+parameter, or membership of the pixel center. A work or precision cap stays
+unresolved.
+
+Inside the reciprocal-input disk, an input cell of radius $r$ centered at
+$p_0$ is covered after inversion by a disk centered at $1/p_0$ of radius
+$r/(|p_0|(|p_0|-r))$. Cells crossing the unit circle do not share one valid
+expanding enclosure and remain unresolved. The same applies to unsupported
+domain or numerical ranges. Binary64 padding and the shader's float32
+uncertainty guards are numerical engineering bounds, not outward-rounded
+interval certificates.
+
 The original dynamical image passes a geometric pixel radius to this search.
 Its footprint allows a visible pixel to intersect finite attractor coverage,
 while capture comparisons require the footprint to fit inside the trap.
-The parameter-plane views use zero geometric pixel radius: a pixel's screen
-size does not expand the marked-point membership test. Floating-point error
-guards remain separate from this geometric footprint.
+For a parameter pixel, both the marked point and the maps vary with $c$.
+The parameter raster therefore follows the whole parameter cell through each
+inverse word. It does not substitute the fixed-$c$ dynamical footprint for
+this variation. The selected parameter's numerical record still evaluates a
+single point. Floating-point error guards remain separate from both kinds of
+geometric coverage.
 
-| Parameter mode | Definition | First inverse digit |
+| Parameter layer | Definition | First inverse digit |
 |---|---|---|
 | `mn` | $\mathcal M_n=\{c:2c\in E(c,2n-1)\}$ | Difference alphabet $A_{2n-1}$ throughout. |
 | `mn0` | $\mathcal M_n^0=\{c:c\in E(c,n)\}$ | Original alphabet $A_n$ throughout. |
 | `mn1` | $\mathcal M_n^1=\{c:c\in A_{n-1}+c^{-1}E(c,n)\}$ | Complementary alphabet $A_{n-1}$ once, followed by $A_n$. |
-| `compare` | Compare $\mathcal M_n$ and $\mathcal M_n^0$. | Each search retains its own alphabet and limits. |
+| Digit $t\in D_n$ | $F_{n,t}=\{c:c\in t+c^{-1}E(c,n)\}$ | The chosen $t$ once, followed by $A_n$. |
 
-An explicit zero-depth API search returns an inconclusive zeroth outer
-approximation. It has not tested a complementary digit and cannot capture
-before that digit. In the interface, boundary depth zero means automatic
-depth (16 or 12), rather than a zero-level search.
+The aggregate layers and individual digits are independently selectable.
+For $D_n=\{-n+1,\ldots,n-1\}$, the original digits give
+$\mathcal M_n^0=\bigcup_{t\in A_n}F_{n,t}$ and the complementary digits give
+$\mathcal M_n^1=\bigcup_{t\in D_n\setminus A_n}F_{n,t}$.
+The digit subsets have a common original-alphabet tail; the full connectedness
+locus permits the larger difference alphabet at every step.
 
-The historical URL/JSON mode `rn` normalizes to `mn0`; new state uses the
-canonical name. The archive's first panel bit retains that meaning. No claim
-that $\mathcal M_n^0\cup\mathcal M_n^1=\mathcal M_n$ is made.
+At API depth zero, an initial enclosure test can still reject a point or
+cell. An original aggregate search can also capture immediately when no
+first digit is required and the initial trap test succeeds. A fixed-digit
+or complementary-first search cannot capture before applying that digit;
+an admissible zero-depth search of that kind remains inconclusive. In the
+interface, boundary depth zero means automatic depth (16 or 12), rather than
+a zero-level search.
+
+The historical URL/JSON mode `rn` normalizes to `mn0`. The archive's first
+panel bit retains that meaning. Their combined marked-point set is a subset
+of $\mathcal M_n$; equality with the full locus is not asserted.
 
 `boundaryDepth=0` selects a base depth of 16 for $n=2$ and 12 otherwise.
 An explicit value 1–100 replaces that base. With `adaptiveBoundary=true`,
@@ -107,12 +174,48 @@ span comes from the fitted view; `spanX` is the current horizontal world width.
 Thus magnification and raster resolution can increase detail without changing
 the selected `kMax` or `LMax`.
 
-The browser requests at most 20,000 digit evaluations per boundary point.
-GPU preview limits can reduce both depth and work. JSON records the requested
+The browser requests at most 20,000 digit evaluations for each selected
+parameter layer or digit subset at a pixel. First-level attractor pieces
+also have independent budgets, in addition to the base original-attractor
+search. More active layers or pieces therefore mean more total work; the
+number is not a cap for the entire composite pixel. GPU preview limits can
+reduce both depth and work. JSON records the requested
 base, adaptation setting, effective depth/work, pixel radius, first-level
 coloring, and self-covering condition. The portable keys are `bdepth` and
 `badapt`; the codec preserves zero as automatic instead of storing a
 viewport-dependent effective depth.
+
+### First-level piece colors and boundaries
+
+Sharp boundary rendering evaluates each $E_t=t+c^{-1}E(c,n)$ separately,
+with the first digit fixed before any capture test. Coverage is stored in
+piece bitmasks; a separate bitmask records unresolved work. This retains
+overlap information that a single winning first-digit index cannot express.
+At a sample covered by several pieces, the fill is the mean of their piece
+colors.
+
+The compositor then draws a near-black inward rim for every covered piece
+whose four cardinal neighbors include an explicitly absent sample of that
+same piece. An unresolved neighbor does not supply edge evidence. The rim
+is one raster pixel wide; two touching inward rims can make an interface
+two pixels wide. A one-pixel halo around worker tiles supplies neighboring
+coverage, preventing tile seams and artificial outlines at the viewport edge.
+Drawing these rims after the fills retains boundaries that lie inside another
+piece's coverage.
+
+The existing first-level-pieces control enables both colors and outlines in
+the sharp boundary mode. Prefix and histogram modes remain finite sample
+drawings. The shared palette starts with gold and periwinkle, followed by
+teal, rose, and violet, and supplies colors for all 100 supported original
+pieces. Original-digit parameter swatches use the same colors as their
+corresponding dynamical pieces. Parameter-layer overlaps likewise average
+the contributing colors; their independent search outcomes remain available.
+
+CPU mask storage uses `ceil(n/32)` 32-bit words per sample, rather than one
+32-bit value that would lose higher-index pieces. Masks include the tile halo.
+Both the masks and their uncertainty counterparts are validated and transferred
+with worker results. These are finite-raster contours of the displayed
+approximations, not analytic or interval-certified boundary curves.
 
 ## Bounded GPU preview
 
@@ -124,10 +227,13 @@ The following constants are implemented limits, not benchmark results:
 | Connectedness/survival search depth | `min(requested kMax, 64)`. |
 | Retained breadth-first frontier | `min(requested LMax, 32)`. |
 | Breadth-first candidate work | At most 2,048 digit evaluations per pixel search. |
-| Original boundary depth | At most 64; a deeper request ending at the shader cap remains unresolved. |
-| Original boundary candidate work | At most 4,096 digit evaluations per point, bounded independently of the breadth-first frontier. |
+| Capture/escape boundary depth | At most 64 for original pieces and parameter cells; a deeper request ending at the shader cap remains unresolved. |
+| Capture/escape candidate work | At most 4,096 digit evaluations independently for each selected parameter layer or first-level piece. |
+| Simultaneous parameter layers | Up to 66: three aggregates plus all 63 digits at the GPU arity limit $n=32$. Larger unsupported selections use CPU rendering. |
 | Parameter-plane enclosure series | 48 terms plus a tail allowance. Fixed dynamical enclosures are prepared in binary64 using the requested tolerance. |
 | Raster size | At most 120,000 pixels; neither dimension exceeds 768 or the device's smaller limit. |
+| Total preview search samples | At most 480,000 across the active search passes. The raster pixel budget decreases with both the number of selected layers or pieces and alphabet size, including the halo area. |
+| Piece-boundary neighborhood | One raster-pixel halo; occupied and unresolved masks retain all pieces up to the GPU arity limit. |
 | Shader capability | Fragment `highp` must provide at least 23 precision bits and exponent range 127. |
 
 The preview rejects a view when one displayed pixel is too small relative to
@@ -142,10 +248,36 @@ allowances to leave uncertain pixels unresolved. These measures are preview
 guards, not a validated interval-arithmetic certificate. GPU and CPU images
 can differ near boundaries or when their effective work budgets differ.
 
+Before evaluating children in the capture/escape search, the shader bounds
+the vertically admissible digit interval and preserves the alphabet's parity.
+The bound includes parameter-cell variation, the current orbit footprint,
+and float32 uncertainty, with one extra alphabet digit at each end of the
+interval. Work counts evaluated candidates after this pruning, including the
+safety-margin digits. A required fixed first digit is still evaluated before
+the tail search. The GPU's wider interval can retain more candidates than the
+CPU interval, so equal work limits need not reach the same depth or outcome.
+
 The preview reports requested and effective limits, actual raster dimensions,
 arithmetic, context information, and coordinate guard values. Hybrid status
 also identifies the requested backend, active backend, rendering phase,
 fallback reason, worker count, and timing where available.
+
+Cell metadata records `parameter_sample_type`, `parameter_radius_world`,
+`parameter_layer_ids`, and `parameter_cell_model: "complex-taylor-disk"`.
+`boundary_work_scope` identifies the per-layer or per-piece budget.
+`search_passes`, `preview_work_weight`, `weighted_search_passes`, and
+`preview_pixel_budget` record the resolution reduction used to keep a
+many-layer preview bounded. The work weight is the larger of one and the
+largest active alphabet size divided by eight. The pixel budget is the
+smaller of 120,000 and 480,000 divided by the weighted search-pass count.
+This preserves common four-map preview quality while reducing large-alphabet
+workloads. CPU refinement retains full output resolution. This sample budget
+is separate from the digit-evaluation work cap of each search.
+Piece metadata names the occupied/uncertain attachments, bit encoding, and
+`raster_halo`, so diagnostic readback can reconstruct the same outlines.
+The GPU's propagated float32 uncertainty is distinct from the geometric
+parameter radius and from the Taylor remainder. A shader fixture can request
+zero parameter radius to compare selected-point behavior explicitly.
 
 ## Attractor coordinates and numerical records
 

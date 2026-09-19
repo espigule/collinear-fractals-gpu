@@ -10,11 +10,12 @@ import {
   getEffectiveC, inLens, computeEnclosureGeneral, getTrapHalfWidths,
   inverseIterationTestDetailed
 } from './src/compute/inverse_search_reference.mjs';
-import { PIECE_COLORS } from './src/renderers/palettes.mjs';
+import { PIECE_COLORS, parameterLayerColor, parameterLayerKeys } from './src/renderers/palettes.mjs';
 import { buildCertificatePayload } from './src/compute/certificate_builder.mjs';
 import { renderPrefixAttractor } from './src/renderers/attractor_prefix.mjs';
 import { renderHistogramAttractor } from './src/renderers/attractor_histogram.mjs';
-import { DEFAULT_EXPLORER_STATE, encodeExplorerState, normalizeExplorerState } from './src/state/explorer_state.mjs';
+import { DEFAULT_EXPLORER_STATE, encodeExplorerState, normalizeExplorerState,
+  parameterModeForSelection, parameterLayersForMode } from './src/state/explorer_state.mjs';
 import { attractorBounds } from './src/math/attractor_bounds.mjs';
 import { decodeExplorerLocation } from './src/state/legacy_state.mjs';
 import { classifyParameterView } from './src/compute/parameter_views.mjs';
@@ -25,6 +26,13 @@ import { membershipDepthForView, createAttractorMembershipContext } from './src/
 
 function isInteriorVerdict(verdict) {
   return verdict === 'Interior' || verdict === 'Interior-offLens';
+}
+
+function parameterSelectionLabel() {
+  const names = { mn: 'Mₙ', mn0: 'Mₙ⁰', mn1: 'Mₙ¹' };
+  return [...state.parameterLayers.map(layer => names[layer]),
+    ...(state.parameterDigits.length > 3 ? [`${state.parameterDigits.length} digit subsets`]
+      : state.parameterDigits.map(digit => `Fₙ,${digit}`))].join(' + ') || 'No sets selected';
 }
 
 // One validated state contract drives controls, history, shared links and exports.
@@ -427,6 +435,8 @@ function updateBoundaryMetadata(info = renderingInfo.dynamical) {
     self_covering_condition: '|c|^2 + 2|Re c| < n',
     pixel_radius_world: gpuOnly ? (info.gpu?.pixel_radius_world ?? Math.SQRT1_2 * state.dynZoom / Math.max(1, canvasDyn.width)) : Math.SQRT1_2 * state.dynZoom / Math.max(1, canvasDyn.width),
     sampling: 'pixel-footprint', first_level_pieces: state.firstLevelPieces,
+    piece_boundaries: state.firstLevelPieces ? 'independent coverage masks with one-pixel neighbor contours' : 'hidden',
+    overlap_colors: 'mean of all covering pieces',
     coordinate_scale: 1, maps: 'z -> t + z/c',
     capture: 'canonical self-covering region only',
     finite_survival: 'finite-resolution coverage',
@@ -449,6 +459,7 @@ function rasterJob(kind) {
     spanX: kind === 'parameter' ? state.paramZoom : state.dynZoom,
     n: state.n, cx: state.cx, cy: state.cy, kMax: state.kMax, LMax: state.LMax, tol: state.tol,
     parameterMode: state.parameterMode, showDifference: state.showDifference,
+    parameterLayers: state.parameterLayers, parameterDigits: state.parameterDigits,
     showOriginalSurvival: state.showCollinear && ['boundary', 'survival'].includes(state.rendererMode),
     originalRenderer: state.rendererMode === 'survival' ? 'survival' : 'boundary',
     escapeDepth: boundaryDepthFor(kind), boundaryWork: BOUNDARY_WORK_LIMIT,
@@ -602,7 +613,7 @@ function updateControlsFromState() {
   if (elBoundaryDepth) elBoundaryDepth.value = state.boundaryDepth;
   if (elAdaptiveBoundary) elAdaptiveBoundary.checked = state.adaptiveBoundary;
   for (const [id, visible] of [
-    ['boundary-settings', state.rendererMode === 'boundary' || state.parameterMode !== 'mn'],
+    ['boundary-settings', state.rendererMode === 'boundary' || state.parameterLayers.length + state.parameterDigits.length > 0],
     ['prefix-settings', state.rendererMode === 'prefix'],
     ['histogram-settings', state.rendererMode === 'histogram']
   ]) {
@@ -874,7 +885,8 @@ const ABOUT_TABS = {
     <p>The original attractor <code>E(c,n)</code> uses a sharp boundary renderer.
     It combines canonical self-covering with inverse escape, accounting for each
     pixel's area so thin pieces remain visible. Detail increases as you zoom.
-    Prefix-cylinder and seeded-histogram views are available in Controls.</p>
+    Black contours trace every first-level piece, including boundaries inside
+    overlaps. Prefix-cylinder and seeded-histogram views are available in Controls.</p>
     <p>Automatic rendering starts with a bounded WebGL 2 GPU preview, then
     refines the image in double precision using background workers. CPU rendering
     takes over when acceleration is unavailable or the view needs more precision.
@@ -885,8 +897,13 @@ const ABOUT_TABS = {
     <strong>Mₙ¹</strong> tests <code>c ∈ A_(n−1) + E(c,n)/c</code>:
     the first inverse digit uses the complementary alphabet, and all later
     digits use <code>A_n</code>. Both are subsets of <strong>Mₙ</strong>.
-    They use the same self-covering and escape search as the original attractor.
-    Teal indicates finite survival; Compare also uses teal for Mₙ⁰ capture.
+    They use the same self-covering and escape search as the original attractor.</p>
+    <p>Each button toggles a set independently; Compare enables all three.
+    Digits selects any of the <code>2n−1</code> sets
+    <code>F_(n,t) = {c: c ∈ t + E(c,n)/c}</code>, with <code>t ∈ D_n</code>.
+    Later digits always belong to <code>A_n</code>. Overlapping colors blend.</p>
+    <p>Parameter images account for variation in <code>c</code> across each pixel.
+    Finite escape coverage is an outer approximation at the displayed resolution.
     Amber marks unresolved computation. The main result bar and exported inverse
     word describe Mₙ.</p>
   `,
@@ -987,7 +1004,7 @@ function openShareModal(kind = 'share') {
 const TOUR_STEPS = [
   {
     title: 'Parameter plane',
-    body: 'The left canvas samples the parameter plane. Drag to pan, use the wheel to zoom, and move the red marker to choose c.'
+    body: 'The left canvas shows parameter sets. Toggle Mₙ, Mₙ⁰ and Mₙ¹ independently, or choose individual first-digit subsets under Digits. Compare enables all three aggregates. Drag to pan, use the wheel to zoom, and move the red marker to choose c.'
   },
   {
     title: 'Dynamical plane',
@@ -995,7 +1012,7 @@ const TOUR_STEPS = [
   },
   {
     title: 'Search limits',
-    body: 'The depth and node limits control the selected M_n search and its JSON record. A limit produces Undetermined. M_n^0 and M_n^1 use their own boundary depth: capture indicates entry into the original attractor’s self-covering region, while finite survival remains an approximation. In Compare, teal highlights M_n^0 capture or finite survival.'
+    body: 'The depth and node limits control the selected M_n search and its JSON record. Images use a separate boundary depth, increasing as you zoom. Self-covering capture accelerates the search where valid; finite escape coverage remains an approximation. Overlapping selected sets blend their colors, and unresolved work limits remain visible.'
   },
   {
     title: 'Reproducibility',
@@ -1043,7 +1060,7 @@ function saveExplorerImage() {
   ctx.fillText(`Requested search: k_max = ${state.kMax} · L_max = ${state.LMax} per level · q = ${state.modulo}`, 12, 63, width - 24);
   let x = 0;
   for (const canvas of canvases) {
-    const parameterLabel = { mn: 'Mₙ', mn0: 'Mₙ⁰', mn1: 'Mₙ¹', compare: 'Mₙ and Mₙ⁰' }[state.parameterMode];
+    const parameterLabel = parameterSelectionLabel();
     const dynamicalLabel = state.showDifference
       ? (state.showCollinear ? 'E(c,n) and ½E(c,2n−1)' : '½E(c,2n−1)')
       : state.showCollinear ? 'E(c,n)' : 'Guides';
@@ -1062,10 +1079,10 @@ function saveExplorerImage() {
     info: renderingInfo[canvas === canvasParam ? 'parameter' : 'dynamical'] }))
     .filter(panel => panel.info?.active_backend === 'webgl2');
   const boundaryLimits = gpuPanels.filter(({ canvas }) => canvas === canvasParam
-    ? state.parameterMode !== 'mn' : state.showCollinear && state.rendererMode === 'boundary')
+    ? state.parameterLayers.length + state.parameterDigits.length > 0 : state.showCollinear && state.rendererMode === 'boundary')
     .map(({ info }) => info.gpu.effective);
   const searchLimits = gpuPanels.filter(({ canvas }) => canvas === canvasParam
-    ? ['mn', 'compare'].includes(state.parameterMode)
+    ? false
     : state.showDifference || (state.showCollinear && state.rendererMode === 'survival'))
     .map(({ info }) => info.gpu.effective);
   const limitLabels = [];
@@ -1248,6 +1265,9 @@ function startMainThreadRaster(kind, metadata) {
   mainThreadRuns[kind] = run;
   updateRenderingInfo(kind, { ...metadata, requested_backend: state.backend,
     active_backend: 'cpu-main-thread', phase: 'refining', arithmetic: 'binary64',
+    parameter_radius_world: kind === 'parameter' ? Math.SQRT1_2 * fullJob.spanX / fullJob.width : 0,
+    pixel_radius_world: kind === 'dynamical' && fullJob.originalRenderer === 'boundary'
+      ? Math.SQRT1_2 * fullJob.spanX / fullJob.width : 0,
     pixels_completed: 0, total_pixels: fullJob.width * fullJob.height,
     requested_limits: { depth: fullJob.kMax, frontier: fullJob.LMax,
       escape_depth: fullJob.escapeDepth, boundary_work: fullJob.boundaryWork, tolerance: fullJob.tol } });
@@ -1288,7 +1308,7 @@ function startMainThreadRaster(kind, metadata) {
       const tile = renderRasterTile(run.prepared, {
         x: run.x, y: run.y, width: Math.min(16, layer.width - run.x), height: 1
       });
-      const rgba = colorizeRasterTile(tile.data, run.prepared.job, colors, tile.pieces);
+      const rgba = colorizeRasterTile(tile.data, run.prepared.job, colors, tile.pieces, tile);
       run.layerContext.putImageData(new ImageData(rgba, tile.width, tile.height), tile.x, tile.y);
       run.x += tile.width;
       if (run.x >= layer.width) { run.x = 0; run.y++; }
@@ -1352,22 +1372,21 @@ function drawParameterLensGuides(completedStage = false) {
     ctxParam.lineWidth = 1.0;
     ctxParam.setLineDash([4, 6]);
     
-    const subset = state.parameterMode === 'mn0' || state.parameterMode === 'mn1';
-    const radius = Math.sqrt(subset ? state.n + 1 : 2 * state.n);
+    const hasMn = state.parameterLayers.includes('mn');
+    const hasSubsets = state.parameterLayers.some(layer => layer !== 'mn') || state.parameterDigits.length > 0;
+    const radii = [...(hasMn ? [Math.sqrt(2 * state.n)] : []), ...(hasSubsets ? [Math.sqrt(state.n + 1)] : [])];
     
     const leftCenter = paramToScreen(-1.0, 0.0);
     const rightCenter = paramToScreen(1.0, 0.0);
     
-    const screenRadius = (radius / state.paramZoom) * canvasParam.width;
-    
-    // Draw overlapping circles
-    ctxParam.beginPath();
-    ctxParam.arc(leftCenter.x, leftCenter.y, screenRadius, 0, Math.PI * 2);
-    ctxParam.stroke();
-    
-    ctxParam.beginPath();
-    ctxParam.arc(rightCenter.x, rightCenter.y, screenRadius, 0, Math.PI * 2);
-    ctxParam.stroke();
+    for (const radius of radii) {
+      const screenRadius = (radius / state.paramZoom) * canvasParam.width;
+      for (const point of [leftCenter, rightCenter]) {
+        ctxParam.beginPath();
+        ctxParam.arc(point.x, point.y, screenRadius, 0, Math.PI * 2);
+        ctxParam.stroke();
+      }
+    }
     
     // Unit disk guide
     ctxParam.strokeStyle = 'rgba(0, 0, 0, 0.1)';
@@ -1412,11 +1431,13 @@ function selectedSearchResult() {
 
 function selectedParameterViewResult() {
   const depth = boundaryDepthFor('parameter');
-  const key = [state.cx, state.cy, state.n, state.kMax, state.LMax, state.tol, state.parameterMode, depth].join('|');
+  const key = [state.cx, state.cy, state.n, state.kMax, state.LMax, state.tol, state.parameterMode,
+    state.parameterLayers.join(','), state.parameterDigits.join(','), depth].join('|');
   if (!selectedParameterViewCache || selectedParameterViewCache.key !== key) {
     selectedParameterViewCache = { key, result: classifyParameterView(
       state.cx, state.cy, state.n, state.kMax, state.LMax, state.tol, state.parameterMode,
-      { escapeDepth: depth, boundaryWork: BOUNDARY_WORK_LIMIT }
+      { escapeDepth: depth, boundaryWork: BOUNDARY_WORK_LIMIT, parameterRadius: 0,
+        parameterLayers: state.parameterLayers, parameterDigits: state.parameterDigits }
     ) };
   }
   return selectedParameterViewCache.result;
@@ -1722,13 +1743,24 @@ function currentCertificatePayload() {
     ...record,
     parameter_view: {
       mode: state.parameterMode,
+      layers: [...state.parameterLayers], digits: [...state.parameterDigits],
       definition: {
         mn: '2c in E(c,2n-1)', mn0: 'c in E(c,n)',
-        mn1: 'c in A_(n-1) + (1/c)E(c,n)', compare: 'M_n and M_n^0'
+        mn1: 'c in (D_n minus A_n) + (1/c)E(c,n)', compare: 'Independently selected parameter subsets'
       }[state.parameterMode],
       search_record_set: 'M_n',
       escape_depth: boundaryDepthFor('parameter'), work_limit: BOUNDARY_WORK_LIMIT,
-      mn: parameterView.mn, mn0: parameterView.mn0, mn1: parameterView.mn1
+      mn: parameterView.mn, mn0: parameterView.mn0, mn1: parameterView.mn1,
+      digit_results: parameterView.digits,
+      digit_definition: 'F_(n,t) = {c: c in t + (1/c)E(c,n)}, t in D_n; tail digits in A_n',
+      raster_sampling: 'parameter-cell',
+      raster_visible: canvasParam.width > 0 && canvasParam.height > 0,
+      raster_parameter_radius: canvasParam.width <= 0 || canvasParam.height <= 0 ? null
+        : renderingInfo.parameter?.active_backend === 'webgl2'
+        ? renderingInfo.parameter.gpu.parameter_radius_world
+        : Math.SQRT1_2 * state.paramZoom / Math.max(1, canvasParam.width),
+      selected_point_sampling: 'point',
+      finite_survival: 'outer approximation at the displayed resolution; not a membership certificate'
     },
     deployment: deploymentInfo ? { source_commit: deploymentInfo.source_commit, version: deploymentInfo.version } : null,
     software: 'Collinear Fractals GPU Explorer',
@@ -1809,15 +1841,21 @@ function updateStatusBar(test) {
   elStatDepth.textContent = test.depth;
   const viewDetail = document.getElementById('stat-view-detail');
   if (viewDetail) {
-    viewDetail.hidden = state.parameterMode === 'mn';
+    viewDetail.hidden = state.parameterLayers.every(layer => layer === 'mn') && state.parameterDigits.length === 0;
     if (!viewDetail.hidden) {
       const view = selectedParameterViewResult();
-      const subset = state.parameterMode === 'mn1' ? view.mn1 : view.mn0;
-      const label = state.parameterMode === 'mn1' ? 'Mₙ¹' : 'Mₙ⁰';
-      const description = subset.stopReason === 'trap-hit' ? 'canonical self-covering reached'
-        : subset.displayReason === 'finite-survival' ? `survives depth ${subset.depth}`
-        : `${subset.verdict} (${subset.stopReason})`;
-      viewDetail.textContent = `${label}: ${description}. The main search record describes Mₙ.`;
+      const entries = [
+        ...state.parameterLayers.filter(layer => layer !== 'mn').map(layer => [layer === 'mn0' ? 'Mₙ⁰' : 'Mₙ¹', view.layers?.[layer]]),
+        ...state.parameterDigits.map(digit => [`Fₙ,${digit}`, view.digits?.[digit]])
+      ];
+      const descriptions = entries.map(([label, result]) => {
+        if (!result) return `${label}: unavailable`;
+        const description = result.stopReason === 'trap-hit' ? 'self-covering reached'
+          : result.displayReason === 'finite-survival' ? `survives depth ${result.depth}`
+          : `${result.verdict} (${result.stopReason})`;
+        return `${label}: ${description}`;
+      });
+      viewDetail.textContent = `${descriptions.join('; ')}. These searches evaluate the selected point. The main record describes Mₙ.`;
     }
   }
   const reasons = {
@@ -1868,7 +1906,7 @@ function updateLegendColors() {
     ? `linear-gradient(90deg, ${getEscapeColorString(0)}, ${getEscapeColorString(10)})` : getExteriorColorString());
   if (exterior) exterior.nextElementSibling.textContent = state.showEscapeStrata ? 'Escape depth (mod 11)' : 'Exterior';
   swatch('legend-coll-color', state.firstLevelPieces && state.rendererMode !== 'survival'
-    ? `linear-gradient(90deg, ${PIECE_COLORS.slice(0, state.n).join(', ')})` : activePalette().branch);
+    ? `linear-gradient(90deg, ${PIECE_COLORS.slice(0, Math.min(state.n, 12)).join(', ')})` : activePalette().branch);
   for (const [selector, visible] of [
     ['#legend-diff-color', state.showDifference],
     ['#legend-coll-color', state.showCollinear],
@@ -1878,20 +1916,21 @@ function updateLegendColors() {
     const element = document.querySelector(selector);
     if (element) element.closest('.legend-item').hidden = !visible;
   }
-  const subsetOnly = state.parameterMode === 'mn0' || state.parameterMode === 'mn1';
-  const subsetLabel = state.parameterMode === 'mn1' ? 'Mₙ¹' : 'Mₙ⁰';
+  const subsetOnly = !state.parameterLayers.includes('mn');
   const locus = document.getElementById('legend-locus-color');
   if (locus) {
-    locus.style.background = interior;
-    locus.nextElementSibling.textContent = subsetOnly ? `${subsetLabel} self-covering capture` : 'Mₙ in-lens capture (depth mod q)';
+    const layerColors = parameterLayerKeys(state).map(layer => parameterLayerColor(layer, state.n));
+    locus.style.background = layerColors.length > 1 ? `linear-gradient(90deg, ${layerColors.join(', ')})` : layerColors[0] ?? getExteriorColorString();
+    locus.nextElementSibling.textContent = `${parameterSelectionLabel()} · capture / finite escape coverage`;
   }
-  document.getElementById('legend-offlens-color')?.closest('.legend-item')?.toggleAttribute('hidden', subsetOnly);
+  // Parameter cells use only strict canonical capture. The archived off-lens
+  // point-search palette is not a classification in the displayed cell layers.
+  document.getElementById('legend-offlens-color')?.closest('.legend-item')?.setAttribute('hidden', '');
   const lens = document.querySelector('.legend-lens');
   if (lens?.nextElementSibling) lens.nextElementSibling.textContent = subsetOnly ? 'Original-attractor self-covering lens' : 'Parameter lens';
   const survivalLegend = document.getElementById('legend-subset-survival');
-  survivalLegend.lastElementChild.textContent = state.parameterMode === 'compare'
-    ? 'Mₙ⁰ capture or finite-depth survival' : `${subsetLabel} finite-depth survivors`;
-  survivalLegend.hidden = state.parameterMode === 'mn';
+  survivalLegend.lastElementChild.textContent = 'Pixel coverage from finite escape levels; overlaps blend';
+  survivalLegend.hidden = state.parameterLayers.length + state.parameterDigits.length === 0;
   const boundaryNote = document.getElementById('boundary-renderer-note');
   if (boundaryNote) boundaryNote.hidden = state.rendererMode !== 'boundary' || !state.showCollinear;
   if (state.rendererMode === 'boundary' && state.showCollinear) updateBoundaryMetadata();
@@ -2048,7 +2087,25 @@ chrome = createExplorerChrome({
   changeView: view => withHistory(() => { state.focusedPanel = view; }, 'both'),
   changeScene: mode => withHistory(() => setComparisonMode(mode), 'dyn'),
   changeParameterMode: mode => {
-    withHistory(() => { state.parameterMode = mode; }, 'param');
+    withHistory(() => {
+      state.parameterLayers = parameterLayersForMode(mode);
+      state.parameterDigits = [];
+      state.parameterMode = mode;
+    }, 'param');
+    updateStatusBar(selectedSearchResult());
+  },
+  changeParameterLayers: layers => {
+    withHistory(() => {
+      state.parameterLayers = [...layers];
+      state.parameterMode = parameterModeForSelection(layers, state.parameterDigits);
+    }, 'param');
+    updateStatusBar(selectedSearchResult());
+  },
+  changeParameterDigits: digits => {
+    withHistory(() => {
+      state.parameterDigits = [...digits];
+      state.parameterMode = parameterModeForSelection(state.parameterLayers, digits);
+    }, 'param');
     updateStatusBar(selectedSearchResult());
   },
   zoom: (panel, factor) => withHistory(() => {

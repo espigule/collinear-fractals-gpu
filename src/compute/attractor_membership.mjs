@@ -15,6 +15,9 @@ const xs = new Float64Array(SIZE);
 const ys = new Float64Array(SIZE);
 const errors = new Float64Array(SIZE);
 const radii = new Float64Array(SIZE);
+const derivativeXs = new Float64Array(SIZE);
+const derivativeYs = new Float64Array(SIZE);
+const remainders = new Float64Array(SIZE);
 const nextDigits = new Float64Array(SIZE);
 const lastDigits = new Float64Array(SIZE);
 
@@ -89,16 +92,46 @@ export function membershipDepthForView(m, spanX, {
  * A finite survivor is only an outer approximation: it does not prove infinite
  * survival or membership. A positive pixelRadius searches disk footprints for
  * display coverage. Capture requires the entire footprint to lie in the trap;
- * parameter-set membership must use the default pixelRadius=0.
+ * parameter-set point membership must use the default pixelRadius=0. A fixed
+ * firstDigit restricts the first-level piece before any capture can occur.
  *
  * The module reuses typed stacks and is synchronous (no callbacks/reentrancy).
  * nodesExplored counts retained nodes including the root; work counts candidate
  * inverse maps. Exterior depth is the greatest exhaustion level encountered.
  */
-export function classifyAttractorPoint(context, zx, zy, depth, {
-  firstStep = 'original', maxWork = ATTRACTOR_MEMBERSHIP_LIMITS.defaultWork,
-  firstLevelPieces = true, pixelRadius = 0
+export function classifyAttractorPoint(context, zx, zy, depth, options = {}) {
+  return classifyMembership(context, zx, zy, depth, options, 0);
+}
+
+/**
+ * Cover the marked-point problem z(c)=c throughout a parameter disk.
+ *
+ * This is display coverage, not point membership. Each inverse word is tracked
+ * as z(c0+delta)=a+b*delta+R, |R|<=remainder, |delta|<=parameterRadius. The
+ * derivative retains cancellation in the parameter dependence. The second-order
+ * remainder and a Hausdorff bound on E(c,n) make enclosure pruning conservative
+ * over the whole disk. Trap capture also requires the whole disk's orbit image
+ * to lie in the corresponding strict self-covering rectangles.
+ *
+ * Arithmetic uses padded binary64 bounds, not directed-rounding certificates.
+ */
+export function classifyAttractorParameterCell(context, depth, {
+  parameterRadius = 0, markedPointScale = 1, ...options
 } = {}) {
+  assertFiniteNumber(parameterRadius, 'parameterRadius');
+  if (parameterRadius < 0) throw new RangeError('parameterRadius must be nonnegative');
+  assertPositiveNumber(markedPointScale, 'markedPointScale');
+  return classifyMembership(context, markedPointScale * context?.x,
+    markedPointScale * context?.y, depth,
+    { firstLevelPieces: false, ...options, pixelRadius: 0, markedPointScale }, parameterRadius);
+}
+
+function classifyMembership(context, zx, zy, depth, {
+  firstStep = 'original', maxWork = ATTRACTOR_MEMBERSHIP_LIMITS.defaultWork,
+  firstLevelPieces = true, pixelRadius = 0, firstDigit: requestedFirstDigit = null,
+  markedPointScale = 1
+} = {}, parameterRadius = 0) {
+  if (!context || typeof context !== 'object') throw new TypeError('context is required');
   assertInteger(depth, 'depth');
   assertInteger(maxWork, 'maxWork', 1, ATTRACTOR_MEMBERSHIP_LIMITS.maxWork);
   assertFiniteNumber(pixelRadius, 'pixelRadius');
@@ -106,26 +139,54 @@ export function classifyAttractorPoint(context, zx, zy, depth, {
   if (firstStep !== 'original' && firstStep !== 'complement') {
     throw new RangeError('firstStep must be original or complement');
   }
+  if (requestedFirstDigit !== null) {
+    assertInteger(requestedFirstDigit, 'firstDigit', -context.m + 1, context.m - 1);
+  }
   let nodesExplored = 0;
   let work = 0;
   let firstDigit = null;
-  const sampleType = pixelRadius > 0 ? 'pixel-footprint' : 'point';
+  const isParameterCell = parameterRadius > 0;
+  const sampleType = isParameterCell ? 'parameter-cell' : pixelRadius > 0 ? 'pixel-footprint' : 'point';
   const result = (verdict, stopReason, status, resultDepth, retainDigit = false) => ({
     verdict, depth: resultDepth, stopReason, status, nodesExplored, work,
     firstDigit: retainDigit ? firstDigit : null,
     firstLevelIndex: retainDigit && firstDigit !== null
-      ? (firstDigit + context.m - (firstStep === 'complement' ? 2 : 1)) / 2 : null,
-    sampleType, pixelRadius
+      ? Math.floor((firstDigit + context.m - 1) / 2) : null,
+    sampleType, pixelRadius,
+    ...(isParameterCell ? { parameterRadius, coverage: 'parameter-taylor-disk' } : {})
   });
-  if (!context || typeof context !== 'object') throw new TypeError('context is required');
   if (context.error) return result('Undetermined', context.error,
     context.error === 'outside-domain' ? 'out-of-domain' : 'numerical-range', 0);
   if (!Number.isFinite(zx) || !Number.isFinite(zy)) {
     return result('Undetermined', 'numerical-range', 'numerical-range', 0);
   }
-  const { x, y, m, rhoUpper, se, ve, S, V, diskRadius, relativeX, relativeY, useTrap } = context;
+  const { x, y, m, rho, rhoUpper, S, V, relativeX, relativeY, useTrap } = context;
   const maxDigit = m - 1;
   const operationFactor = 16 * EPS * (Math.abs(x) + Math.abs(y));
+  const parameterRhoUpper = rhoUpper + parameterRadius;
+  const parameterRhoLower = rho * (1 - 8 * EPS) - parameterRadius;
+  // A cell intersecting the unit circle cannot share an expanding enclosure.
+  // Leave that unresolved instead of pruning it using its center alone.
+  if (isParameterCell && parameterRhoLower <= 1) {
+    return result('Undetermined', 'outside-domain', 'out-of-domain', 0);
+  }
+  const enclosurePad = isParameterCell
+    ? maxDigit * parameterRadius / (parameterRhoLower - 1) ** 2 * (1 + 64 * EPS) : 0;
+  const se = context.se + enclosurePad;
+  const ve = context.ve + enclosurePad;
+  const diskRadius = isParameterCell
+    ? Math.min(context.diskRadius + enclosurePad,
+      maxDigit * parameterRhoLower / (parameterRhoLower - 1) * (1 + 64 * EPS))
+    : context.diskRadius;
+  if (!Number.isFinite(se) || !Number.isFinite(ve) || !Number.isFinite(diskRadius)) {
+    return result('Undetermined', 'numerical-range', 'numerical-range', 0);
+  }
+  const minimumY = Math.max(0, Math.abs(y) - parameterRadius);
+  const cellTrap = isParameterCell && useTrap && minimumY > 0
+    && parameterRhoUpper ** 2 + 2 * (Math.abs(x) + parameterRadius) < m;
+  const cellS = m * (minimumY / rho) * (1 - 64 * EPS);
+  const cellV = (m - 2 * (Math.abs(x) + parameterRadius))
+    * (minimumY / parameterRhoUpper) / parameterRhoUpper * (1 - 64 * EPS);
   const precisionScale = Math.max(se, ve);
   let maxReached = 0;
 
@@ -136,7 +197,15 @@ export function classifyAttractorPoint(context, zx, zy, depth, {
       * (Math.abs(relativeY * u) + Math.abs(relativeX * v)) + TINY;
     if (Math.abs(v) > ve + radius + error || Math.abs(s) > se + radius + projectionError
       || Math.hypot(u, v) > diskRadius + radius + error) return -1;
-    if (canCapture && useTrap && Math.abs(s) + radius + projectionError < S
+    if (canCapture && isParameterCell && cellTrap) {
+      // |y(c)u(c)+x(c)v(c)| is bounded in the center's normalized direction;
+      // the final term allows the canonical direction itself to vary with c.
+      const directionVariation = parameterRadius / rho
+        * (Math.hypot(u, v) + radius + error);
+      if (Math.abs(s) + radius + projectionError + directionVariation < cellS
+        && Math.abs(v) + radius + error < cellV) return 1;
+    } else if (canCapture && !isParameterCell && useTrap
+      && Math.abs(s) + radius + projectionError < S
       && Math.abs(v) + radius + error < V) return 1;
     return 0;
   }
@@ -144,10 +213,18 @@ export function classifyAttractorPoint(context, zx, zy, depth, {
   // Keep only digits whose child's vertical coordinate can meet the enlarged
   // enclosure. Clamp before integer conversion, including near-real parameters.
   function prepareDigits(level) {
-    const limit = level === 0 && firstStep === 'complement' ? m - 2 : maxDigit;
+    const limit = level === 0 && firstStep === 'complement' && requestedFirstDigit === null
+      ? m - 2 : maxDigit;
     const u = xs[level], v = ys[level];
     const q = y * u + x * v;
-    const nextRadius = radii[level] * rhoUpper;
+    let nextRadius = radii[level] * rhoUpper;
+    if (isParameterCell) {
+      const derivative = Math.hypot(derivativeXs[level], derivativeYs[level]);
+      const derivativeBound = Math.hypot(u, v) + limit + rhoUpper * derivative;
+      const remainderBound = parameterRhoUpper * remainders[level]
+        + derivative * parameterRadius ** 2 + errors[level] * parameterRadius;
+      nextRadius = (derivativeBound * parameterRadius + remainderBound) * (1 + 64 * EPS) + TINY;
+    }
     const maxError = errors[level] * rhoUpper
       + operationFactor * (Math.abs(u) + Math.abs(v) + limit) + TINY;
     const qError = 8 * EPS * (Math.abs(y * u) + Math.abs(x * v)) + TINY;
@@ -164,12 +241,20 @@ export function classifyAttractorPoint(context, zx, zy, depth, {
     // The index expression avoids signed-modulo parity surprises.
     nextDigits[level] = -limit + 2 * Math.ceil((a + limit) / 2);
     lastDigits[level] = b;
+    if (level === 0 && requestedFirstDigit !== null) {
+      nextDigits[level] = requestedFirstDigit;
+      lastDigits[level] = requestedFirstDigit >= a && requestedFirstDigit <= b
+        ? requestedFirstDigit : requestedFirstDigit - 1;
+    }
     return true;
   }
 
-  xs[0] = zx; ys[0] = zy; errors[0] = 0; radii[0] = pixelRadius;
+  xs[0] = zx; ys[0] = zy; errors[0] = 0;
+  radii[0] = isParameterCell ? markedPointScale * parameterRadius : pixelRadius;
+  derivativeXs[0] = markedPointScale; derivativeYs[0] = 0; remainders[0] = 0;
   nodesExplored = 1;
-  const root = inspect(zx, zy, 0, pixelRadius, firstStep === 'original' && !firstLevelPieces);
+  const root = inspect(zx, zy, 0, radii[0],
+    requestedFirstDigit === null && firstStep === 'original' && !firstLevelPieces);
   if (root < 0) return result('Exterior', 'enclosure-escape', 'escaped', 0);
   if (root > 0) return result('Interior', 'trap-hit', 'captured', 0, true);
   if (depth === 0) return result('Undetermined', 'depth-cap', 'finite-survivor', 0, true);
@@ -192,7 +277,20 @@ export function classifyAttractorPoint(context, zx, zy, depth, {
     const childY = y * shifted + x * v;
     const error = errors[level] * rhoUpper
       + operationFactor * (Math.abs(u) + Math.abs(v) + Math.abs(t)) + TINY;
-    const radius = radii[level] * rhoUpper;
+    let radius = radii[level] * rhoUpper;
+    let derivativeX = 0, derivativeY = 0, remainder = 0;
+    if (isParameterCell) {
+      const dx = derivativeXs[level], dy = derivativeYs[level];
+      derivativeX = shifted + x * dx - y * dy;
+      derivativeY = v + y * dx + x * dy;
+      const derivativeError = 32 * EPS * (Math.abs(shifted) + Math.abs(v)
+        + (Math.abs(x) + Math.abs(y)) * (Math.abs(dx) + Math.abs(dy))) + TINY;
+      remainder = (parameterRhoUpper * remainders[level]
+        + Math.hypot(dx, dy) * parameterRadius ** 2
+        + (derivativeError + errors[level]) * parameterRadius) * (1 + 64 * EPS) + TINY;
+      radius = (Math.hypot(derivativeX, derivativeY) * parameterRadius + remainder)
+        * (1 + 64 * EPS) + TINY;
+    }
     const childLevel = level + 1;
     maxReached = Math.max(maxReached, childLevel);
     if (!Number.isFinite(childX) || !Number.isFinite(childY)
@@ -213,6 +311,8 @@ export function classifyAttractorPoint(context, zx, zy, depth, {
     }
     xs[childLevel] = childX; ys[childLevel] = childY;
     errors[childLevel] = error; radii[childLevel] = radius;
+    derivativeXs[childLevel] = derivativeX; derivativeYs[childLevel] = derivativeY;
+    remainders[childLevel] = remainder;
     if (!prepareDigits(childLevel)) {
       return result('Undetermined', 'numerical-range', 'numerical-range', childLevel);
     }

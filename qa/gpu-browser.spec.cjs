@@ -35,7 +35,18 @@ async function openHarness(page) {
     const colors = { table, branch: [23, 143, 209], exterior: [249, 247, 245], survivalOpacity: 0.45 };
     const unavailable = [];
     const device = createWebGLPreview({ onUnavailable: reason => unavailable.push(reason) });
-    window.gpuTest = { device, colors, unavailable, prepareRasterJob, renderRasterTile, colorizeRasterTile };
+    const maskTile = (width, height) => {
+      const raw = device.readPieceMasks();
+      if (!raw?.halo) return { width, height };
+      const flip = source => {
+        const target = new Uint32Array(source.length);
+        for (let row = 0; row < raw.height; row++) target.set(source.subarray(
+          (raw.height - row - 1) * raw.width, (raw.height - row) * raw.width), row * raw.width);
+        return target;
+      };
+      return { width, height, pieceMasks: flip(raw.pieceMasks), pieceUncertainMasks: flip(raw.pieceUncertainMasks) };
+    };
+    window.gpuTest = { device, colors, unavailable, prepareRasterJob, renderRasterTile, colorizeRasterTile, maskTile };
   });
 }
 
@@ -278,7 +289,7 @@ test('WebGL2: asymmetric original-attractor orientation survives canvas composit
 test('WebGL2: original parameter sets use independent depth and work budgets', async ({ page }) => {
   await openHarness(page);
   const result = await page.evaluate(() => {
-    const { device, colors } = window.gpuTest;
+    const { device, colors, prepareRasterJob, renderRasterTile } = window.gpuTest;
     const base = { kind: 'parameter', width: 1, height: 1, spanX: 0.01,
       center: { x: 1, y: 1 }, n: 2, kMax: 0, LMax: 1, tol: 1e-8,
       escapeDepth: 16, boundaryWork: 20000, firstLevelPieces: true };
@@ -293,7 +304,9 @@ test('WebGL2: original parameter sets use independent depth and work budgets', a
     return jobs.map(job => {
       const frame = device.render(job, colors);
       if (!frame) throw new Error(device.reason);
-      return { codes: [...device.readClassification().data], pieces: [...device.readPieces().data], metadata: frame.metadata };
+      const cpu = renderRasterTile(prepareRasterJob(job), { x: 0, y: 0, width: 1, height: 1 });
+      return { codes: [...device.readClassification().data], pieces: [...device.readPieces().data],
+        cpu: [...cpu.data], metadata: frame.metadata };
     });
   });
   // 1+i = 1 - sum_(k>=1)(1+i)^(-k), so digits [1,-1,-1,...]
@@ -302,6 +315,9 @@ test('WebGL2: original parameter sets use independent depth and work budgets', a
   expect(result[0].codes.slice(0, 2)).toEqual([3, 16]);
   expect(result[0].pieces[0]).toBe(2);
   expect(result[1].codes.slice(0, 2)).toEqual([0, 1]);
+  // Exhausting the first inverse level records depth one, including when an
+  // admissible-digit interval can exclude every child before evaluation.
+  expect(result[1].codes.slice(0, 2)).toEqual(result[1].cpu.slice(0, 2));
   expect(result[2].codes[0]).toBe(7);
   expect(result[2].pieces[0]).toBe(0);
   expect(result[3].codes.slice(0, 2)).toEqual([3, 0]);
@@ -316,7 +332,7 @@ test('WebGL2: original parameter sets use independent depth and work budgets', a
 test('WebGL2: boundary fill uses independent piece indices and never colors resource caps as members', async ({ page }) => {
   await openHarness(page);
   const result = await page.evaluate(() => {
-    const { device, colors, colorizeRasterTile } = window.gpuTest;
+    const { device, colors, colorizeRasterTile, maskTile } = window.gpuTest;
     const pieceColors = new Uint8Array([250, 10, 20, 20, 220, 30, 40, 50, 230, 170, 80, 200]);
     const palette = { ...colors, pieceColors };
     const base = { kind: 'dynamical', width: 1, height: 1, spanX: 0.01,
@@ -337,7 +353,7 @@ test('WebGL2: boundary fill uses independent piece indices and never colors reso
       const context = canvas.getContext('2d'); context.drawImage(rendered.canvas, 0, 0);
       const data = device.readClassification().data, pieces = device.readPieces().data;
       return { data: [...data], pieces: [...pieces], color: [...context.getImageData(0, 0, 1, 1).data],
-        expected: [...colorizeRasterTile(data, job, palette, pieces)] };
+        expected: [...colorizeRasterTile(data, job, palette, pieces, maskTile(1, 1))] };
     });
   });
   expect(result[0].data.slice(2)).toEqual([3, 12]);
@@ -398,7 +414,7 @@ test('WebGL2: pixel footprints retain thin original attractors without filling t
 test('WebGL2: complete pixel grids have no opposed CPU decisions and share palette compositing', async ({ page }, testInfo) => {
   await openHarness(page);
   const report = await page.evaluate(baseJob => {
-    const { device, colors, prepareRasterJob, renderRasterTile, colorizeRasterTile } = window.gpuTest;
+    const { device, colors, prepareRasterJob, renderRasterTile, colorizeRasterTile, maskTile } = window.gpuTest;
     const jobs = [2, 4, 13].flatMap(n => ['mn', 'mn0', 'mn1', 'compare'].map(parameterMode => ({
       ...baseJob, n, parameterMode, width: 12, height: 12, spanX: 8, center: { x: 0.13, y: 0.17 },
     })));
@@ -426,7 +442,7 @@ test('WebGL2: complete pixel grids have no opposed CPU decisions and share palet
           (job.height - row) * job.width * 2), row * job.width * 2);
       }
       const cpu = renderRasterTile(prepareRasterJob(job), { x: 0, y: 0, width: job.width, height: job.height }).data;
-      const expectedDisplay = colorizeRasterTile(topDown, job, jobColors, topDownPieces);
+      const expectedDisplay = colorizeRasterTile(topDown, job, jobColors, topDownPieces, maskTile(job.width, job.height));
       const opposed = [], invalidCodes = [], paletteDifferences = [];
       let decisive = 0, channels = 0;
       for (let offset = 0; offset < raw.data.length; offset += 4) {
@@ -460,6 +476,160 @@ test('WebGL2: complete pixel grids have no opposed CPU decisions and share palet
     expect(grid.decisive, 'The GPU meaningfully classifies the grid rather than returning all uncertainty').toBeGreaterThan(grid.channels * 0.2);
     expect.soft(grid.paletteDifferences, `GPU and CPU palette compositing for ${grid.kind}/${grid.parameterMode}`).toEqual([]);
   }
+});
+
+test('WebGL2: parameter cells retain an exact digit-subset boundary missed by the center point', async ({ page }) => {
+  await openHarness(page);
+  const result = await page.evaluate(() => {
+    const { device, colors } = window.gpuTest;
+    // c*=2+i sqrt(2) satisfies c*=3-3/(c*-1), hence the A4 address
+    // [3,-3,-3,...]. Its F_3 boundary crosses the first cell, whose center
+    // itself escapes. Moving the whole cell away must retain the gap.
+    const base = { kind: 'parameter', width: 1, height: 1, spanX: 0.006,
+      n: 4, center: { x: 2.002, y: Math.SQRT2 }, kMax: 0, LMax: 1,
+      escapeDepth: 32, boundaryWork: 20000, parameterLayers: [], parameterDigits: [3],
+      parameterMode: 'mn0', showEscapeStrata: false };
+    return [
+      { ...base, parameterRadius: 0 },
+      { ...base, parameterRadius: 0.003 },
+      { ...base, parameterRadius: 0.003, center: { x: 2.02, y: Math.SQRT2 } },
+      { ...base, parameterRadius: 0.003, boundaryWork: 1 },
+      { ...base, parameterRadius: 0.2, center: { x: 0, y: 0.1 } },
+      { ...base, parameterRadius: 0.0005, center: {
+        x: 2.002 / (2.002 ** 2 + 2), y: -Math.SQRT2 / (2.002 ** 2 + 2) } },
+    ].map(job => {
+      const frame = device.render(job, colors);
+      if (!frame) throw new Error(device.reason);
+      return { data: [...device.readLayers().data], metadata: frame.metadata };
+    });
+  });
+  expect(result[0].data[0]).toBe(0);
+  expect(result[1].data).toEqual([3, 32]);
+  expect(result[2].data[0]).toBe(0);
+  expect(result[3].data[0]).toBe(7);
+  expect([5, 8]).toContain(result[4].data[0]); // the input cell includes the reciprocal pole
+  expect(result[5].data).toEqual([3, 32]); // reciprocal cell containing the same exact address
+  expect(result[1].metadata).toMatchObject({ parameter_sample_type: 'parameter-cell',
+    parameter_cell_model: 'complex-taylor-disk', parameter_radius_world: 0.003,
+    parameter_layer_ids: ['digit:3'], boundary_work_scope: 'per-selected-layer' });
+});
+
+test('WebGL2: independently selected aggregates and digits share exact layer compositing', async ({ page }) => {
+  await openHarness(page);
+  const result = await page.evaluate(() => {
+    const { device, colors, colorizeRasterTile, prepareRasterJob, renderRasterTile } = window.gpuTest;
+    const job = { kind: 'parameter', width: 9, height: 7, spanX: 0.08,
+      n: 3, center: { x: 0.5, y: 1.1 }, kMax: 8, LMax: 32,
+      escapeDepth: 16, boundaryWork: 20000, parameterLayers: ['mn', 'mn0', 'mn1'],
+      parameterDigits: [-2, -1, 0, 1, 2], parameterMode: 'compare', showEscapeStrata: false };
+    const frame = device.render(job, colors);
+    if (!frame) throw new Error(device.reason);
+    const layers = device.readLayers();
+    const layerData = new Uint8Array(layers.data.length);
+    for (let row = 0; row < job.height; row++) layerData.set(layers.data.subarray(
+      (job.height - row - 1) * job.width * layers.layerCount * 2,
+      (job.height - row) * job.width * layers.layerCount * 2), row * job.width * layers.layerCount * 2);
+    const canvas = document.createElement('canvas'); canvas.width = job.width; canvas.height = job.height;
+    const context = canvas.getContext('2d'); context.drawImage(frame.canvas, 0, 0);
+    const display = context.getImageData(0, 0, job.width, job.height).data;
+    const expected = colorizeRasterTile(new Uint8Array(display.length), job, colors, null,
+      { width: job.width, height: job.height, layerData });
+    const cpu = renderRasterTile(prepareRasterJob(job), { x: 0, y: 0, width: job.width, height: job.height });
+    let opposed = 0, differences = 0, covered = 0;
+    for (let index = 0; index < layerData.length; index += 2) {
+      const gpu = layerData[index], reference = cpu.layerData[index];
+      if ((gpu === 0 && reference === 1) || (gpu === 1 && reference === 0)) opposed++;
+      if (gpu === 1 || gpu === 3) covered++;
+    }
+    for (let index = 0; index < display.length; index++) if (Math.abs(display[index] - expected[index]) > 1) differences++;
+    const empty = device.render({ ...job, parameterLayers: [], parameterDigits: [] }, colors);
+    context.drawImage(empty.canvas, 0, 0);
+    return { ids: layers.layerIds, opposed, differences, covered,
+      empty: [...context.getImageData(0, 0, 1, 1).data], exterior: [...colors.exterior, 255] };
+  });
+  expect(result.ids).toEqual(['mn', 'mn0', 'mn1', 'digit:-2', 'digit:-1', 'digit:0', 'digit:1', 'digit:2']);
+  expect(result.opposed).toBe(0);
+  expect(result.differences).toBe(0);
+  expect(result.covered).toBeGreaterThan(100);
+  expect(result.empty).toEqual(result.exterior);
+});
+
+test('WebGL2: piece masks reveal overlap boundaries and preserve the viewport halo', async ({ page }) => {
+  await openHarness(page);
+  const result = await page.evaluate(() => {
+    const { device, colors, colorizeRasterTile, maskTile } = window.gpuTest;
+    const job = { kind: 'dynamical', width: 81, height: 61, spanX: 8,
+      center: { x: 0, y: 0 }, n: 5, cx: 1, cy: 2, kMax: 0, LMax: 1,
+      escapeDepth: 12, boundaryWork: 20000, originalRenderer: 'boundary', firstLevelPieces: true,
+      showDifference: false, showOriginalSurvival: true, originalOpacity: 1 };
+    const frame = device.render(job, colors);
+    if (!frame) throw new Error(device.reason);
+    const masks = device.readPieceMasks(), raw = device.readClassification(), piece = device.readPieces();
+    const topDown = new Uint8Array(raw.data.length), topPieces = new Uint8Array(piece.data.length);
+    for (let row = 0; row < job.height; row++) {
+      topDown.set(raw.data.subarray((job.height - row - 1) * job.width * 4,
+        (job.height - row) * job.width * 4), row * job.width * 4);
+      topPieces.set(piece.data.subarray((job.height - row - 1) * job.width * 2,
+        (job.height - row) * job.width * 2), row * job.width * 2);
+    }
+    const canvas = document.createElement('canvas'); canvas.width = job.width; canvas.height = job.height;
+    const context = canvas.getContext('2d'); context.drawImage(frame.canvas, 0, 0);
+    const display = context.getImageData(0, 0, job.width, job.height).data;
+    const expected = colorizeRasterTile(topDown, job, colors, topPieces, maskTile(job.width, job.height));
+    let overlap = 0, internalOutline = 0, differences = 0;
+    for (let y = 1; y <= job.height; y++) for (let x = 1; x <= job.width; x++) {
+      const index = y * masks.width + x, occupied = masks.pieceMasks[index];
+      if (occupied && (occupied & (occupied - 1))) overlap++;
+      const neighbors = [index - 1, index + 1, index - masks.width, index + masks.width];
+      if (occupied && neighbors.every(i => masks.pieceMasks[i] !== 0) &&
+          neighbors.some(i => occupied & ~masks.pieceMasks[i] & ~masks.pieceUncertainMasks[i])) internalOutline++;
+    }
+    for (let i = 0; i < display.length; i++) if (Math.abs(display[i] - expected[i]) > 1) differences++;
+    return { overlap, internalOutline, differences, width: masks.width, height: masks.height, metadata: frame.metadata };
+  });
+  expect(result.overlap).toBeGreaterThan(0);
+  expect(result.internalOutline).toBeGreaterThan(20);
+  expect(result.differences).toBe(0);
+  expect([result.width, result.height]).toEqual([83, 63]);
+  expect(result.metadata).toMatchObject({ raster_halo: 1,
+    piece_boundaries: 'all-piece-coverage-with-uncertainty-aware-neighbors' });
+});
+
+test('WebGL2: all supported digit layers retain diagnostics within a bounded preview workload', async ({ page }, testInfo) => {
+  await openHarness(page);
+  const results = await page.evaluate(() => {
+    const { device, colors } = window.gpuTest;
+    const base = { kind: 'parameter', width: 420, height: 240, spanX: 0.05,
+      center: { x: 0.5, y: 1.1 }, kMax: 8, LMax: 32,
+      escapeDepth: 12, boundaryWork: 20000, parameterMode: 'compare',
+      parameterLayers: ['mn', 'mn0', 'mn1'] };
+    return [3, 32].map(n => {
+      const job = { ...base, n, parameterDigits: Array.from({ length: 2 * n - 1 }, (_, i) => i - n + 1) };
+      const start = performance.now();
+      const frame = device.render(job, colors);
+      if (!frame) throw new Error(device.reason);
+      const layers = device.readLayers();
+      return { layerIds: layers.layerIds, bytes: layers.data.length, metadata: frame.metadata,
+        diagnosticElapsedMs: performance.now() - start };
+    });
+  });
+  const result = results[1];
+  expect(results[0].layerIds).toHaveLength(8);
+  expect(results[0].metadata.search_passes).toBe(9);
+  expect(results[0].metadata.preview_work_weight).toBe(1);
+  expect(results[0].metadata.width * results[0].metadata.height * 9).toBeLessThanOrEqual(480000);
+  expect(result.layerIds).toHaveLength(66);
+  expect(result.layerIds.slice(0, 4)).toEqual(['mn', 'mn0', 'mn1', 'digit:-31']);
+  expect(result.layerIds.at(-1)).toBe('digit:31');
+  expect(result.metadata.search_passes).toBe(67);
+  expect(result.metadata.preview_work_weight).toBe(63 / 8);
+  expect(result.metadata.weighted_search_passes).toBe(67 * 63 / 8);
+  expect(result.metadata.width * result.metadata.height).toBeLessThanOrEqual(result.metadata.preview_pixel_budget);
+  expect(result.metadata.width * result.metadata.height * result.metadata.search_passes).toBeLessThanOrEqual(480000);
+  expect(result.metadata.width * result.metadata.height * result.metadata.weighted_search_passes).toBeLessThanOrEqual(480000);
+  expect(result.bytes).toBe(result.metadata.width * result.metadata.height * 66 * 2);
+  expect(result.metadata.parameter_radius_world).toBeGreaterThan(Math.SQRT1_2 * 0.05 / 420);
+  await testInfo.attach('all-digit-layer-preview-workload.json', { body: JSON.stringify(results, null, 2), contentType: 'application/json' });
 });
 
 test('WebGL2: precision and resource guards preserve CPU fallback and requested budgets', async ({ page }) => {

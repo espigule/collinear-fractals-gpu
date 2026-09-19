@@ -25,44 +25,52 @@ includes alternative text and nearby explanations.
 
 ## Original attractor examples
 
-![Three original collinear attractors, colored by first-level piece.](attractor-examples.svg)
+![Three original collinear attractors with first-level piece colors and black contours.](attractor-examples.svg)
 
 [Generator](../../tools/docs/generate_attractor_examples.mjs) ·
 [Parameters and provenance](attractor-examples.json)
 
-| Panel | Expanding parameter | Arity | Prefix depth | Prefix count |
-|---|---|---:|---:|---:|
-| Four-piece overlap preset | $(3+i\sqrt{11})/2$ | 4 | 8 | 65,536 |
-| Five-piece plane-filling preset | $1+2i$ | 5 | 8 | 390,625 |
-| Sparse three-piece example | $3+3i$ | 3 | 8 | 6,561 |
+| Panel | Expanding parameter | Arity | Escape depth |
+|---|---|---:|---:|
+| Four-piece overlap preset | $(3+i\sqrt{11})/2$ | 4 | 12 |
+| Five-piece plane-filling preset | $1+2i$ | 5 | 12 |
+| Overlapping rectangular pieces | $2i$ | 5 | 12 |
 
-The generator uses the explorer's shared prefix, tail, support-bound, and
-palette modules. Every panel enumerates the complete prefix level
+The generator uses the explorer's binary64 capture-and-escape raster,
+support-bound, palette, and per-piece contour modules. It evaluates a
+dynamical pixel footprint against $E(c,n)$ in the original convention
+$f_t(z)=t+z/c$. The first digit is unscaled. Every first-level piece is
+searched separately with that digit fixed, so the compositor retains
+overlap information and can draw boundaries inside another piece.
 
-$$
-\sum_{j=0}^{7}t_j c^{-j},\qquad t_j\in A_n.
-$$
-
-The first digit is unscaled. An independent constant-digit fixed-point check
-guards this coordinate convention. Colors identify the outermost digit, and
-the axes have equal units within each panel. Each panel is fitted separately,
+Colors identify the outermost digit; overlapping fills average their colors.
+Black contours mark a covered piece sample next to an explicitly absent
+neighbor of the same piece. Unresolved work does not count as absence.
+The axes have equal units within each panel. Each panel is fitted separately,
 so the three images do not share a common magnification.
 
-The plotted disks use the geometric tail radius or a minimum display size,
-whichever is larger. This makes the sparse example visible at README size;
-both radii are recorded in the metadata. Antialiasing, finite prefixes, and
-color compositing affect the picture. The figures do not establish overlap,
-connectedness, interior, or a search verdict. The first two panel labels use
-the names of the existing presets.
+Finite-depth survival and pixel coverage determine the displayed
+approximation; they do not establish connectedness, interior, or a selected
+search verdict. The first two panel labels use the names of the existing
+presets. The third panel has the independently derived support
+$E(2i,5)=[-16/3,16/3]\times[-8/3,8/3]$ and overlapping rectangular
+first-level pieces. It makes boundaries lying inside another piece visible
+and exercises the original-alphabet self-covering trap. The figure's finite
+raster remains an approximation to those exact rectangles.
+
+Each 332 × 220 plot embeds a 664 × 440 raster, using depth 12 and a work
+limit of 20,000 digit evaluations per piece. Original-piece opacity is one;
+each piece's inward contour is one raster pixel wide. Coverage statistics,
+exact viewports, source hashes, and image hashes are recorded in the metadata.
 
 The metadata includes a fully encoded `interactive_url` for each panel. Those
 links restore the corresponding parameter, original-attractor scene, colors,
-and horizontal coordinate span using the default sharp boundary renderer.
-The linked view requests automatic base depth and zoom adaptation; its
-effective depth depends on the viewport and raster resolution. GPU previews
-have separate depth/work caps before automatic binary64 CPU refinement.
-The static illustrations retain their complete depth-eight prefix construction.
-Use the generators to reproduce the committed figures exactly.
+and horizontal coordinate span using the sharp boundary renderer. The figure's
+escape depth becomes the starting depth, with adaptation enabled so detail
+increases during exploration. The live depth and pixel footprint depend on
+zoom and canvas dimensions; GPU previews also have separate depth/work caps.
+Use the generator's recorded fixed depth and raster dimensions to reproduce
+the committed figures exactly.
 
 The SVG embeds its three raster plots as PNG data, with vector titles, axes,
 and legends. It has no external image or font dependencies. The JSON records

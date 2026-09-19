@@ -66,6 +66,16 @@ async function select(page, selector, value) {
   await (await reveal(page, selector)).selectOption(value);
 }
 
+async function setParameterLayers(page, layers) {
+  for (const layer of ['mn', 'mn0', 'mn1']) {
+    const button = await reveal(page, `#btn-locus-${layer}`);
+    if ((await button.getAttribute('aria-pressed') === 'true') !== layers.includes(layer)) {
+      await button.click();
+    }
+    await expect(button).toHaveAttribute('aria-pressed', String(layers.includes(layer)));
+  }
+}
+
 async function expectInsideViewport(page, selector) {
   const box = await page.locator(selector).boundingBox();
   expect(box, `${selector} has visible layout bounds`).not.toBeNull();
@@ -234,6 +244,49 @@ for (const fixture of [
   });
 }
 
+test('black first-piece boundaries remain visible inside overlapping exact rectangles', async ({ page }, testInfo) => {
+  // For c=2i and n=5, the independent even/odd radix -4 expansions are
+  // intervals: E=[-16/3,16/3]×[-8/3,8/3]. Every first piece is
+  // [t-4/3,t+4/3]×[-8/3,8/3], for t=-4,-2,0,2,4. The edges at
+  // x=2/3 and x=4/3 lie strictly inside the union and inside another piece;
+  // an outer-union contour or a last-painted-piece contour misses them.
+  await page.goto('/#n=5&cx=0&cy=2&dcx=0&dcy=0&dz=12&focus=dynamical&mode=collinear&layers=0100000&backend=cpu&renderer=boundary&pieces=1&aop=1&bdepth=16&badapt=0');
+  const canvas = page.locator('#dynamical-canvas');
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  const probe = async () => canvas.evaluate(element => {
+    const context = element.getContext('2d');
+    const scale = element.width / 12;
+    const top = Math.round(element.height / 2 - 1.2 * scale);
+    const bottom = Math.round(element.height / 2 - 0.5 * scale);
+    const scan = worldX => {
+      const center = Math.round(element.width / 2 + worldX * scale);
+      const width = 7;
+      const data = context.getImageData(center - 3, top, width, bottom - top).data;
+      let darkRows = 0;
+      for (let row = 0; row < bottom - top; row++) {
+        for (let column = 0; column < width; column++) {
+          const offset = (row * width + column) * 4;
+          if (Math.max(data[offset], data[offset + 1], data[offset + 2]) < 70) {
+            darkRows++;
+            break;
+          }
+        }
+      }
+      return darkRows / (bottom - top);
+    };
+    return { boundaries: [2 / 3, 4 / 3].map(scan), interiors: [1, 2].map(scan) };
+  });
+  const outlined = await probe();
+  for (const coverage of outlined.boundaries) expect(coverage, 'Each covered internal piece edge is a continuous black line').toBeGreaterThan(0.9);
+  for (const coverage of outlined.interiors) expect(coverage, 'Interior fill does not become a false black contour').toBeLessThan(0.1);
+  await page.screenshot({ path: testInfo.outputPath('overlapping-rectangles-all-piece-outlines.png') });
+
+  await (await reveal(page, '#first-level-pieces')).uncheck();
+  await page.locator('#btn-close-controls').click();
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  for (const coverage of (await probe()).boundaries) expect(coverage, 'Hiding the first pieces also hides their internal outlines').toBeLessThan(0.1);
+});
+
 test('boundary detail follows zoom and preserves manual depth independently of search limits', async ({ page }) => {
   await page.goto('/#n=4&cx=0&cy=2&dcx=0&dcy=0&dz=12&focus=dynamical&mode=collinear&layers=0100000&backend=cpu&k=8');
   const canvas = page.locator('#dynamical-canvas');
@@ -279,7 +332,9 @@ test('boundary detail follows zoom and preserves manual depth independently of s
 
   await select(page, '#original-renderer-mode', 'prefix');
   await expect(page.locator('#prefix-settings')).toBeVisible();
-  await expect(page.locator('#boundary-settings')).not.toBeVisible();
+  // The independent M_n parameter layer still uses cell escape depth even
+  // when the dynamical view selects a direct prefix renderer.
+  await expect(page.locator('#boundary-settings')).toBeVisible();
   await select(page, '#original-renderer-mode', 'histogram');
   await expect(page.locator('#histogram-settings')).toBeVisible();
   await expect(page.locator('#prefix-settings')).not.toBeVisible();
@@ -376,23 +431,33 @@ test('scene chips, zoom and fit update the rendered view and shared state', asyn
   await expect(page.locator('#btn-layer-difference')).toHaveAttribute('aria-pressed', 'true');
 
   await page.locator('#btn-view-param').click();
+  await setParameterLayers(page, []);
+  const active = [];
   for (const mode of ['mn0', 'mn1']) {
     await page.locator(`#btn-locus-${mode}`).click();
+    active.push(mode);
     await expect(page.locator(`#btn-locus-${mode}`)).toHaveAttribute('aria-pressed', 'true');
     await expectInsideViewport(page, `#btn-locus-${mode}`);
     hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
-    expect(hash.get('pm')).toBe(mode);
+    expect(hash.get('pl')).toBe(active.join(','));
+    expect(hash.get('pm')).toBe(active.length === 1 ? mode : 'compare');
   }
   await page.locator('#btn-locus-compare').click();
   await expect(page.locator('#btn-locus-compare')).toHaveAttribute('aria-pressed', 'true');
   hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
   expect(hash.get('pm')).toBe('compare');
+  expect(hash.get('pl')).toBe('mn,mn0,mn1');
   await page.locator('#btn-locus-mn').click();
-  await expect(page.locator('#btn-locus-mn')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#btn-locus-mn')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#btn-locus-mn0')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#btn-locus-mn1')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#parameter-canvas')).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
 });
 
 test('M_n, M_n^0, M_n^1 and comparison pixels preserve their definitions and M_n record', async ({ page }) => {
+  // Four independently completed renders and four schema-validated downloads
+  // share this fixture; each individual render keeps its 30-second deadline.
+  test.setTimeout(75000);
   // This magnified classification fixture needs only a narrow neighborhood.
   // Preserve horizontal scale and the independent probes while bounding the
   // number of expensive search pixels on slower CI machines. Full viewport
@@ -402,7 +467,7 @@ test('M_n, M_n^0, M_n^1 and comparison pixels preserve their definitions and M_n
   const canvas = page.locator('#parameter-canvas');
   let witness;
   for (const mode of ['mn', 'mn0', 'mn1', 'compare']) {
-    await (await reveal(page, `#btn-locus-${mode}`)).click();
+    await setParameterLayers(page, mode === 'compare' ? ['mn', 'mn0', 'mn1'] : [mode]);
     await expect(page.locator(`#btn-locus-${mode}`)).toHaveAttribute('aria-pressed', 'true');
     await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
     await expect(page.locator('#stat-verdict')).toHaveText('Interior-offLens');
@@ -455,7 +520,7 @@ test('complementary first digits distinguish M_n^1 from M_n^0 in actual paramete
   await open(page, '#n=2&cx=1&cy=1&k=12&l=1000&pm=mn0&focus=parameter&pcx=1&pcy=1&pz=.0002&layers=0000000&backend=cpu');
   const canvas = page.locator('#parameter-canvas');
   for (const mode of ['mn0', 'mn1']) {
-    await (await reveal(page, `#btn-locus-${mode}`)).click();
+    await setParameterLayers(page, [mode]);
     await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
     const coverage = await canvas.evaluate(element => {
       const x = Math.round(element.width * 0.6);
@@ -478,6 +543,146 @@ test('complementary first digits distinguish M_n^1 from M_n^0 in actual paramete
       expect(record.parameter_view.mn1.verdict).toBe('Exterior');
     }
   }
+});
+
+test('independent aggregates and digit subsets survive sharing, export and arity changes', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: page.viewportSize().width, height: 520 });
+  await open(page, '#n=3&cx=1.2&cy=.9&focus=parameter&pcx=1.2&pcy=.9&pz=.02&layers=0000000&backend=cpu&pl=mn0,mn1&pd=-2,0,2');
+  for (const layer of ['mn0', 'mn1']) await expect(page.locator(`#btn-locus-${layer}`)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#btn-locus-mn')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('[data-parameter-digit]')).toHaveCount(5);
+  for (const digit of [-2, 0, 2]) await expect(page.locator(`[data-parameter-digit="${digit}"]`)).toBeChecked();
+  const keyboardDigit = await reveal(page, '[data-parameter-digit="-1"]');
+  await keyboardDigit.focus();
+  await keyboardDigit.press('Space');
+  await expect(keyboardDigit).toBeChecked();
+  await (await reveal(page, '[data-parameter-digit="2"]')).uncheck();
+  await expectInsideViewport(page, '#parameter-digit-settings .parameter-digit-card');
+  await page.screenshot({ path: testInfo.outputPath('independent-first-digit-controls.png') });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#parameter-digit-settings')).not.toHaveAttribute('open');
+  await page.locator('#btn-locus-compare').click();
+  for (const layer of ['mn', 'mn0', 'mn1']) await expect(page.locator(`#btn-locus-${layer}`)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-parameter-digit="-1"]')).toBeChecked();
+  await expect(page.locator('[data-parameter-digit="2"]')).not.toBeChecked();
+  await page.locator('#btn-locus-mn').click();
+  await expect(page.locator('#btn-locus-mn0')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#btn-locus-mn1')).toHaveAttribute('aria-pressed', 'true');
+
+  const url = await shareUrl(page);
+  const hash = new URLSearchParams(new URL(url).hash.slice(1));
+  expect(hash.get('pl')).toBe('mn0,mn1');
+  expect(hash.get('pd')).toBe('-2,-1,0');
+  expect(hash.get('pm')).toBe('compare');
+  await page.goto('/');
+  await page.goto(url);
+  const record = await readRecord(page);
+  expect(record.parameter_view.layers).toEqual(['mn0', 'mn1']);
+  expect(record.parameter_view.digits).toEqual([-2, -1, 0]);
+  expect(record.parameter_view.search_record_set).toBe('M_n');
+  await page.locator('#btn-close-controls').click();
+  for (const digit of [-2, -1, 0]) await expect(page.locator(`[data-parameter-digit="${digit}"]`)).toBeChecked();
+  await (await reveal(page, '#btn-digits-all')).click();
+  await expect(page.locator('[data-parameter-digit]:checked')).toHaveCount(5);
+  await page.locator('#btn-view-dyn').click();
+  await expect(page.locator('#parameter-digit-settings')).not.toHaveAttribute('open');
+  await expect(page.locator('#dynamical-panel')).toBeVisible();
+  await expect(page.locator('#parameter-panel')).not.toBeVisible();
+  await page.keyboard.press('Escape');
+  // With the hidden popup closed, Escape retains its existing workspace
+  // shortcut and restores both panels rather than focusing an invisible control.
+  await expect(page.locator('#parameter-panel')).toBeVisible();
+  await expect(page.locator('#dynamical-panel')).toBeVisible();
+  await page.locator('#btn-view-param').click();
+  await (await reveal(page, '#btn-digits-none')).click();
+  await expect(page.locator('[data-parameter-digit]:checked')).toHaveCount(0);
+  await expect(page.locator('#btn-locus-mn0')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#btn-locus-mn1')).toHaveAttribute('aria-pressed', 'true');
+  await (await reveal(page, '[data-parameter-digit="0"]')).check();
+  await page.keyboard.press('Escape');
+  await fillNumber(page, '#quick-arity', 2);
+  await expect(page.locator('[data-parameter-digit]')).toHaveCount(3);
+  await expect(page.locator('[data-parameter-digit="0"]')).toBeChecked();
+  const resized = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
+  expect(resized.get('pl')).toBe('mn0,mn1');
+  expect(resized.get('pd')).toBe('0');
+  await setParameterLayers(page, []);
+  await (await reveal(page, '[data-parameter-digit="0"]')).uncheck();
+  await page.keyboard.press('Escape');
+  const emptyUrl = await shareUrl(page);
+  const empty = new URLSearchParams(new URL(emptyUrl).hash.slice(1));
+  expect(empty.get('pl')).toBe('');
+  expect(empty.get('pd')).toBe('');
+  await page.goto(emptyUrl);
+  for (const layer of ['mn', 'mn0', 'mn1']) await expect(page.locator(`#btn-locus-${layer}`)).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('[data-parameter-digit]:checked')).toHaveCount(0);
+});
+
+test('parameter cells retain a proven boundary between pixel centers without filling nearby exterior', async ({ page }, testInfo) => {
+  // At n=4, digit 3 followed forever by -3 gives c=3-3/(c-1),
+  // so c*=2+i√2 belongs to F_(4,3). This lies outside the original trap lens.
+  // The chosen pixel center c*+.002 escapes under point sampling; its footprint
+  // still contains c*. A point-cloud renderer loses this exact boundary point.
+  await page.setViewportSize({ width: page.viewportSize().width, height: 520 });
+  await open(page, '#n=4&cx=1.2&cy=.9&focus=parameter&layers=0000000&backend=cpu&pl=&pd=3&bdepth=32&badapt=0');
+  const canvas = page.locator('#parameter-canvas');
+  const dimensions = await canvas.evaluate(element => ({ width: element.width, height: element.height }));
+  const step = 0.003 * Math.SQRT2;
+  const pixel = { x: Math.floor(dimensions.width / 2), y: Math.floor(dimensions.height / 2) };
+  const hash = new URLSearchParams({
+    n: '4', cx: '1.2', cy: '.9', focus: 'parameter', layers: '0000000', backend: 'cpu',
+    pl: '', pd: '3', bdepth: '32', badapt: '0',
+    pcx: String(2.002 - (pixel.x + 0.5 - dimensions.width / 2) * step),
+    pcy: String(Math.SQRT2 + (pixel.y + 0.5 - dimensions.height / 2) * step),
+    pz: String(dimensions.width * step),
+  });
+  await page.goto(`/#${hash}`);
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  const pixels = await canvas.evaluate((element, pixel) => {
+    const context = element.getContext('2d');
+    const sample = offset => Array.from(context.getImageData(pixel.x + offset, pixel.y, 1, 1).data);
+    return { boundary: sample(0), exterior: sample(4) };
+  }, pixel);
+  expect(Math.min(...pixels.boundary.slice(0, 3)), 'The pixel containing the explicit infinite address remains visible').toBeLessThan(220);
+  expect(Math.min(...pixels.exterior.slice(0, 3)), 'A nearby pruned exterior pixel remains white').toBeGreaterThan(245);
+  const record = await readRecord(page);
+  expect(record.parameter_view.layers).toEqual([]);
+  expect(record.parameter_view.digits).toEqual([3]);
+  expect(record.parameter_view.raster_sampling).toBe('parameter-cell');
+  expect(record.parameter_view.selected_point_sampling).toBe('point');
+  expect(record.parameter_view.raster_parameter_radius).toBeCloseTo(0.003, 12);
+  await page.locator('#btn-close-controls').click();
+  await page.screenshot({ path: testInfo.outputPath('parameter-cell-proven-boundary.png') });
+});
+
+test('all 199 digit controls stay reachable without overflowing the viewport', async ({ page }, testInfo) => {
+  await open(page, '#n=100&cx=100&cy=100&focus=parameter&pcx=100&pcy=100&pz=.1&layers=0000000&backend=cpu&pl=&pd=');
+  await expect(page.locator('[data-parameter-digit]')).toHaveCount(199);
+  await (await reveal(page, '[data-parameter-digit="98"]')).check();
+  await expect(page.locator('[data-parameter-digit="98"]')).toBeChecked();
+  await expect(page.locator('[data-parameter-digit]:checked')).toHaveCount(1);
+  await expect(page.locator('#parameter-digit-count')).toHaveText('1/199');
+  await expectInsideViewport(page, '#parameter-digit-settings .parameter-digit-card');
+  await expectInsideViewport(page, '[data-parameter-digit="98"]');
+  const focusedCard = await page.locator('#parameter-digit-settings .parameter-digit-card').boundingBox();
+  const focusedPanel = await page.locator('#parameter-panel').boundingBox();
+  expect(focusedCard.y + focusedCard.height, 'The scrollable popup ends above the plot boundary and status bar').toBeLessThanOrEqual(focusedPanel.y + focusedPanel.height + 1);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+  expect(overflow, 'The longest digit alphabet does not create horizontal page scrolling').toBe(false);
+  await page.screenshot({ path: testInfo.outputPath('maximum-arity-digit-controls.png') });
+  await page.keyboard.press('Escape');
+  const hash = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
+  expect(hash.get('pl')).toBe('');
+  expect(hash.get('pd')).toBe('98');
+  await page.setViewportSize({ width: 800, height: 900 });
+  await page.locator('#btn-view-split').click();
+  await reveal(page, '[data-parameter-digit="98"]');
+  await expectInsideViewport(page, '#parameter-digit-settings .parameter-digit-card');
+  const card = await page.locator('#parameter-digit-settings .parameter-digit-card').boundingBox();
+  const panel = await page.locator('#parameter-panel').boundingBox();
+  expect(card.x + card.width, 'Tablet digit controls fit their half of the split workspace').toBeLessThanOrEqual(panel.x + panel.width + 1);
+  expect(card.y + card.height, 'The tablet panel does not clip the bottom of its popup').toBeLessThanOrEqual(panel.y + panel.height + 1);
+  await page.screenshot({ path: testInfo.outputPath('maximum-arity-tablet-split.png') });
 });
 
 test('polar edits roundtrip through Cartesian controls and preserve exact real-axis input', async ({ page }) => {
@@ -678,7 +883,7 @@ test('partial and malformed share hashes preserve defaults and enforce bounds', 
   await expect(page.locator('#param-imag')).toHaveValue('1.1');
   await expect(page.locator('#param-kmax')).toHaveValue('37');
   await expect(page.locator('#param-lmax')).toHaveValue('1000');
-  await expect(page.locator('#original-attractor-opacity')).toHaveValue('72');
+  await expect(page.locator('#original-attractor-opacity')).toHaveValue('100');
   let params = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
   expect(Number(params.get('pz'))).toBeGreaterThan(0.01);
   expect(Number(params.get('dz'))).toBeGreaterThan(0.01);

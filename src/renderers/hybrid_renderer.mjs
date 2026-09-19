@@ -1,6 +1,8 @@
 import { createWebGLPreview } from './webgl_preview.mjs';
 import { createRasterWorkerPool } from '../compute/raster_worker_pool.mjs';
-import { PIECE_COLORS, hexToRgb } from './palettes.mjs';
+import {
+  PIECE_COLORS, PIECE_OUTLINE_COLOR, hexToRgb, parameterLayerColor, parameterLayerKeys
+} from './palettes.mjs';
 
 const TABLE_WIDTH = 101;
 const TEAL = [50, 138, 148];
@@ -8,8 +10,76 @@ const DEFAULT_PIECE_COLORS = Uint8Array.from(PIECE_COLORS.flatMap(value => {
   const { r, g, b } = hexToRgb(value); return [r, g, b];
 }));
 
-/** Convert independent numerical result codes to the same palette as the GPU. */
-export function colorizeRasterTile(data, job, colors, pieces) {
+/**
+ * A separate mask for every first-level piece keeps edges inside overlaps.
+ * The one-cell halo comes from the same search as the tile and prevents seams
+ * or spurious outlines at the viewport boundary. Capped neighbors are unknown,
+ * never exterior evidence for an outline.
+ */
+function pieceMaskSampler(tile, job, pixelCount, pieceColors, pieceCount) {
+  const masks = tile?.pieceMasks;
+  const uncertain = tile?.pieceUncertainMasks;
+  if (!(masks instanceof Uint32Array) || !pieceCount || tile.width * tile.height !== pixelCount) return null;
+  const words = Math.ceil(job.n / 32);
+  const stride = tile.width + 2;
+  const required = stride * (tile.height + 2) * words;
+  if (masks.length !== required || (uncertain && uncertain.length !== required)) return null;
+  return index => {
+    const x = index % tile.width, y = Math.floor(index / tile.width);
+    const center = ((y + 1) * stride + x + 1) * words;
+    const neighbors = [center - words, center + words, center - stride * words, center + stride * words];
+    let r = 0, g = 0, b = 0, count = 0, outline = false;
+    for (let word = 0; word < words; word++) {
+      let occupied = masks[center + word];
+      if (!occupied) continue;
+      for (const neighbor of neighbors) {
+        if (occupied & ~masks[neighbor + word] & ~(uncertain?.[neighbor + word] ?? 0)) outline = true;
+      }
+      while (occupied) {
+        const bit = 31 - Math.clz32(occupied & -occupied);
+        const piece = word * 32 + bit;
+        if (piece < job.n) {
+          const offset = (piece % pieceCount) * 3;
+          r += pieceColors[offset]; g += pieceColors[offset + 1]; b += pieceColors[offset + 2]; count++;
+        }
+        occupied = (occupied & (occupied - 1)) >>> 0;
+      }
+    }
+    return count ? { fill: outline ? PIECE_OUTLINE_COLOR : [r / count, g / count, b / count], outline } : null;
+  };
+}
+
+function parameterLayerSampler(tile, job, colors, pixelCount, lookup) {
+  const keys = parameterLayerKeys(job);
+  const layers = tile?.layerData;
+  if (!(layers instanceof Uint8Array) || layers.length !== pixelCount * keys.length * 2) return null;
+  const palette = keys.map(key => {
+    const value = hexToRgb(parameterLayerColor(key, job.n));
+    return [value.r, value.g, value.b];
+  });
+  // Domain and arithmetic limits outrank work exhaustion when several selected
+  // searches remain unresolved. A known covered layer still establishes the
+  // displayed union independently of the others.
+  const priorities = [0, 0, 0, 0, 1, 5, 3, 2, 4];
+  return index => {
+    if (!keys.length) return colors.exterior;
+    let r = 0, g = 0, b = 0, covered = 0, diagnostic = 0, diagnosticDepth = 0, escapeDepth = 0;
+    const start = index * keys.length * 2;
+    for (let layer = 0; layer < keys.length; layer++) {
+      const code = layers[start + layer * 2], depth = layers[start + layer * 2 + 1];
+      if (code === 1 || code === 2 || code === 3) {
+        r += palette[layer][0]; g += palette[layer][1]; b += palette[layer][2]; covered++;
+      } else if (code === 0) escapeDepth = Math.max(escapeDepth, depth);
+      else if ((priorities[code] ?? 0) > priorities[diagnostic]) { diagnostic = code; diagnosticDepth = depth; }
+    }
+    if (covered) return job.showEscapeStrata ? colors.exterior : [r / covered, g / covered, b / covered];
+    const offset = lookup(diagnostic, diagnostic ? diagnosticDepth : escapeDepth);
+    return [colors.table[offset], colors.table[offset + 1], colors.table[offset + 2]];
+  };
+}
+
+/** Convert independent numerical result codes and coverage to the GPU palette. */
+export function colorizeRasterTile(data, job, colors, pieces, tile) {
   const output = new Uint8ClampedArray(data.length);
   const lookup = (code, depth) => (Math.min(8, code) * TABLE_WIDTH + Math.min(100, depth)) * 4;
   const opacity = Math.max(0, Math.min(1, colors.survivalOpacity ?? job.survivalOpacity ?? 0.45));
@@ -17,7 +87,16 @@ export function colorizeRasterTile(data, job, colors, pieces) {
   const pieceColors = colors.pieceColors ?? DEFAULT_PIECE_COLORS;
   const pieceCount = Math.floor(pieceColors.length / 3);
   const originalBoundary = (job.originalRenderer ?? 'boundary') === 'boundary';
+  const samplePieces = job.kind === 'dynamical' && job.firstLevelPieces !== false && originalBoundary
+    ? pieceMaskSampler(tile, job, data.length / 4, pieceColors, pieceCount) : null;
+  const sampleLayers = job.kind === 'parameter'
+    ? parameterLayerSampler(tile, job, colors, data.length / 4, lookup) : null;
   for (let i = 0; i < data.length; i += 4) {
+    if (sampleLayers) {
+      const [r, g, b] = sampleLayers(i / 4);
+      output[i] = Math.round(r); output[i + 1] = Math.round(g); output[i + 2] = Math.round(b); output[i + 3] = 255;
+      continue;
+    }
     let code = data[i], depth = data[i + 1];
     const secondary = data[i + 2];
     let teal = false;
@@ -37,13 +116,16 @@ export function colorizeRasterTile(data, job, colors, pieces) {
       if (!job.showDifference) [r, g, b] = colors.exterior;
       if (job.showOriginalSurvival) {
         if (originalBoundary) {
-          if (secondary === 1 || secondary === 3) {
+          const mask = samplePieces?.(i / 4);
+          if (mask || secondary === 1 || secondary === 3) {
             const encodedPiece = pieces?.[i / 2 + 1] ?? 0;
             const pieceOffset = ((encodedPiece - 1) % pieceCount) * 3;
             const usePiece = job.firstLevelPieces !== false && encodedPiece > 0 && pieceCount > 0;
-            r = Math.round(r * (1 - originalOpacity) + (usePiece ? pieceColors[pieceOffset] : colors.branch[0]) * originalOpacity);
-            g = Math.round(g * (1 - originalOpacity) + (usePiece ? pieceColors[pieceOffset + 1] : colors.branch[1]) * originalOpacity);
-            b = Math.round(b * (1 - originalOpacity) + (usePiece ? pieceColors[pieceOffset + 2] : colors.branch[2]) * originalOpacity);
+            const fill = mask?.fill ?? (usePiece
+              ? [pieceColors[pieceOffset], pieceColors[pieceOffset + 1], pieceColors[pieceOffset + 2]] : colors.branch);
+            r = Math.round(r * (1 - originalOpacity) + fill[0] * originalOpacity);
+            g = Math.round(g * (1 - originalOpacity) + fill[1] * originalOpacity);
+            b = Math.round(b * (1 - originalOpacity) + fill[2] * originalOpacity);
           } else if (secondary !== 0 && secondary !== 5) {
             const unknown = lookup(secondary, data[i + 3]);
             r = colors.table[unknown]; g = colors.table[unknown + 1]; b = colors.table[unknown + 2];
@@ -121,7 +203,11 @@ export function createHybridRenderer({ onStatus = () => {} } = {}) {
     if (!current(run) || run.refining || run.failed) return;
     run.refining = true;
     run.completed = false;
-    report(run, { active_backend: 'cpu-worker', arithmetic: 'binary64', phase: 'refining' });
+    report(run, { active_backend: 'cpu-worker', arithmetic: 'binary64', phase: 'refining',
+      parameter_radius_world: run.job.kind === 'parameter'
+        ? (run.job.parameterRadius ?? Math.SQRT1_2 * run.job.spanX / run.job.width) : 0,
+      pixel_radius_world: run.job.kind === 'dynamical' && (run.job.originalRenderer ?? 'boundary') === 'boundary'
+        ? Math.SQRT1_2 * run.job.spanX / run.job.width : 0 });
     // A small worker pass gives machines without WebGL a prompt first image.
     const coarse = !run.renderedGPU && run.job.width * run.job.height > 16384;
     const renderPass = preview => {
@@ -145,7 +231,7 @@ export function createHybridRenderer({ onStatus = () => {} } = {}) {
         run.workerHandle = getPool().render(job, {
           onTile: tile => {
             if (!current(run)) return;
-            const rgba = colorizeRasterTile(tile.data, job, run.colors, tile.pieces);
+            const rgba = colorizeRasterTile(tile.data, job, run.colors, tile.pieces, tile);
             context.putImageData(new ImageData(rgba, tile.width, tile.height), tile.x, tile.y);
             if (preview) {
               run.context.imageSmoothingEnabled = false;
@@ -200,6 +286,11 @@ export function createHybridRenderer({ onStatus = () => {} } = {}) {
           escape_depth: job.escapeDepth ?? (job.n === 2 ? 16 : 12), boundary_work: job.boundaryWork ?? 20000 },
         original_renderer: job.originalRenderer ?? 'boundary',
         original_sample_type: job.kind === 'dynamical' && (job.originalRenderer ?? 'boundary') === 'boundary' ? 'pixel-footprint' : 'point',
+        parameter_sample_type: job.kind === 'parameter' && job.parameterRadius !== 0 ? 'parameter-cell' : 'point',
+        parameter_radius_world: job.kind === 'parameter' ? (job.parameterRadius ?? Math.SQRT1_2 * job.spanX / job.width) : 0,
+        parameter_layers: job.kind === 'parameter' ? parameterLayerKeys(job) : [],
+        first_piece_boundaries: job.kind === 'dynamical' && job.showOriginalSurvival &&
+          job.firstLevelPieces && (job.originalRenderer ?? 'boundary') === 'boundary',
         pixel_radius_world: job.kind === 'dynamical' && (job.originalRenderer ?? 'boundary') === 'boundary'
           ? Math.SQRT1_2 * job.spanX / job.width : 0 }
     };
@@ -220,7 +311,10 @@ export function createHybridRenderer({ onStatus = () => {} } = {}) {
           context.drawImage(preview.canvas, 0, 0, canvas.width, canvas.height);
           run.renderedGPU = true;
           report(run, { active_backend: 'webgl2', arithmetic: 'float32-preview', phase: 'preview',
-            gpu: preview.metadata, first_preview_ms: performance.now() - run.started });
+            gpu: preview.metadata,
+            parameter_radius_world: preview.metadata.parameter_radius_world,
+            pixel_radius_world: preview.metadata.pixel_radius_world,
+            first_preview_ms: performance.now() - run.started });
           if (job.backend === 'gpu') {
             run.completed = true;
             paint(run, true);
