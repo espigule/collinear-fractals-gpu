@@ -23,6 +23,9 @@ The [19 September correction](#parameter-cells-multiple-subsets-and-piece-bounda
 supersedes the earlier exclusive comparison controls and pixel-center
 marked-point rendering. Its scope is cell coverage, simultaneous subsets, and
 the separate boundaries of overlapping first-level pieces.
+The later [finite-capture correction](#finite-capture-fields--19-september-2026)
+also separates minimum capture time from geometric coverage and removes
+historical off-lens trap acceptance from current browser searches.
 
 ## Review basis and publication state
 
@@ -451,3 +454,46 @@ The [current architecture](RENDERING_ARCHITECTURE.md) gives the propagation
 and pruning bounds; the [validation guide](VALIDATION.md) identifies the
 checks needed for the final published revision. This addendum makes no
 physical-device performance or interval-certification claim.
+
+## Finite-capture fields — 19 September 2026
+
+The cell and contour correction above preserved fine boundaries, but its
+first-success depth-first search was insufficient for a capture-time image.
+A finite survivor could terminate the search before a sibling reached the
+trap, and a returned witness could be longer than the minimum. Flat
+set/piece colors then concealed finite-capture structure even where capture
+was already being used for numerical acceptance.
+
+The current correction keeps coverage and minimum capture as independent
+fields. Parameter cells still vary $c$ through the inverse maps; original
+attractor pixels keep their geometric footprint. A separate bounded search
+at each center completes all shallower levels before assigning a minimum.
+The existing difference-attractor point search is already breadth-first and
+supplies its ordered depth directly. A capture whose minimum remains unknown
+stays visible without being assigned a spurious stratum.
+
+| Area | Previous cell renderer | Current capture correction | Practical consequence |
+|---|---|---|---|
+| Capture time | First-success depth-first witness or finite survival. | Independently ordered minimum search at the pixel center. | Fine coverage remains while capture strata become visible and correctly ordered. |
+| All parameter sets | Aggregate/digit identity by flat hue. | Capture shading for $\mathcal M_n$, $\mathcal M_n^0$, $\mathcal M_n^1$, and every $F_{n,t}$. | Independent overlays retain their own set hues and capture fields. |
+| Whole-attractor origin | First-piece search could shift capture by its compulsory step. | Whole $E(c,n)$ begins at depth zero; fixed first digits begin at one. | Turning piece colors on no longer alters the meaning of capture depth. |
+| Aggregate base levels | Decomposition could suggest additional capture levels in the original lens. | $\mathcal M_n^0$ is uniformly captured at zero and $\mathcal M_n^1$ at one there. | The display respects the canonical trap instead of inventing strata; fixed digits can still capture later. |
+| Color | Piece hue and black contours only. | Default cyclic minimum-depth shading; flat set-color option; pale finite coverage and solid unconfirmed-minimum witnesses. | Capture structure and piece identity can be read together; every black overlap contour survives. |
+| Off-lens acceptance | Historical selected/difference searches could accept an off-lens rectangle. | Current browser capture uses only the canonical strict lens. | An audited false-positive rule is removed; outside-lens geometry uses escape/survival. |
+| Cost and provenance | Coverage and piece searches. | A bounded center search plus separate capture buffers and metadata. | Additional work is explicit and included in GPU preview sizing; full CPU refinement remains available. |
+
+The best feature to recover from the older explorer is its immediate visual
+use of finite-capture layers. The maintained version now does so with an
+explicit depth convention and independently retained boundary detail. The
+shade cycle is a display choice; neither changing it nor selecting flat
+colors changes a numerical acceptance rule. Parameter-set and piece hues
+remain stable across the two views.
+
+The [capture triptych](figures/README.md#finite-capture-layers) is generated
+with the production modules and illustrates $\mathcal M_3$, $F_{5,0}$,
+and the exact rectangular support of $E(2i,5)$. Its minimum-depth samples,
+coverage outcomes, and source hashes are recorded separately. The
+[implementation notes](IMPLEMENTATION_NOTES.md#current-capture-policy-and-historical-replay)
+give the historical off-lens counterexample and replay boundary; the
+[validation guide](VALIDATION.md#minimum-capture-correction--19-september-2026)
+specifies the checks for this revision. Earlier QA counts remain historical.

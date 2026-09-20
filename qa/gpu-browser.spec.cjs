@@ -36,15 +36,25 @@ async function openHarness(page) {
     const unavailable = [];
     const device = createWebGLPreview({ onUnavailable: reason => unavailable.push(reason) });
     const maskTile = (width, height) => {
-      const raw = device.readPieceMasks();
-      if (!raw?.halo) return { width, height };
-      const flip = source => {
-        const target = new Uint32Array(source.length);
-        for (let row = 0; row < raw.height; row++) target.set(source.subarray(
-          (raw.height - row - 1) * raw.width, (raw.height - row) * raw.width), row * raw.width);
+      const minima = device.readCaptureDepths();
+      const layers = device.readLayers();
+      const flipRows = (source, rowWidth, rows, Type = Uint8Array) => {
+        const target = new Type(source.length);
+        for (let row = 0; row < rows; row++) target.set(source.subarray(
+          (rows - row - 1) * rowWidth, (rows - row) * rowWidth), row * rowWidth);
         return target;
       };
-      return { width, height, pieceMasks: flip(raw.pieceMasks), pieceUncertainMasks: flip(raw.pieceUncertainMasks) };
+      const tile = { width, height,
+        captureDepths: flipRows(minima.data, width * 2, height) };
+      if (layers) {
+        tile.layerData = flipRows(layers.data, width * layers.layerCount * 2, height);
+        tile.layerCaptureDepths = flipRows(layers.captureDepths, width * layers.layerCount, height);
+      }
+      const raw = device.readPieceMasks();
+      if (!raw?.halo) return tile;
+      return { ...tile,
+        pieceMasks: flipRows(raw.pieceMasks, raw.width, raw.height, Uint32Array),
+        pieceUncertainMasks: flipRows(raw.pieceUncertainMasks, raw.width, raw.height, Uint32Array) };
     };
     window.gpuTest = { device, colors, unavailable, prepareRasterJob, renderRasterTile, colorizeRasterTile, maskTile };
   });
@@ -338,7 +348,8 @@ test('WebGL2: boundary fill uses independent piece indices and never colors reso
     const base = { kind: 'dynamical', width: 1, height: 1, spanX: 0.01,
       n: 4, cx: 0, cy: 2, kMax: 0, LMax: 1, tol: 1e-8,
       escapeDepth: 12, boundaryWork: 20000, originalRenderer: 'boundary',
-      showDifference: false, showOriginalSurvival: true, firstLevelPieces: true, originalOpacity: 1 };
+      showDifference: false, showOriginalSurvival: true, firstLevelPieces: true, originalOpacity: 1,
+      captureStyle: 'sets' };
     return [
       { ...base, center: { x: 3, y: 0.75 } },
       { ...base, center: { x: -3, y: -0.75 } },
@@ -368,11 +379,98 @@ test('WebGL2: boundary fill uses independent piece indices and never colors reso
   expect(result[4].data.slice(2)).toEqual([1, 0]); // even-n canonical original trap
   expect(result[4].pieces).toEqual([0, 0]);
   expect(result[5].data[2]).toBe(1);
-  expect(result[5].data[3]).toBeGreaterThan(0);
-  expect(result[5].pieces[1]).toBeGreaterThan(0);
+  expect(result[5].data[3]).toBe(0);
+  expect(result[5].pieces[1]).toBe(0);
   for (const frame of result) for (let channel = 0; channel < 4; channel++) {
     expect(Math.abs(frame.color[channel] - frame.expected[channel])).toBeLessThanOrEqual(1);
   }
+});
+
+test('WebGL2: minimum center capture survives competing branches and independent geometry limits', async ({ page }) => {
+  await openHarness(page);
+  const report = await page.evaluate(() => {
+    const { device, colors, prepareRasterJob, renderRasterTile, colorizeRasterTile, maskTile } = window.gpuTest;
+    const palette = { ...colors, captureInterior: [166, 170, 174] };
+    const base = { kind: 'dynamical', width: 1, height: 1, spanX: 0.01,
+      center: { x: -0.7, y: -2 }, n: 3, cx: 0.3, cy: 1.2, kMax: 12, LMax: 32,
+      escapeDepth: 12, boundaryWork: 20000, originalRenderer: 'boundary', firstLevelPieces: false,
+      showDifference: false, showOriginalSurvival: true, originalOpacity: 1, captureStyle: 'depth', modulo: 3 };
+    const jobs = [base, { ...base, center: { x: -0.9, y: 1.9 } },
+      { ...base, n: 5, cx: 0, cy: 2, center: { x: 0, y: 0 } },
+      { ...base, n: 5, cx: 0, cy: 2, center: { x: 0, y: 0 }, firstLevelPieces: true },
+      { ...base, boundaryWork: 1 },
+      { ...base, kind: 'parameter', n: 5, spanX: 1, center: { x: 0, y: 2 }, parameterMode: 'mn0', boundaryWork: 1 },
+      { ...base, center: { x: -3.75, y: 1.25 }, showDifference: true, showOriginalSurvival: false }];
+    return jobs.map(job => {
+      const frame = device.render(job, palette);
+      if (!frame) throw new Error(device.reason);
+      const raw = device.readClassification(), minima = device.readCaptureDepths();
+      const pieces = device.readPieces();
+      const cpu = renderRasterTile(prepareRasterJob(job), { x: 0, y: 0, width: 1, height: 1 });
+      const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+      const context = canvas.getContext('2d'); context.drawImage(frame.canvas, 0, 0);
+      return { codes: [...raw.data], minima: [...minima.data], cpuMinima: [...cpu.captureDepths],
+        display: [...context.getImageData(0, 0, 1, 1).data],
+        expected: [...colorizeRasterTile(raw.data, job, palette, pieces.data, maskTile(1, 1))], metadata: frame.metadata };
+    });
+  });
+  // These points have a first-level strict-trap branch that the earlier DFS
+  // missed while pursuing either a depth-12 survivor or a depth-two witness.
+  expect(report[0].codes.slice(2)).toEqual([3, 12]);
+  expect(report[1].codes.slice(2)).toEqual([1, 2]);
+  expect(report[0].minima[1]).toBe(1);
+  expect(report[1].minima[1]).toBe(1);
+  expect(report[2].minima[1]).toBe(0);
+  expect(report[3].minima[1]).toBe(0);
+  expect(report[4].codes[2]).toBe(7);
+  expect(report[4].minima[1]).toBe(255);
+  // A point-center root capture remains known when the enclosing parameter
+  // disk cannot be resolved in its separately bounded geometry search.
+  expect(report[5].codes[0]).toBe(7);
+  expect(report[5].minima[0]).toBe(0);
+  expect(report[6].minima[0]).toBe(1);
+  expect(report[6].display).toEqual([125, 128, 131, 255]);
+  for (const sample of report) {
+    expect(sample.minima).toEqual(sample.cpuMinima);
+    for (let channel = 0; channel < 4; channel++) {
+      expect(Math.abs(sample.display[channel] - sample.expected[channel])).toBeLessThanOrEqual(1);
+    }
+    expect(sample.metadata).toMatchObject({ capture_sample_type: 'pixel-center',
+      capture_search: 'iterative-deepening-with-independent-work-budget',
+      effective: { capture_work: sample.metadata.effective.boundary_work } });
+  }
+});
+
+test('WebGL2: every aggregate and first digit retains its own minimum center capture', async ({ page }) => {
+  await openHarness(page);
+  const result = await page.evaluate(() => {
+    const { device, colors, prepareRasterJob, renderRasterTile } = window.gpuTest;
+    const job = { kind: 'parameter', width: 1, height: 1, spanX: 0.01,
+      center: { x: 0.5, y: 1.1 }, n: 3, kMax: 12, LMax: 32, escapeDepth: 12, boundaryWork: 20000,
+      parameterMode: 'compare', parameterLayers: ['mn', 'mn0', 'mn1'], parameterDigits: [-2, -1, 0, 1, 2] };
+    const frame = device.render(job, colors);
+    if (!frame) throw new Error(device.reason);
+    const layers = device.readLayers();
+    const cpu = renderRasterTile(prepareRasterJob(job), { x: 0, y: 0, width: 1, height: 1 });
+    const before = [...layers.data];
+    device.render({ ...job, captureStyle: 'sets', modulo: 1 }, colors);
+    const after = device.readLayers();
+    device.render({ ...job, escapeDepth: 0 }, colors);
+    const zeroCoverage = device.readLayers();
+    device.render({ ...job, kMax: 0 }, colors);
+    return { ids: layers.layerIds, depths: [...layers.captureDepths], cpuDepths: [...cpu.layerCaptureDepths],
+      before, after: [...after.data], afterDepths: [...after.captureDepths],
+      zeroCoverageDepths: [...zeroCoverage.captureDepths],
+      zeroDepth: [...device.readLayers().captureDepths], unknown: layers.unknownCaptureDepth };
+  });
+  expect(result.ids).toEqual(['mn', 'mn0', 'mn1', 'digit:-2', 'digit:-1', 'digit:0', 'digit:1', 'digit:2']);
+  expect(result.depths).toEqual([0, 0, 1, 4, 2, 1, 1, 1]);
+  expect(result.depths).toEqual(result.cpuDepths);
+  expect(result.after).toEqual(result.before);
+  expect(result.afterDepths).toEqual(result.depths);
+  expect(result.zeroCoverageDepths).toEqual(result.depths);
+  expect(result.zeroDepth).toEqual([0, 0, 255, 255, 255, 255, 255, 255]);
+  expect(result.unknown).toBe(255);
 });
 
 test('WebGL2: pixel footprints retain thin original attractors without filling their gaps', async ({ page }, testInfo) => {
@@ -526,14 +624,18 @@ test('WebGL2: independently selected aggregates and digits share exact layer com
     if (!frame) throw new Error(device.reason);
     const layers = device.readLayers();
     const layerData = new Uint8Array(layers.data.length);
+    const layerCaptureDepths = new Uint8Array(layers.captureDepths.length);
     for (let row = 0; row < job.height; row++) layerData.set(layers.data.subarray(
       (job.height - row - 1) * job.width * layers.layerCount * 2,
       (job.height - row) * job.width * layers.layerCount * 2), row * job.width * layers.layerCount * 2);
+    for (let row = 0; row < job.height; row++) layerCaptureDepths.set(layers.captureDepths.subarray(
+      (job.height - row - 1) * job.width * layers.layerCount,
+      (job.height - row) * job.width * layers.layerCount), row * job.width * layers.layerCount);
     const canvas = document.createElement('canvas'); canvas.width = job.width; canvas.height = job.height;
     const context = canvas.getContext('2d'); context.drawImage(frame.canvas, 0, 0);
     const display = context.getImageData(0, 0, job.width, job.height).data;
     const expected = colorizeRasterTile(new Uint8Array(display.length), job, colors, null,
-      { width: job.width, height: job.height, layerData });
+      { width: job.width, height: job.height, layerData, layerCaptureDepths });
     const cpu = renderRasterTile(prepareRasterJob(job), { x: 0, y: 0, width: job.width, height: job.height });
     let opposed = 0, differences = 0, covered = 0;
     for (let index = 0; index < layerData.length; index += 2) {
@@ -616,14 +718,16 @@ test('WebGL2: all supported digit layers retain diagnostics within a bounded pre
   const result = results[1];
   expect(results[0].layerIds).toHaveLength(8);
   expect(results[0].metadata.search_passes).toBe(9);
+  expect(results[0].metadata.capture_search_passes).toBe(9);
   expect(results[0].metadata.preview_work_weight).toBe(1);
   expect(results[0].metadata.width * results[0].metadata.height * 9).toBeLessThanOrEqual(480000);
   expect(result.layerIds).toHaveLength(66);
   expect(result.layerIds.slice(0, 4)).toEqual(['mn', 'mn0', 'mn1', 'digit:-31']);
   expect(result.layerIds.at(-1)).toBe('digit:31');
   expect(result.metadata.search_passes).toBe(67);
+  expect(result.metadata.capture_search_passes).toBe(67);
   expect(result.metadata.preview_work_weight).toBe(63 / 8);
-  expect(result.metadata.weighted_search_passes).toBe(67 * 63 / 8);
+  expect(result.metadata.weighted_search_passes).toBe(134 * 63 / 8);
   expect(result.metadata.width * result.metadata.height).toBeLessThanOrEqual(result.metadata.preview_pixel_budget);
   expect(result.metadata.width * result.metadata.height * result.metadata.search_passes).toBeLessThanOrEqual(480000);
   expect(result.metadata.width * result.metadata.height * result.metadata.weighted_search_passes).toBeLessThanOrEqual(480000);
@@ -642,6 +746,7 @@ test('WebGL2: precision and resource guards preserve CPU fallback and requested 
       { ...job, kind: 'dynamical', cx: 2, cy: 1e-10 },
       { ...job, kind: 'dynamical', cx: 1.00005, cy: 0.00001 },
       { ...job, kind: 'dynamical', cx: 0, cy: 5e-324 },
+      { ...job, captureDepth: 0 },
     ].map(candidate => ({ rendered: Boolean(device.render(candidate, colors)), reason: device.reason,
       raw: device.readClassification(), supported: device.supported }));
     const rendered = device.render({ ...job, kMax: 100, LMax: 10000 }, colors);
@@ -654,7 +759,8 @@ test('WebGL2: precision and resource guards preserve CPU fallback and requested 
     expect(candidate.reason.length).toBeGreaterThan(10);
   }
   expect(result.metadata.requested).toMatchObject({ depth: 100, frontier: 10000, tolerance: 1e-8,
-    escape_depth: 12, boundary_work: 20000 });
+    escape_depth: 12, capture_depth: 100, boundary_work: 20000 });
+  expect(result.metadata.effective.capture_depth).toBe(64);
   expect(result.metadata.effective).toMatchObject({ depth: 64, frontier: 32, work: 2048, tail: 48 });
   expect(result.raw[0]).toBe(1);
 });
@@ -665,6 +771,7 @@ test('WebGL2: production device recovers native context loss and disposes idempo
     const { device, colors, unavailable } = window.gpuTest;
     const before = device.render(job, colors);
     const beforeBytes = [...device.readClassification().data];
+    const beforeCaptureDepths = [...device.readCaptureDepths().data];
     const pieceJob = { ...job, parameterMode: 'mn0', n: 2, center: { x: 1, y: 1 }, spanX: 0.01, escapeDepth: 16 };
     device.render(pieceJob, colors);
     const beforePieces = [...device.readPieces().data];
@@ -673,29 +780,33 @@ test('WebGL2: production device recovers native context loss and disposes idempo
     const lostEvent = new Promise(resolve => device.canvas.addEventListener('webglcontextlost', resolve, { once: true }));
     extension.loseContext();
     await lostEvent;
-    const during = { supported: device.supported, render: device.render(job, colors), read: device.readClassification(), reason: device.reason };
+    const during = { supported: device.supported, render: device.render(job, colors), read: device.readClassification(),
+      capture: device.readCaptureDepths(), reason: device.reason };
     await new Promise(resolve => setTimeout(resolve, 0));
     const restoredEvent = new Promise(resolve => device.canvas.addEventListener('webglcontextrestored', resolve, { once: true }));
     extension.restoreContext(); await restoredEvent;
     const after = device.render(job, colors);
     const afterBytes = [...device.readClassification().data];
+    const afterCaptureDepths = [...device.readCaptureDepths().data];
     device.render(pieceJob, colors);
     const afterPieces = [...device.readPieces().data];
     device.dispose(); device.dispose();
-    return { beforeBytes, afterBytes, beforePieces, afterPieces, during, beforeGeneration: before.metadata.generation,
+    return { beforeBytes, afterBytes, beforeCaptureDepths, afterCaptureDepths, beforePieces, afterPieces, during,
+      beforeGeneration: before.metadata.generation,
       afterGeneration: after.metadata.generation, unavailable, disposed: {
-        supported: device.supported, render: device.render(job, colors), read: device.readClassification() } };
+        supported: device.supported, render: device.render(job, colors), read: device.readClassification(), capture: device.readCaptureDepths() } };
   }, CORE_GPU_FIXTURES[2].job);
-  expect([2, 8]).toContain(result.beforeBytes[0]);
+  expect([3, 4, 7, 8]).toContain(result.beforeBytes[0]);
   expect(result.beforeBytes.slice(2)).toEqual([0, 2]);
   expect(result.afterBytes).toEqual(result.beforeBytes);
+  expect(result.afterCaptureDepths).toEqual(result.beforeCaptureDepths);
   expect(result.beforePieces).toEqual([2, 0]);
   expect(result.afterPieces).toEqual(result.beforePieces);
-  expect(result.during).toMatchObject({ supported: false, render: null, read: null });
+  expect(result.during).toMatchObject({ supported: false, render: null, read: null, capture: null });
   expect(result.during.reason).toMatch(/context.*lost/i);
   expect(result.unavailable).toHaveLength(1);
   expect(result.afterGeneration).toBeGreaterThan(result.beforeGeneration);
-  expect(result.disposed).toEqual({ supported: false, render: null, read: null });
+  expect(result.disposed).toEqual({ supported: false, render: null, read: null, capture: null });
 });
 
 test('WebGL2: native GLSL compilation, readback and loss/restoration are available', async ({ page }, testInfo) => {

@@ -17,7 +17,7 @@ self.addEventListener('message', ({ data: message }) => {
     const tile = renderRasterTile(prepared, message.tile);
     const transfers = [tile.data.buffer];
     if (tile.pieces) transfers.push(tile.pieces.buffer);
-    for (const key of ['layerData', 'pieceMasks', 'pieceUncertainMasks']) {
+    for (const key of ['captureDepths', 'layerData', 'layerCaptureDepths', 'pieceMasks', 'pieceUncertainMasks']) {
       if (tile[key]) transfers.push(tile[key].buffer);
     }
     self.postMessage({ type: 'tile', jobId, tileId, ...tile }, transfers);

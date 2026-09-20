@@ -103,7 +103,7 @@
                   <input type="number" id="param-lmax" value="1000" min="1" max="10000" step="1" inputmode="numeric" aria-describedby="search-help">
                 </div>
               </div>
-              <p class="control-help" id="search-help">Higher limits may resolve more points and take longer. Undetermined points are not classified as boundary.</p>
+              <p class="control-help" id="search-help">Maximum depth bounds the selected-point search and capture-level search at pixel centers. Depth 0 tests only the initial trap. Boundary depth separately controls escape coverage. Higher limits may resolve more points and take longer.</p>
             </div>
           </details>
 
@@ -143,7 +143,7 @@
                   <input type="number" id="boundaryDepth" value="0" min="0" max="100" step="1" inputmode="numeric" aria-describedby="boundary-depth-help">
                 </div>
                 <label class="checkbox-label" for="adaptiveBoundary"><input type="checkbox" id="adaptiveBoundary" checked><span>Increase detail as you zoom</span></label>
-                <p class="control-help" id="boundary-depth-help">Automatic depth starts at 16 for two maps and 12 otherwise. Adaptive detail increases the depth when you zoom in.</p>
+                <p class="control-help" id="boundary-depth-help">Escape coverage starts at depth 16 for two maps and 12 otherwise, increasing with zoom. Capture levels use the separate maximum search depth <span class="math">k</span><sub>max</sub>.</p>
               </div>
               <div class="renderer-settings" id="prefix-settings" hidden>
                 <div class="field">
@@ -188,15 +188,23 @@
           </details>
 
           <details class="control-section">
-            <summary>Search colors &amp; depth bands</summary>
+            <summary>Colors &amp; finite capture</summary>
             <div class="section-content">
+              <div class="control-group">
+                <label for="capture-style">Capture display</label>
+                <select id="capture-style" aria-describedby="capture-style-help">
+                  <option value="depth" selected>Finite-capture layers</option>
+                  <option value="sets">Set colors</option>
+                </select>
+                <p class="control-help" id="capture-style-help">Reveal minimum capture at pixel centers through the maximum search depth. Parameter and Sharp boundary coverage use whole pixels; the half-difference uses point samples. Piece hues and black contours remain. This choice changes colors, not the computed sets.</p>
+              </div>
               <div class="control-group">
                 <label for="param-modulo">Capture-depth cycle <span class="math">q</span></label>
                 <div class="slider-container">
                   <input type="range" id="param-modulo" min="1" max="12" value="3" step="1" aria-describedby="modulo-help">
                   <output class="slider-val" id="modulo-val" for="param-modulo">3</output>
                 </div>
-                <p class="control-help" id="modulo-help">On the difference attractor, capture-depth colors repeat modulo <span class="math">q</span>.</p>
+                <p class="control-help" id="modulo-help">Minimum capture levels repeat modulo <span class="math">q</span> in all numerical set layers. Solid color means capture was found but its minimum is not yet established; pale color marks finite escape coverage.</p>
               </div>
               <div class="control-group">
                 <label for="palette-mode">Search palette</label>
@@ -207,11 +215,11 @@
                   <option value="custom">Custom</option>
                 </select>
               </div>
-              <p class="control-help" id="palette-scope-help">This palette colors the difference-attractor search, single-color attractors, unresolved results and background. Parameter sets and colored first-level pieces use their identifying colors; overlaps blend those colors.</p>
+              <p class="control-help" id="palette-scope-help">This palette colors the difference attractor, single-color attractors, unresolved results and background. Capture shading preserves parameter-set and first-piece hues; overlaps blend their colors.</p>
               <fieldset class="palette-grid" id="custom-palette-controls" aria-describedby="palette-scope-help">
                 <legend>Search and background colors</legend>
                 <label for="palette-interior">In-lens capture<input type="color" id="palette-interior" value="#059669"></label>
-                <label for="palette-offlens">Off-lens capture<input type="color" id="palette-offlens" value="#2563eb"></label>
+                <label for="palette-offlens" hidden>Archived off-lens color<input type="color" id="palette-offlens" value="#2563eb"></label>
                 <label for="palette-undetermined">Undetermined<input type="color" id="palette-undetermined" value="#fbbf24"></label>
                 <label for="palette-exterior">Exterior / background<input type="color" id="palette-exterior" value="#ffffff"></label>
               </fieldset>
@@ -282,12 +290,19 @@
           <summary>Legend</summary>
           <div class="legend-card" aria-label="Parameter-plane legend">
 <div class="legend-item"><span class="legend-color legend-lens" aria-hidden="true"></span><span>Parameter lens <span class="math">X</span><sub>n</sub></span></div>
-          <div class="legend-item"><span class="legend-color" id="legend-locus-color" aria-hidden="true"></span><span>In-lens capture (depth mod <span class="math">q</span>)</span></div>
+          <div class="legend-item"><span class="legend-color" id="legend-locus-color" aria-hidden="true"></span><span>Selected parameter sets</span></div>
+            <div class="capture-legend" id="parameter-capture-legend">
+              <span class="capture-level-title">Minimum capture level, mod 3</span>
+              <div class="capture-level-swatches" aria-label="Minimum capture level colors"></div>
+              <div class="legend-item"><span class="legend-color capture-witness-color" aria-hidden="true"></span><span>Capture found · minimum unconfirmed</span></div>
+              <div class="legend-item"><span class="legend-color capture-survivor-color" aria-hidden="true"></span><span>Finite escape coverage</span></div>
+            </div>
           <div class="legend-item"><span class="legend-color" id="legend-offlens-color" aria-hidden="true"></span><span>Off-lens trap hit</span></div>
-          <div class="legend-item"><span class="legend-color" id="legend-undetermined-color" aria-hidden="true"></span><span>Undetermined</span></div>
+          <div class="legend-item"><span class="legend-color" id="legend-undetermined-color" aria-hidden="true"></span><span>Unresolved search / precision limit</span></div>
           <div class="legend-item"><span class="legend-color" id="legend-exterior-color" aria-hidden="true"></span><span>Exterior</span></div>
             <div class="legend-item" id="legend-subset-survival" hidden><span class="legend-color" style="background:#328a94" aria-hidden="true"></span><span>Mₙ⁰ finite-depth survivors</span></div>
             <p class="legend-note" id="parameter-view-note" hidden></p>
+            <p class="legend-note" id="parameter-capture-note">Minimum capture at pixel centers; boundary coverage uses whole pixels. A fixed first digit counts as one step. The selected-point record is separate.</p>
           </div>
         </details>
       </section>
@@ -319,12 +334,20 @@
           <div class="legend-card" aria-label="Dynamical-plane legend">
 <div class="legend-item"><span class="legend-color" id="legend-diff-color" aria-hidden="true"></span><span>Difference ½ <span class="math">E</span>(<span class="math">c</span>, <span class="math">N</span>)</span></div>
           <div class="legend-item"><span class="legend-color" id="legend-coll-color" aria-hidden="true"></span><span>Collinear <span class="math">E</span>(<span class="math">c</span>, <span class="math">n</span>)</span></div>
+            <div class="capture-legend" id="dynamical-capture-legend">
+              <span class="capture-level-title">Minimum capture level, mod 3</span>
+              <div class="capture-level-swatches" aria-label="Minimum capture level colors"></div>
+              <div class="legend-item"><span class="legend-color capture-witness-color" aria-hidden="true"></span><span>Capture found · minimum unconfirmed</span></div>
+              <div class="legend-item"><span class="legend-color capture-survivor-color" aria-hidden="true"></span><span>Finite escape coverage</span></div>
+              <div class="legend-item"><span class="legend-color capture-unresolved-color" aria-hidden="true"></span><span>Unresolved search / precision limit</span></div>
+            </div>
           <div class="legend-item"><span class="legend-color legend-trap" aria-hidden="true"></span><span>Trap ½ <span class="math">P</span><sub>c</sub>(<span class="math">S</span>, <span class="math">V</span>)</span></div>
           <div class="legend-item"><span class="legend-color legend-enclosure" aria-hidden="true"></span><span>Enclosure ½ <span class="math">P</span><sub>c</sub>(<span class="math">S</span><sub>E</sub>, <span class="math">V</span><sub>E</sub>)</span></div>
           <div class="legend-item"><span class="legend-color legend-locator" aria-hidden="true"></span><span>Evaluated parameter</span></div>
           <div class="legend-item"><span class="legend-color legend-origin" aria-hidden="true"></span><span>Origin 0</span></div>
             <p class="legend-note"><span class="math">N</span> = 2<span class="math">n</span> − 1. The difference attractor is displayed at half scale.</p>
-            <p class="legend-note" id="boundary-renderer-note">Sharp boundary uses first-digit colors for captures and finite-depth survivors. Unresolved pixels are shown separately.</p>
+            <p class="legend-note" id="boundary-renderer-note">Sharp boundary shades finite-capture levels and retains every first-piece contour.</p>
+            <p class="legend-note" id="dynamical-capture-note">Capture levels use pixel centers and the maximum search depth. E(c,n) boundary coverage uses whole pixels; the half-difference uses point samples. Whole-attractor capture starts at depth 0.</p>
           </div>
         </details>
       </section>

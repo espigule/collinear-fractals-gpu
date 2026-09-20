@@ -138,7 +138,11 @@ export function createRasterWorkerPool(options = {}) {
         message.data.byteLength !== 4 * tile.width * tile.height ||
         (message.pieces !== undefined && (!(message.pieces instanceof Uint8Array) ||
           message.pieces.byteLength !== 2 * tile.width * tile.height)) ||
+        (message.captureDepths !== undefined && (!(message.captureDepths instanceof Uint8Array) ||
+          message.captureDepths.byteLength !== 2 * tile.width * tile.height)) ||
         (message.layerData !== undefined && (!(message.layerData instanceof Uint8Array) || message.layerData.byteLength !== layerBytes)) ||
+        (message.layerCaptureDepths !== undefined && (!(message.layerCaptureDepths instanceof Uint8Array) ||
+          message.layerCaptureDepths.byteLength !== layerBytes / 2)) ||
         ['pieceMasks', 'pieceUncertainMasks'].some(key => message[key] !== undefined &&
           (!(message[key] instanceof Uint32Array) || message[key].length !== maskLength)) ||
         ['x', 'y', 'width', 'height'].some(key => message[key] !== tile[key])) {
@@ -153,7 +157,7 @@ export function createRasterWorkerPool(options = {}) {
       job.callbacks.onTile?.({
         jobId: job.id, ...tile, data: message.data,
         ...(message.pieces === undefined ? {} : { pieces: message.pieces }),
-        ...Object.fromEntries(['layerData', 'pieceMasks', 'pieceUncertainMasks']
+        ...Object.fromEntries(['captureDepths', 'layerData', 'layerCaptureDepths', 'pieceMasks', 'pieceUncertainMasks']
           .filter(key => message[key] !== undefined).map(key => [key, message[key]])),
         pixelsCompleted: job.pixelsCompleted, totalPixels: job.totalPixels
       });

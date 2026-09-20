@@ -10,9 +10,11 @@
  * The legacy comparison pair uses M_n then M_n0. Selected parameter layers
  * use independent passes retained in a texture array. Dynamical mode uses
  * half-difference then full E(c,n); a disabled layer receives DOMAIN. A second
- * RGBA8 target retains first-piece indices. Two further byte targets encode
+ * RGBA8 target retains first-piece indices plus primary/secondary minimum
+ * capture depths at the pixel center (255 means unknown). Two further targets encode
  * every occupied/uncertain first-level piece as bit masks, so interfaces inside
- * overlaps remain visible. Depth bytes retain their original meaning.
+ * overlaps remain visible. Coverage depth bytes retain their original meaning;
+ * selected-layer arrays store their independent center minimum in channel B.
  */
 export const GPU_SEARCH_LIMITS = Object.freeze({
   frontier: 32,
@@ -60,11 +62,13 @@ uniform bool u_fixedOriginalLens;
 uniform bool u_originalBoundary;
 uniform bool u_firstLevelPieces;
 uniform int u_escapeDepth;
+uniform int u_captureDepth;
 uniform int u_boundaryWork;
 uniform float u_pixelRadius;
 uniform float u_parameterRadius;
 uniform int u_firstDigit;
 uniform int u_rasterHalo;
+uniform bool u_layerOutput;
 layout(location = 0) out vec4 outClassification;
 layout(location = 1) out vec4 outPieces;
 layout(location = 2) out vec4 outOccupied;
@@ -213,43 +217,8 @@ vec2 baseEnclosure(Parameter p) {
   return vec2(se, ve);
 }
 
-// Exact integer evaluation avoids a sqrt/floor discontinuity at square n.
-int offLensKappa(int n) {
-  if (n <= 7) return 1;
-  int ceilTwiceRoot = 12;
-  for (int j = 1; j <= 12; ++j) {
-    if (j * j >= 4 * n) {
-      ceilTwiceRoot = j;
-      break;
-    }
-  }
-  return n - 1 - ceilTwiceRoot;
-}
-
-vec2 parameterTrap(Parameter p, int m, out bool isLens, out bool reliable) {
-  float lensValue = p.rho * p.rho + 2.0 * abs(p.c.x) - float(m);
-  float lensError = 2.0 * dot(abs(p.c), p.dc) + dot(p.dc, p.dc)
-    + 2.0 * p.dc.x + 16.0 * UNIT *
-      (p.rho * p.rho + 2.0 * abs(p.c.x) + float(m) + 1.0);
-  isLens = lensValue < -lensError;
-  reliable = abs(lensValue) > lensError;
-  float rhoUpper = p.rho + p.drho;
-  float yLower = max(0.0, abs(p.c.y) - p.dc.y);
-  float S;
-  float V;
-  if (isLens) {
-    S = float(m) * yLower / rhoUpper;
-    V = max(0.0, float(m) - 2.0 * (abs(p.c.x) + p.dc.x)) *
-      yLower / (rhoUpper * rhoUpper);
-  } else {
-    S = float(m - 1) * yLower / rhoUpper;
-    V = float(offLensKappa(u_n)) * yLower / (rhoUpper * rhoUpper);
-  }
-  return max(vec2(0.0), vec2(S, V) * (1.0 - 32.0 * UNIT) - vec2(TINY_ERROR));
-}
-
-// The original alphabet has its own canonical lens and trap. In particular,
-// neither the difference-set lens nor its exploratory off-lens trap applies.
+// Each alphabet has its own strict canonical lens and self-covering trap.
+// No exploratory off-lens rectangle is used as a capture test.
 vec2 originalTrap(Parameter p, int m, out bool enabled) {
   float lensValue = p.rho * p.rho + 2.0 * abs(p.c.x) - float(m);
   float lensError = 2.0 * dot(abs(p.c), p.dc) + dot(p.dc, p.dc)
@@ -374,13 +343,22 @@ bool outsideOriginal(vec4 cartesian, vec4 canonical, vec2 enclosure, float disk,
     length(cartesian.xy) - length(cartesian.zw) > disk + radius;
 }
 
-bool insideOriginalCellTrap(Parameter p, vec4 point, float footprint, int m) {
+bool originalCellTrapEnabled(Parameter p, int m) {
   float parameterRadius = p.cellRadius + length(p.dc);
   float rhoUpper = p.rho + p.drho + p.cellRadius;
   float xUpper = abs(p.c.x) + parameterRadius;
   float yLower = abs(p.c.y) - parameterRadius;
   float guard = 32.0 * UNIT * (1.0 + float(m) + rhoUpper * rhoUpper);
-  if (yLower <= 0.0 || rhoUpper * rhoUpper + 2.0 * xUpper + guard >= float(m)) return false;
+  return yLower > 0.0 && rhoUpper * rhoUpper + 2.0 * xUpper + guard < float(m);
+}
+
+bool insideOriginalCellTrap(Parameter p, vec4 point, float footprint, int m) {
+  if (!originalCellTrapEnabled(p, m)) return false;
+  float parameterRadius = p.cellRadius + length(p.dc);
+  float rhoUpper = p.rho + p.drho + p.cellRadius;
+  float xUpper = abs(p.c.x) + parameterRadius;
+  float yLower = abs(p.c.y) - parameterRadius;
+  float guard = 32.0 * UNIT * (1.0 + float(m) + rhoUpper * rhoUpper);
   float radius = footprint + point.z;
   float canonical = abs(p.c.y * point.x + p.c.x * point.y) +
     (p.rho + p.drho) * radius + parameterRadius * (length(point.xy) + radius);
@@ -414,28 +392,30 @@ ivec2 originalDigitInterval(Parameter p, vec4 point, float footprint, int alphab
 // The c-cell is a Taylor disk, separate from binary32 arithmetic uncertainty:
 // z(c+delta)=a+b*delta+R, |delta|<=r. Keeping the derivative preserves
 // cancellation that is lost when c is treated independently at every level.
-ivec3 originalSearch(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
-                     vec2 trap, bool useTrap, int firstMode, int fixedDigit, float markedScale) {
-  if (p.errorCode != 0) return ivec3(p.errorCode, 0, -1);
-  if (m < 2 || m > MAX_ALPHABET) return ivec3(8, 0, -1);
+ivec4 originalTraverse(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
+                     vec2 trap, bool useTrap, int firstMode, int fixedDigit, float markedScale,
+                       int depthLimit, int workLimit, bool captureSweep, float sampleRadius) {
+  int work = 0;
+  if (p.errorCode != 0) return ivec4(p.errorCode, 0, -1, work);
+  if (m < 2 || m > MAX_ALPHABET) return ivec4(8, 0, -1, work);
   if (invalidPair(enclosure) || any(lessThanEqual(enclosure, vec2(0.0))) ||
-      invalidPair(trap) || invalidPair(z) || invalidPair(dz)) return ivec3(6, 0, -1);
+      invalidPair(trap) || invalidPair(z) || invalidPair(dz)) return ivec4(6, 0, -1, work);
   vec4 root = initialNode(p, z, dz);
-  float rootRadius = u_kind == 3 ? u_pixelRadius : 0.0;
+  float rootRadius = sampleRadius;
   float parameterRadius = u_kind == 3 ? 0.0 : p.cellRadius;
   float rhoCellLower = p.rho - p.drho - parameterRadius;
-  if (rhoCellLower <= 1.0) return ivec3(8, 0, -1);
+  if (rhoCellLower <= 1.0) return ivec4(8, 0, -1, work);
   // Hausdorff distance between E(c,m) and every E(c+delta,m) in this cell.
   float enlargement = float(m - 1) * parameterRadius /
     ((rhoCellLower - 1.0) * (rhoCellLower - 1.0)) * (1.0 + 16.0 * UNIT);
   enclosure += vec2(enlargement);
   rootRadius += markedScale * parameterRadius;
   float disk = float(m - 1) * rhoCellLower / (rhoCellLower - 1.0) * (1.0 + 16.0 * UNIT);
-  if (outsideOriginal(vec4(z, dz), root, enclosure, disk, rootRadius)) return ivec3(0, 0, -1);
-  if (firstMode == 0 && !u_firstLevelPieces && useTrap &&
+  if (outsideOriginal(vec4(z, dz), root, enclosure, disk, rootRadius)) return ivec4(0, 0, -1, work);
+  if (firstMode == 0 && useTrap &&
       (parameterRadius > 0.0 ? insideOriginalCellTrap(p, vec4(z, length(dz), 0.0), rootRadius, m) :
-       insideTrap(root, trap - vec2(rootRadius)))) return ivec3(1, 0, -1);
-  if (u_escapeDepth == 0) return ivec3(3, 0, -1);
+       insideTrap(root, trap - vec2(rootRadius)))) return ivec4(1, 0, -1, work);
+  if (depthLimit == 0) return ivec4(3, 0, -1, work);
   vec4 path[MAX_DEPTH + 1];
   int nextDigit[MAX_DEPTH + 1];
   int lastDigit[MAX_DEPTH + 1];
@@ -454,9 +434,8 @@ ivec3 originalSearch(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
   derivativeErrors[0] = 0.0;
   int level = 0;
   int firstPiece = -1;
-  int work = 0;
   int deepest = 0;
-  int workLimit = min(u_boundaryWork, MAX_BOUNDARY_WORK);
+  bool survivor = false;
   // Each candidate push can cause at most one later pop; the independent loop
   // bound is a safety ceiling, separate from the requested candidate budget.
   for (int step = 0; step < 2 * MAX_BOUNDARY_WORK + MAX_DEPTH + 1; ++step) {
@@ -467,11 +446,11 @@ ivec3 originalSearch(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
       // An empty admissible interval already exhausts the next inverse level,
       // even when pruning avoids evaluating any individual child there.
       deepest = max(deepest, level + 1);
-      if (level == 0) return ivec3(0, deepest, -1);
+      if (level == 0) return ivec4(survivor ? 3 : 0, survivor ? depthLimit : deepest, -1, work);
       --level;
       continue;
     }
-    if (work >= workLimit) return ivec3(7, deepest, -1);
+    if (work >= workLimit) return ivec4(7, deepest, -1, work);
     ++work;
     nextDigit[level] = digit + 1;
     float t = level == 0 && firstMode == 2 ? float(fixedDigit) : float(2 * digit - (alphabet - 1));
@@ -499,14 +478,18 @@ ivec3 originalSearch(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
     int depth = level + 1;
     deepest = max(deepest, depth);
     if (invalidPair(childCartesian.xy) || invalidPair(childCartesian.zw) ||
-        invalidPair(child.xy) || invalidPair(child.zw) || invalidFloat(radius)) return ivec3(6, depth, -1);
+        invalidPair(child.xy) || invalidPair(child.zw) || invalidFloat(radius)) return ivec4(6, depth, -1, work);
     if (outsideOriginal(childCartesian, child, enclosure, disk, radius)) continue;
     int piece = level == 0 ? (firstMode == 2 ? (fixedDigit + m - 1) / 2 : digit) : firstPiece;
     if (useTrap && (parameterRadius > 0.0 ? insideOriginalCellTrap(p, childCartesian, radius, m) :
-        insideTrap(child, trap - vec2(radius)))) return ivec3(1, depth, piece);
-    if (max(child.z, child.w) > 0.25 * (max(enclosure.x, enclosure.y) + radius)) return ivec3(8, depth, -1);
-    if (depth >= u_escapeDepth) return ivec3(3, depth, piece);
-    if (depth >= MAX_DEPTH) return ivec3(7, depth, -1);
+        insideTrap(child, trap - vec2(radius)))) return ivec4(1, depth, piece, work);
+    if (max(child.z, child.w) > 0.25 * (max(enclosure.x, enclosure.y) + radius)) return ivec4(8, depth, -1, work);
+    if (depth >= depthLimit) {
+      if (!captureSweep) return ivec4(3, depth, piece, work);
+      survivor = true;
+      continue;
+    }
+    if (depth >= MAX_DEPTH) return ivec4(7, depth, -1, work);
     if (level == 0) firstPiece = piece;
     level = depth;
     path[level] = childCartesian;
@@ -518,7 +501,40 @@ ivec3 originalSearch(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
     derivativeErrors[level] = derivativeError;
     remainders[level] = remainder;
   }
-  return ivec3(7, deepest, -1);
+  return ivec4(7, deepest, -1, work);
+}
+
+
+// Pixel coverage and point-center capture answer different questions. Keep
+// the full footprint search unchanged; a separate bounded, level-ordered
+// search colors the capture filtration at the pixel center. In particular a
+// finite-surviving footprint can contain a center captured at a shallow level.
+// Result = (coverage code, coverage depth, first piece, center minimum depth).
+// 255 means no verified center minimum, never a proof of no possible capture.
+ivec4 originalSearch(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
+                     vec2 trap, bool useTrap, int firstMode, int fixedDigit,
+                     float markedScale, bool minimumCapture) {
+  int limit = min(u_boundaryWork, MAX_BOUNDARY_WORK);
+  ivec4 coverage = originalTraverse(p, z, dz, m, enclosure, trap, useTrap,
+    firstMode, fixedDigit, markedScale, u_escapeDepth, limit, false,
+    u_kind == 3 ? u_pixelRadius : 0.0);
+  ivec4 retained = ivec4(coverage.xyz, 255);
+  if (!minimumCapture || !useTrap || p.errorCode != 0) return retained;
+  // Arithmetic uncertainty is retained; geometric cell/footprint radii are not.
+  Parameter center = p;
+  center.cellRadius = 0.0;
+  int work = 0;
+  int captureLimit = min(u_boundaryWork, MAX_BOUNDARY_WORK);
+  for (int cutoff = 0; cutoff <= MAX_DEPTH; ++cutoff) {
+    if (cutoff > u_captureDepth) break;
+    if (work >= captureLimit) return retained;
+    ivec4 pass = originalTraverse(center, z, dz, m, enclosure, trap, useTrap,
+      firstMode, fixedDigit, markedScale, cutoff, captureLimit - work, true, 0.0);
+    work += pass.w;
+    if (pass.x == 1) return ivec4(coverage.xyz, pass.y);
+    if (pass.x != 3) return retained;
+  }
+  return retained;
 }
 
 vec4 encodeMask(uint mask) {
@@ -530,12 +546,14 @@ void main() {
   ivec2 primary = ivec2(5, 0);
   ivec2 secondary = ivec2(5, 0);
   ivec2 pieces = ivec2(0);
-  outPieces = vec4(0.0);
+  ivec2 minimums = ivec2(255);
+  outPieces = vec4(0.0, 0.0, 1.0, 1.0);
   outOccupied = vec4(0.0);
   outUncertain = vec4(0.0);
   if (u_n < 2 || u_n > 32 || u_kMax < 0 || u_lMax < 1 ||
       any(lessThanEqual(u_resolution, vec2(0.0)))) {
-    outClassification = vec4(6.0, 0.0, 6.0, 0.0) / 255.0;
+    outClassification = u_layerOutput ? vec4(6.0, 0.0, 255.0, 0.0) / 255.0
+      : vec4(6.0, 0.0, 6.0, 0.0) / 255.0;
     return;
   }
   // gl_FragCoord has an upward y axis, as do the mathematical world coordinates.
@@ -550,8 +568,11 @@ void main() {
     if (u_showDifference) {
       vec2 enclosure = u_fixedEnclosure.xy + 16.0 * UNIT *
         max(vec2(1.0), abs(u_fixedEnclosure.xy));
+      bool differenceLensReliable;
+      vec2 differenceTrap = min(trap, originalTrap(p, 2 * u_n - 1, differenceLensReliable));
       primary = search(p, 2.0 * world, 2.0 * dWorld, 2 * u_n - 1,
-        enclosure, trap, true, u_fixedLens);
+        enclosure, differenceTrap, u_fixedLens && differenceLensReliable, true);
+      if (primary.x == 1 || primary.x == 2) minimums.x = primary.y;
     }
     if (u_showOriginal) {
       vec2 enclosure = u_fixedEnclosure.zw + 16.0 * UNIT *
@@ -561,33 +582,31 @@ void main() {
           max(vec2(1.0), abs(u_fixedOriginalTrap)));
         bool originalLensReliable;
         originalTrapBounds = min(originalTrapBounds, originalTrap(p, u_n, originalLensReliable));
-        ivec3 original;
+        // Whole-E capture is independent of piece identification. The original
+        // trap may capture the center at depth zero even with piece colors on.
+        ivec4 original = originalSearch(p, world, dWorld, u_n, enclosure,
+          originalTrapBounds, u_fixedOriginalLens && originalLensReliable, 0, 0, 0.0, true);
         if (u_firstLevelPieces) {
           // Search every actual first-level piece. The union's first witness
           // cannot reveal boundaries hidden inside overlaps.
           uint occupied = 0u;
           uint uncertain = 0u;
-          original = ivec3(0, 0, -1);
           for (int index = 0; index < 32; ++index) {
             if (index >= u_n) break;
-            ivec3 candidate = originalSearch(p, world, dWorld, u_n, enclosure,
-              originalTrapBounds, u_fixedOriginalLens && originalLensReliable, 2, 2 * index - (u_n - 1), 0.0);
+            ivec4 candidate = originalSearch(p, world, dWorld, u_n, enclosure,
+              originalTrapBounds, u_fixedOriginalLens && originalLensReliable, 2, 2 * index - (u_n - 1), 0.0, false);
             if (candidate.x == 1 || candidate.x == 3) {
               occupied |= 1u << uint(index);
-              if (original.x != 1 && (candidate.x == 1 || original.x != 3)) original = candidate;
             } else if (candidate.x != 0 && candidate.x != 5) {
               uncertain |= 1u << uint(index);
-              if (original.x == 0) original = candidate;
             }
           }
           outOccupied = encodeMask(occupied);
           outUncertain = encodeMask(uncertain);
-        } else {
-          original = originalSearch(p, world, dWorld, u_n, enclosure,
-            originalTrapBounds, u_fixedOriginalLens && originalLensReliable, 0, 0, 0.0);
         }
         secondary = original.xy;
         pieces.y = original.z + 1;
+        minimums.y = original.w;
       } else {
         secondary = search(p, world, dWorld, u_n, enclosure, vec2(0.0), false, false);
       }
@@ -601,36 +620,40 @@ void main() {
       vec2 base = baseEnclosure(p);
       if (u_kind == 0 || u_kind == 2) {
         bool isLens;
-        bool reliable;
-        vec2 trap = parameterTrap(p, 2 * u_n - 1, isLens, reliable);
+        vec2 trap = originalTrap(p, 2 * u_n - 1, isLens);
         if (p.cellRadius > 0.0) {
           // Cell display uses the same bounded-orbit machinery as the digit
           // subsets. The separately exported marked-point record retains BFS.
           bool differenceLens;
           vec2 differenceTrap = originalTrap(p, 2 * u_n - 1, differenceLens);
-          primary = originalSearch(p, 2.0 * p.c, 2.0 * p.dc, 2 * u_n - 1,
+          ivec4 membership = originalSearch(p, 2.0 * p.c, 2.0 * p.dc, 2 * u_n - 1,
             float(2 * u_n - 2) * base * (1.0 + 8.0 * UNIT), differenceTrap,
-            differenceLens, 0, 0, 2.0).xy;
+            differenceLens, 0, 0, 2.0, true);
+          primary = membership.xy;
+          minimums.x = membership.w;
         } else {
           primary = search(p, 2.0 * p.c, 2.0 * p.dc, 2 * u_n - 1,
             float(2 * u_n - 2) * base * (1.0 + 8.0 * UNIT),
-            trap, reliable, isLens);
+            trap, isLens, isLens);
+          if (primary.x == 1 || primary.x == 2) minimums.x = primary.y;
         }
       }
       if (u_kind == 1 || u_kind == 2 || u_kind == 4 || u_kind == 5) {
         bool originalLens;
         vec2 originalTrapBounds = originalTrap(p, u_n, originalLens);
-        ivec3 original = originalSearch(p, p.c, p.dc, u_n,
+        ivec4 original = originalSearch(p, p.c, p.dc, u_n,
           float(u_n - 1) * base * (1.0 + 8.0 * UNIT), originalTrapBounds, originalLens,
-          u_kind == 5 ? 2 : (u_kind == 4 ? 1 : 0), u_firstDigit, 1.0);
-        if (u_kind == 1 || u_kind == 4 || u_kind == 5) { primary = original.xy; pieces.x = original.z + 1; }
-        else { secondary = original.xy; pieces.y = original.z + 1; }
+          u_kind == 5 ? 2 : (u_kind == 4 ? 1 : 0), u_firstDigit, 1.0, true);
+        if (u_kind == 1 || u_kind == 4 || u_kind == 5) {
+          primary = original.xy; pieces.x = original.z + 1; minimums.x = original.w;
+        } else { secondary = original.xy; pieces.y = original.z + 1; minimums.y = original.w; }
       }
     }
   } else {
     primary = ivec2(6, 0);
   }
-  outClassification = vec4(vec2(primary), vec2(secondary)) / 255.0;
-  outPieces = vec4(vec2(pieces), 0.0, 0.0) / 255.0;
+  outClassification = u_layerOutput ? vec4(vec2(primary), float(minimums.x), 0.0) / 255.0
+    : vec4(vec2(primary), vec2(secondary)) / 255.0;
+  outPieces = vec4(vec2(pieces), vec2(minimums)) / 255.0;
 }
 `;

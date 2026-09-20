@@ -34,6 +34,7 @@ function canvas() {
 }
 
 // Run the actual worker handlers without requiring browser-only Worker APIs.
+let workerHarnessRun = 0;
 async function workerHarness(relativePath, run) {
   const workerUrl = new URL(relativePath, import.meta.url);
   const text = await readFile(workerUrl, 'utf8');
@@ -46,7 +47,7 @@ async function workerHarness(relativePath, run) {
     postMessage(message) { messages.push(message); }
   };
   try {
-    await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+    await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}#run-${workerHarnessRun++}`);
     await run(job => { handler({ data: job }); return messages.at(-1); });
   } finally {
     if (oldSelf === undefined) delete globalThis.self;
@@ -359,5 +360,29 @@ test('certificate worker preserves kMax=0, tolerance and request identifiers', a
     const invalid = dispatch({ id: 20, x: NaN, y: 1, n: 3 });
     assert.equal(invalid.ok, false);
     assert.equal(invalid.id, 20);
+  });
+});
+
+test('certificate worker preserves canonical-only policy in both search and payload', async () => {
+  await workerHarness('../workers/certificate-worker.js', dispatch => {
+    const job = { x: 1.419643377607, y: .606290729207, n: 3, kMax: 12, LMax: 100 };
+    const legacy = dispatch({ ...job, id: 21 });
+    assert.equal(legacy.ok, true);
+    assert.equal(legacy.result.verdict, 'Interior-offLens');
+    assert.notEqual(legacy.certificate.trap, null);
+    const canonical = dispatch({ ...job, id: 22, canonicalOnly: true });
+    assert.equal(canonical.ok, true);
+    assert.equal(canonical.id, 22);
+    assert.equal(canonical.result.verdict, 'Undetermined');
+    assert.equal(canonical.certificate.verdict, canonical.result.verdict);
+    assert.equal(canonical.certificate.trap, null);
+    assert.equal(canonical.certificate.trap_region, null);
+    assert.equal(canonical.certificate.minimum_capture_depth, null);
+    assert.equal(canonical.certificate.trap_policy, 'canonical-only');
+    const interior = dispatch({ ...job, id: 23, x: .7, y: 1.4, canonicalOnly: true });
+    assert.equal(interior.ok, true);
+    assert.equal(interior.result.verdict, 'Interior');
+    assert.notEqual(interior.certificate.trap, null);
+    assert.equal(interior.certificate.minimum_capture_depth, interior.result.depth);
   });
 });

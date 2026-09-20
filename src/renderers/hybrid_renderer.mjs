@@ -1,7 +1,8 @@
 import { createWebGLPreview } from './webgl_preview.mjs';
 import { createRasterWorkerPool } from '../compute/raster_worker_pool.mjs';
 import {
-  PIECE_COLORS, PIECE_OUTLINE_COLOR, hexToRgb, parameterLayerColor, parameterLayerKeys
+  PIECE_COLORS, PIECE_OUTLINE_COLOR, UNKNOWN_CAPTURE_DEPTH, captureShade,
+  knownCaptureDepth, hexToRgb, parameterLayerColor, parameterLayerKeys
 } from './palettes.mjs';
 
 const TABLE_WIDTH = 101;
@@ -45,7 +46,7 @@ function pieceMaskSampler(tile, job, pixelCount, pieceColors, pieceCount) {
         occupied = (occupied & (occupied - 1)) >>> 0;
       }
     }
-    return count ? { fill: outline ? PIECE_OUTLINE_COLOR : [r / count, g / count, b / count], outline } : null;
+    return count ? { fill: [r / count, g / count, b / count], outline } : null;
   };
 }
 
@@ -53,6 +54,8 @@ function parameterLayerSampler(tile, job, colors, pixelCount, lookup) {
   const keys = parameterLayerKeys(job);
   const layers = tile?.layerData;
   if (!(layers instanceof Uint8Array) || layers.length !== pixelCount * keys.length * 2) return null;
+  const minima = tile?.layerCaptureDepths;
+  const hasMinima = minima instanceof Uint8Array && minima.length === pixelCount * keys.length;
   const palette = keys.map(key => {
     const value = hexToRgb(parameterLayerColor(key, job.n));
     return [value.r, value.g, value.b];
@@ -67,8 +70,10 @@ function parameterLayerSampler(tile, job, colors, pixelCount, lookup) {
     const start = index * keys.length * 2;
     for (let layer = 0; layer < keys.length; layer++) {
       const code = layers[start + layer * 2], depth = layers[start + layer * 2 + 1];
-      if (code === 1 || code === 2 || code === 3) {
-        r += palette[layer][0]; g += palette[layer][1]; b += palette[layer][2]; covered++;
+      const minimum = hasMinima ? minima[index * keys.length + layer] : UNKNOWN_CAPTURE_DEPTH;
+      if (knownCaptureDepth(minimum) || code === 1 || code === 2 || code === 3) {
+        const fill = captureShade(palette[layer], code, minimum, job);
+        r += fill[0]; g += fill[1]; b += fill[2]; covered++;
       } else if (code === 0) escapeDepth = Math.max(escapeDepth, depth);
       else if ((priorities[code] ?? 0) > priorities[diagnostic]) { diagnostic = code; diagnosticDepth = depth; }
     }
@@ -91,6 +96,16 @@ export function colorizeRasterTile(data, job, colors, pieces, tile) {
     ? pieceMaskSampler(tile, job, data.length / 4, pieceColors, pieceCount) : null;
   const sampleLayers = job.kind === 'parameter'
     ? parameterLayerSampler(tile, job, colors, data.length / 4, lookup) : null;
+  const minima = tile?.captureDepths;
+  const hasMinima = minima instanceof Uint8Array && minima.length === data.length / 2;
+  const minimumAt = index => hasMinima ? minima[index] : UNKNOWN_CAPTURE_DEPTH;
+  const captureBase = code => {
+    const value = code === 2 ? colors.captureOffLens : colors.captureInterior;
+    if (value) return value;
+    // Retain support for callers supplying the original nine-row color table.
+    const offset = lookup(code === 2 ? 2 : 1, 0);
+    return [colors.table[offset], colors.table[offset + 1], colors.table[offset + 2]];
+  };
   for (let i = 0; i < data.length; i += 4) {
     if (sampleLayers) {
       const [r, g, b] = sampleLayers(i / 4);
@@ -114,15 +129,25 @@ export function colorizeRasterTile(data, job, colors, pieces, tile) {
     if (teal) [r, g, b] = TEAL;
     if (job.kind === 'dynamical') {
       if (!job.showDifference) [r, g, b] = colors.exterior;
+      else if (knownCaptureDepth(minimumAt(i / 2)) || code === 1 || code === 2 || code === 3) {
+        [r, g, b] = job.showEscapeStrata ? colors.exterior
+          : captureShade(captureBase(code), code, minimumAt(i / 2), job);
+      }
       if (job.showOriginalSurvival) {
         if (originalBoundary) {
           const mask = samplePieces?.(i / 4);
-          if (mask || secondary === 1 || secondary === 3) {
+          if (mask || knownCaptureDepth(minimumAt(i / 2 + 1)) || secondary === 1 || secondary === 2 || secondary === 3) {
             const encodedPiece = pieces?.[i / 2 + 1] ?? 0;
             const pieceOffset = ((encodedPiece - 1) % pieceCount) * 3;
             const usePiece = job.firstLevelPieces !== false && encodedPiece > 0 && pieceCount > 0;
-            const fill = mask?.fill ?? (usePiece
+            const base = mask?.fill ?? (usePiece
               ? [pieceColors[pieceOffset], pieceColors[pieceOffset + 1], pieceColors[pieceOffset + 2]] : colors.branch);
+            // Piece hue and contours describe first-level geometry. Shading
+            // describes the pixel-center E(c,n) filtration, including depth-
+            // zero capture, independently of whether piece colors are enabled.
+            const coveredCode = secondary === 1 || secondary === 2 ? secondary : 3;
+            const fill = mask?.outline ? PIECE_OUTLINE_COLOR
+              : captureShade(base, coveredCode, minimumAt(i / 2 + 1), job);
             r = Math.round(r * (1 - originalOpacity) + fill[0] * originalOpacity);
             g = Math.round(g * (1 - originalOpacity) + fill[1] * originalOpacity);
             b = Math.round(b * (1 - originalOpacity) + fill[2] * originalOpacity);
@@ -131,16 +156,19 @@ export function colorizeRasterTile(data, job, colors, pieces, tile) {
             r = colors.table[unknown]; g = colors.table[unknown + 1]; b = colors.table[unknown + 2];
           }
         } else if (secondary === 1 || secondary === 2 || secondary === 3 || secondary === 4 || secondary === 7) {
-          r = Math.round(r * (1 - opacity) + colors.branch[0] * opacity);
-          g = Math.round(g * (1 - opacity) + colors.branch[1] * opacity);
-          b = Math.round(b * (1 - opacity) + colors.branch[2] * opacity);
+          const fill = captureShade(colors.branch, secondary, minimumAt(i / 2 + 1), job);
+          r = Math.round(r * (1 - opacity) + fill[0] * opacity);
+          g = Math.round(g * (1 - opacity) + fill[1] * opacity);
+          b = Math.round(b * (1 - opacity) + fill[2] * opacity);
         } else if (secondary === 6 || secondary === 8) {
           const unknown = lookup(secondary, data[i + 3]);
           r = colors.table[unknown]; g = colors.table[unknown + 1]; b = colors.table[unknown + 2];
         }
       }
     }
-    output[i] = r; output[i + 1] = g; output[i + 2] = b; output[i + 3] = 255;
+    // Uint8ClampedArray alone rounds half-integers to even. Explicit rounding
+    // matches the shader's floor(color * 255 + 0.5), including custom palettes.
+    output[i] = Math.round(r); output[i + 1] = Math.round(g); output[i + 2] = Math.round(b); output[i + 3] = 255;
   }
   return output;
 }
@@ -283,8 +311,18 @@ export function createHybridRenderer({ onStatus = () => {} } = {}) {
       started: performance.now(), cancelled: false, completed: false, refining: false,
       metadata: { requested_backend: job.backend, active_backend: 'initializing', phase: 'initializing',
         requested_limits: { depth: job.kMax, frontier: job.LMax, tolerance: job.tol,
-          escape_depth: job.escapeDepth ?? (job.n === 2 ? 16 : 12), boundary_work: job.boundaryWork ?? 20000 },
+          escape_depth: job.escapeDepth ?? (job.n === 2 ? 16 : 12),
+          capture_depth: Math.min(job.kMax ?? 37, 100),
+          boundary_work: job.boundaryWork ?? 20000, capture_work: job.boundaryWork ?? 20000 },
         original_renderer: job.originalRenderer ?? 'boundary',
+        capture_style: job.captureStyle ?? 'depth',
+        capture_cycle: job.modulo ?? 3,
+        capture_sample_type: 'pixel-center',
+        capture_depth_convention: 'minimum inverse steps at the pixel center after every shallower search completes; a forced first digit counts as one step',
+        capture_depth_unknown: UNKNOWN_CAPTURE_DEPTH,
+        capture_coverage_relation: 'capture minima sample pixel centers independently of coverage; parameter and original Sharp boundary views cover whole pixels, while half-difference coverage samples pixel centers',
+        capture_work_scope: 'per-original-union-or-selected-layer; separate from pixel coverage',
+        difference_sample_type: 'point',
         original_sample_type: job.kind === 'dynamical' && (job.originalRenderer ?? 'boundary') === 'boundary' ? 'pixel-footprint' : 'point',
         parameter_sample_type: job.kind === 'parameter' && job.parameterRadius !== 0 ? 'parameter-cell' : 'point',
         parameter_radius_world: job.kind === 'parameter' ? (job.parameterRadius ?? Math.SQRT1_2 * job.spanX / job.width) : 0,

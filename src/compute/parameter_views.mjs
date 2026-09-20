@@ -1,6 +1,7 @@
 import { inverseIterationTestFast } from './inverse_search_kernel.mjs';
-import { getEffectiveC, validateSearchLimits } from './inverse_search_reference.mjs';
-import { createAttractorMembershipContext, classifyAttractorPoint, classifyAttractorParameterCell } from './attractor_membership.mjs';
+import { getEffectiveC, inLens, validateSearchLimits } from './inverse_search_reference.mjs';
+import { createAttractorMembershipContext, classifyAttractorPoint, classifyAttractorParameterCell,
+  classifyAttractorCapture } from './attractor_membership.mjs';
 import { assertArity, assertFiniteNumber, assertInteger, assertPositiveNumber } from '../math/validation.mjs';
 
 export const PARAMETER_VIEW_MODES = Object.freeze(['mn', 'mn0', 'mn1', 'compare']);
@@ -26,13 +27,19 @@ export function normalizeMembershipLimits(n, options = {}) {
     throw new TypeError('membership options must be an object');
   }
   const escapeDepth = options.escapeDepth ?? (n === 2 ? 16 : 12);
+  const captureDepth = options.captureDepth ?? escapeDepth;
   const boundaryWork = options.boundaryWork ?? 20000;
   const parameterRadius = options.parameterRadius ?? 0;
+  const captureStyle = options.captureStyle ?? 'depth';
+  const minimumCapture = options.minimumCapture ?? false;
   assertFiniteNumber(parameterRadius, 'parameterRadius');
   if (parameterRadius < 0) throw new RangeError('parameterRadius must be nonnegative');
   assertInteger(escapeDepth, 'escapeDepth', 0, 100);
+  assertInteger(captureDepth, 'captureDepth', 0, 100);
   assertInteger(boundaryWork, 'boundaryWork', 1, MAX_BOUNDARY_WORK);
-  return { escapeDepth, boundaryWork, parameterRadius };
+  if (!['depth', 'sets'].includes(captureStyle)) throw new RangeError('invalid captureStyle');
+  if (typeof minimumCapture !== 'boolean') throw new TypeError('minimumCapture must be boolean');
+  return { escapeDepth, captureDepth, boundaryWork, parameterRadius, captureStyle, minimumCapture };
 }
 
 function labelledResult(value, set, n, usesTrap) {
@@ -91,13 +98,27 @@ function classifyMembership(geometry, n, set, limits, digit = null) {
     ? ((digit + n - 1) % 2 === 0 ? 'original' : 'complement')
     : PARAMETER_VIEW_DEFINITIONS[set].firstStep ?? 'original';
   const searchOptions = { firstStep, firstDigit: digit, maxWork: limits.boundaryWork,
-    firstLevelPieces: false };
-  const value = limits.parameterRadius > 0
+    firstLevelPieces: false, minimumCapture: false };
+  let value = limits.parameterRadius > 0
     ? classifyAttractorParameterCell(context, limits.escapeDepth, {
       ...searchOptions, parameterRadius: geometry.radius, markedPointScale: set === 'mn' ? 2 : 1
     })
     : classifyAttractorPoint(context, geometry.effective.x, geometry.effective.y, limits.escapeDepth,
       searchOptions);
+  {
+    const scale = set === 'mn' ? 2 : 1;
+    const zx = scale * geometry.effective.x, zy = scale * geometry.effective.y;
+    const centerCapture = classifyAttractorCapture(context, zx, zy, limits.captureDepth, searchOptions);
+    if (limits.parameterRadius === 0 && limits.minimumCapture && centerCapture.minimumCaptureDepth !== null) {
+      value = centerCapture;
+    }
+    value.captureSample = {
+      ...centerCapture,
+      sampling: limits.parameterRadius > 0 ? 'parameter-pixel-center' : 'parameter-point', sampleType: 'point',
+      markedPoint: { x: zx, y: zy }, markedPointScale: scale,
+      usesTrap: Boolean(context.useTrap), arithmetic: 'binary64', maxDepth: limits.captureDepth
+    };
+  }
   const r = geometry.radius;
   const usesTrap = Boolean(context.useTrap) && (r === 0 || (
     context.rho * (1 - 8 * Number.EPSILON) - r > 1 && Math.abs(context.y) > r
@@ -183,13 +204,18 @@ export function classifyParameterView(
   validateSearchLimits(kMax, LMax);
   assertPositiveNumber(tol, 'tol');
   mode = normalizeParameterViewMode(mode);
-  const limits = normalizeMembershipLimits(n, options);
+  const limits = normalizeMembershipLimits(n, { ...options, captureDepth: options.captureDepth ?? Math.min(kMax, 100) });
   const selection = normalizeSelection(n, mode, options);
   const geometry = parameterGeometry(x, y, n, tol, limits);
   const layers = {}, digits = {};
   for (const set of selection.parameterLayers) {
     if (set === 'mn' && limits.parameterRadius === 0) {
-      layers.mn = labelledResult(inverseIterationTestFast(x, y, n, kMax, LMax, tol), 'mn', n, true);
+      const point = inverseIterationTestFast(x, y, n, kMax, LMax, tol, { canonicalOnly: true });
+      layers.mn = labelledResult({ ...point,
+        minimumCaptureDepth: point.stopReason === 'trap-hit' ? point.depth : null,
+        captureDepthSemantics: point.stopReason === 'trap-hit' ? 'minimum-verified' : 'not-captured',
+        captureSearchStopReason: point.stopReason === 'trap-hit' ? 'minimum-found' : point.stopReason
+      }, 'mn', n, !geometry.invalidResult() && inLens(x, y, n));
     } else {
       const { value, usesTrap } = classifyMembership(geometry, n, set, limits);
       layers[set] = labelledResult(value, set, n, usesTrap);

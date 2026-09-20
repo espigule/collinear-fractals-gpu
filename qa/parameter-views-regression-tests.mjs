@@ -57,9 +57,9 @@ test('canonical definitions distinguish the initial digit from the tail alphabet
   assert.equal(result.word, undefined);
 });
 
-test('Mn preserves the existing fast classification independently of membership budgets', () => {
+test('Mn preserves canonical breadth-first classification independently of membership budgets', () => {
   for (const [x, y, n] of [[0.5, 1.1, 3], [1.419643377607, 0.606290729207, 3], [3, 3, 3]]) {
-    const direct = inverseIterationTestFast(x, y, n, 12, 100);
+    const direct = inverseIterationTestFast(x, y, n, 12, 100, 1e-8, { canonicalOnly: true });
     for (const options of [{ escapeDepth: 0, boundaryWork: 1 }, { escapeDepth: 30 }]) {
       const adapted = classifyParameterView(x, y, n, 12, 100, 1e-8, 'mn', options);
       assert.deepEqual(searchFields(adapted), searchFields(direct));
@@ -124,16 +124,16 @@ test('work caps remain unresolved and membership budgets do not use the Mn front
   assert.equal(limited.stopReason, 'work-cap');
   assert.equal(limited.displayReason, 'work-cap');
   assert.deepEqual(
-    classifyParameterView(1, 1, 2, 0, 1, 1e-8, 'mn0', { escapeDepth: 8 }),
-    classifyParameterView(1, 1, 2, 99, 1000, 1e-8, 'mn0', { escapeDepth: 8 })
+    searchFields(classifyParameterView(1, 1, 2, 0, 1, 1e-8, 'mn0', { escapeDepth: 8 })),
+    searchFields(classifyParameterView(1, 1, 2, 99, 1000, 1e-8, 'mn0', { escapeDepth: 8 }))
   );
 });
 
 test('M0 differs from Mn and comparison retains independent records', () => {
   const result = classify(1.2, 0.9, 2, 'compare');
-  assert.equal(result.mn.verdict, 'Interior-offLens');
+  assert.equal(result.mn.verdict, 'Undetermined');
   assert.equal(result.mn0.verdict, 'Exterior');
-  assert.equal(result.comparison, 'mn-trap-mn0-exterior');
+  assert.equal(result.comparison, 'mn0-exterior-mn-unresolved');
   assert.equal(survivesDiskBound(1.2, 0.9, 2, 4), false);
   assert.equal(classify(3, 3, 3, 'compare').comparison, 'outside-both');
   for (let n = 2; n <= 32; n++) {

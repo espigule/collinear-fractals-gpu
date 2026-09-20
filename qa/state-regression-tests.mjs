@@ -93,6 +93,7 @@ test('deep zooms, scientific notation and all view settings roundtrip losslessly
     kMax: 0,
     LMax: 1,
     modulo: 12,
+    captureStyle: 'sets',
     cx: 1.0000000000000002,
     cy: 1e-10,
     paramCenter: { x: -0, y: -1.2345678901234567 },
@@ -130,6 +131,7 @@ test('deep zooms, scientific notation and all view settings roundtrip losslessly
   assert.equal(params.get('pcx'), '-0');
   assert.equal(params.get('bdepth'), '73');
   assert.equal(params.get('badapt'), '0');
+  assert.equal(params.get('capture'), 'sets');
   assert.equal(params.get('layers'), '0101011');
   for (const form of [params, params.toString(), `#${params}`, `?${params}`]) {
     assert.deepEqual(decodeExplorerState(form, DEFAULT_EXPLORER_STATE), state);
@@ -152,7 +154,7 @@ test('ordinary historical links still decode with their original field names', (
 });
 
 test('enum, layer, boolean and color validation rejects unsupported values', () => {
-  const invalidModes = decodeExplorerState('#mode=constructor&pm=constructor&renderer=webgl&palette=__proto__&focus=all&pieces=false', defaults);
+  const invalidModes = decodeExplorerState('#mode=constructor&pm=constructor&renderer=webgl&palette=__proto__&capture=constructor&focus=all&pieces=false', defaults);
   assert.deepEqual(invalidModes, defaults);
   for (const layers of ['', '111111', '11111111', '1x11111', 'abcdefg', '1111111\n']) {
     assert.deepEqual(decodeExplorerState(new URLSearchParams({ layers }), defaults), defaults);
@@ -169,6 +171,22 @@ test('enum, layer, boolean and color validation rejects unsupported values', () 
   assert.deepEqual(colors.customPalette, { ...defaults.customPalette, interior: '#aabbcc' });
   assert.deepEqual(decodeExplorerState(new URLSearchParams({ ci: '#abcdef\n' }), defaults), defaults);
   assert.deepEqual(decodeExplorerState('#pieces=0', defaults), { ...defaults, firstLevelPieces: false });
+});
+
+test('capture presentation roundtrips independently of set selections and cycle', () => {
+  assert.equal(DEFAULT_EXPLORER_STATE.captureStyle, 'depth');
+  assert.equal(decodeExplorerState('#n=4').captureStyle, 'depth');
+  const selected = normalizeExplorerState({ n: 4, parameterLayers: ['mn0', 'mn1'], parameterDigits: [-3, 0, 3], modulo: 5 });
+  const flat = decodeExplorerState('#capture=sets', selected);
+  assert.deepEqual(flat, { ...selected, captureStyle: 'sets' });
+  assert.deepEqual(decodeExplorerState(encodeExplorerState(flat)), flat);
+  assert.deepEqual(decodeExplorerState('#capture=depth', flat), selected);
+  for (const value of ['', 'Depth', 'sets,depth', '__proto__']) {
+    assert.deepEqual(decodeExplorerState(new URLSearchParams({ capture: value }), flat), flat);
+  }
+  // Old links inherit the chosen display preference rather than resetting it.
+  assert.equal(decodeExplorerState('#q=7', flat).captureStyle, 'sets');
+  assert.equal(decodeExplorerState('#q=7', flat).modulo, 7);
 });
 
 test('parameter-mode links default to Mn and preserve each canonical mode', () => {

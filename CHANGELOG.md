@@ -4,6 +4,19 @@
 
 ### Correctness
 
+- Separate minimum finite-capture depth at pixel centers from geometric
+  coverage. Complete shallower inverse searches before assigning a minimum;
+  a first depth-first survivor or longer witness no longer conceals earlier
+  capture. Keep a found witness when its minimum remains unconfirmed.
+- Restrict current browser selected searches and difference rendering to
+  canonical strict-lens capture. An exact one-step counterexample disproves
+  the historical off-lens rectangle as a general trap. Historical reference
+  defaults and records remain available for explicit replay.
+- Preserve whole-attractor depth-zero capture independently of first-piece
+  coloring. Required first digits still count as one step, and `M_n^0`
+  retains its depth-zero field throughout the strict original lens. The
+  complementary aggregate `M_n^1` has depth one throughout that lens;
+  individual fixed-digit subsets can still capture later.
 - Share an original-alphabet membership search across the sharp boundary and
   marked-point views. Canonical capture is restricted to
   `|c|² + 2|Re c| < n`, including even alphabets. Exhaustive escape, finite
@@ -33,6 +46,14 @@
 
 ### Browser and performance
 
+- Expose finite-capture layers across all parameter aggregates, digit
+  subsets, and numerical dynamical scenes. Minimum-depth shades cycle modulo
+  `q` while keeping set/piece hues and black overlap contours. Distinguish
+  a minimum, a witness without a confirmed minimum, and pale finite escape
+  coverage. Share `capture=depth` or `capture=sets` with the complete view.
+- Transfer independent center-capture fields through CPU workers and GPU
+  texture attachments. Bound their search work separately from cell coverage
+  and include the added GPU passes in the preview resolution budget.
 - Make **Sharp boundary** the default original-attractor renderer, using
   bounded GPU previews followed by binary64 worker refinement. Automatic
   boundary depth starts at 16 for two maps and 12 otherwise, adapts to zoom and
@@ -73,6 +94,10 @@
 
 ### Maintenance and documentation
 
+- Add a reproducible production-rendered capture triptych for `M_3`,
+  `F_(5,0)`, and `E(2i,5)`, with separate coverage/minimum-depth metadata.
+  Retain the original piece gallery in flat set colors and document both
+  encodings, their exact first-digit conventions, and current capture policy.
 - Rewrote the README lens inequality without the unsupported named-operator
   macro, and added reproducible attractor examples, a parameter-lens diagram,
   and a diagram of hybrid rendering and the independent reference search.

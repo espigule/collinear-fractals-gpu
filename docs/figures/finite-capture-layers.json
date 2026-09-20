@@ -1,0 +1,302 @@
+{
+  "schema_version": "1.0.0",
+  "artifact": "docs/figures/finite-capture-layers.svg",
+  "artifact_sha256": "8c84ac2b2a6be57ba1b7c05fb39a20f84ab4af26ff2c99731a1e3e1521bbf6af",
+  "title": "Finite capture in parameter and dynamical planes",
+  "generator": "tools/docs/generate_attractor_examples.mjs",
+  "regenerate": "node tools/docs/generate_attractor_examples.mjs",
+  "verify": "node tools/docs/generate_attractor_examples.mjs --check",
+  "generator_sha256": "7f9f1134a39e26ca9cd7cf8d9f1c898912e638c419342a02191ec2e03180c45f",
+  "source_modules_sha256": {
+    "src/math/alphabets.mjs": "2c8c131eafb353a2dab4b26214494b87defa95b3d38a3321fb2977797b49ccad",
+    "src/math/attractor_bounds.mjs": "c50be5f717be0324254a2032b3121a3bd5e3a9be6fb079119d8444fbe646652d",
+    "src/math/complex.mjs": "5c507c04375c27d7a2a5c4241379f54726217f226b484b1b7dfca738f29f0650",
+    "src/math/validation.mjs": "19ed9444507f93799359ad1849ed8dfc28eac741be14a0fc4537622d0b4cedc9",
+    "src/compute/attractor_membership.mjs": "9f220bc943f86a09751f5d0eb2f8f2b7ab47084182a95dbf424b59b6adf37401",
+    "src/compute/inverse_search_kernel.mjs": "035206d2bc634d0abf289606b09f1ce5e17166832af10c3fb6808a3871bf743d",
+    "src/compute/inverse_search_reference.mjs": "13fd3edcddfc95217ff84568abef9c7ebf867385ad559f814ee203496bfc9630",
+    "src/compute/parameter_views.mjs": "82ed048557d2665153226e262eb04f0c3b4cef68343eaa44896c09fbe376603b",
+    "src/compute/raster_jobs.mjs": "ddf4e25bf3278f5ef6b088f60235a8de49d7076aa2af1e253cdf59bdd9a73f73",
+    "src/renderers/palettes.mjs": "6d873520c67f255083e90f75033ffdd0b5c07af92d3d4ee4bc1a28a9edee5cc8",
+    "src/renderers/hybrid_renderer.mjs": "cfd22cf8b55c7bace48477ca1dd18d1e136b1181dd80e3532eaca47259ac69c8",
+    "src/state/explorer_state.mjs": "2ec120e4694226caaa5bda535827053f2679104f0d5b9fba377b6bec3f31201e"
+  },
+  "svg_size": {
+    "width": 1200,
+    "height": 575
+  },
+  "arithmetic": "binary64",
+  "rounding_verified": false,
+  "proof_status": "visual-approximation",
+  "mathematical_reference": "https://arxiv.org/html/2603.07397v1",
+  "capture_field": "Minimum inverse depth to the canonical trap at each pixel center, with all shallower numerical searches completed before a minimum is assigned.",
+  "coverage_field": "Separate finite parameter-cell or dynamical-footprint search; capture of a center is not capture of the full cell.",
+  "shade_encoding": {
+    "modulo": 3,
+    "known_minimum_rgb_scale": ".6+.3*(depth%3)/2",
+    "witness_unknown_minimum": "base hue",
+    "finite_survivor": "72% base hue +28% white"
+  },
+  "panels": [
+    {
+      "id": "mn3_capture",
+      "set": "M_3",
+      "kind": "parameter",
+      "n": 3,
+      "parameter": null,
+      "parameter_layers": [
+        "mn"
+      ],
+      "parameter_digits": [],
+      "viewport": {
+        "center": {
+          "x": 0.9,
+          "y": 1.6
+        },
+        "span_x": 1.8,
+        "span_y": 1.1927710843373494,
+        "width": 664,
+        "height": 440
+      },
+      "coordinate_convention": "expanding-parameter; original unscaled E(c,n) dynamical coordinates",
+      "capture_style": "depth",
+      "capture_modulo": 3,
+      "capture_sampling": "pixel-center",
+      "capture_search": "iterative-deepening-with-independent-work-budget",
+      "minimum_depth_unknown": 255,
+      "minimum_depth_counts": {
+        "0": 39333,
+        "1": 36327,
+        "2": 14959,
+        "3": 5140,
+        "4": 2963,
+        "5": 1098,
+        "6": 763,
+        "7": 331,
+        "8": 216,
+        "9": 119,
+        "10": 75,
+        "11": 31,
+        "12": 18,
+        "255": 190787
+      },
+      "observed_minimum_depths": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "capture_depth_limit": 12,
+      "capture_work": 20000,
+      "coverage_sampling": "complex-taylor-parameter-disk",
+      "geometric_radius_world": 0.0019168557321322074,
+      "coverage_codes": {
+        "EXTERIOR": 0,
+        "INTERIOR": 1,
+        "OFF_LENS": 2,
+        "DEPTH_CAP": 3,
+        "NODE_CAP": 4,
+        "OUTSIDE_DOMAIN": 5,
+        "NUMERICAL_RANGE": 6,
+        "WORK_CAP": 7,
+        "PRECISION": 8
+      },
+      "coverage_code_counts": {
+        "0": 159182,
+        "1": 73475,
+        "3": 59503
+      },
+      "escape_depth": 12,
+      "boundary_work": 20000,
+      "first_level_piece_masks": false,
+      "outlined_pixels": 0,
+      "fixture_checks": [
+        "multiple minimum-capture levels computed independently of coverage",
+        "coverage and center capture stored separately",
+        "no historical off-lens acceptance",
+        "unrestricted base capture level zero retained"
+      ],
+      "raster_sha256": "ebde0aa722ea3f9e9a8ac60a20a03d969037b7a44d30666499754fa9298ef540",
+      "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=3&k=12&l=1000&tol=1e-8&q=3&cx=0.9&cy=1.6&pz=1.8&dz=8&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=0.9&pcy=1.6&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&capture=depth&focus=parameter&pl=mn&pd=&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
+      "interactive_note": "Same view and shading; capture depth limit12, boundary depth starts at12 and adapts with zoom/resolution. The figure uses fixed-depth binary64 CPU rendering.",
+      "proof_status": "visual-approximation",
+      "limitations": "A minimum describes a completed numerical search at the pixel center, not the full geometric cell or an interval-certified theorem. Coverage can remain unresolved or survive without a center capture."
+    },
+    {
+      "id": "f5_0_capture",
+      "set": "F_(5,0)",
+      "kind": "parameter",
+      "n": 5,
+      "parameter": null,
+      "parameter_layers": [],
+      "parameter_digits": [
+        0
+      ],
+      "viewport": {
+        "center": {
+          "x": 0.75,
+          "y": 1.67
+        },
+        "span_x": 2,
+        "span_y": 1.3253012048192772,
+        "width": 664,
+        "height": 440
+      },
+      "coordinate_convention": "expanding-parameter; original unscaled E(c,n) dynamical coordinates",
+      "capture_style": "depth",
+      "capture_modulo": 3,
+      "capture_sampling": "pixel-center",
+      "capture_search": "iterative-deepening-with-independent-work-budget",
+      "minimum_depth_unknown": 255,
+      "minimum_depth_counts": {
+        "1": 111823,
+        "2": 17867,
+        "3": 4364,
+        "4": 1741,
+        "5": 319,
+        "6": 80,
+        "7": 16,
+        "8": 4,
+        "9": 2,
+        "255": 155944
+      },
+      "observed_minimum_depths": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "capture_depth_limit": 12,
+      "capture_work": 20000,
+      "coverage_sampling": "complex-taylor-parameter-disk",
+      "geometric_radius_world": 0.002129839702369119,
+      "coverage_codes": {
+        "EXTERIOR": 0,
+        "INTERIOR": 1,
+        "OFF_LENS": 2,
+        "DEPTH_CAP": 3,
+        "NODE_CAP": 4,
+        "OUTSIDE_DOMAIN": 5,
+        "NUMERICAL_RANGE": 6,
+        "WORK_CAP": 7,
+        "PRECISION": 8
+      },
+      "coverage_code_counts": {
+        "0": 123123,
+        "1": 124154,
+        "3": 44883
+      },
+      "escape_depth": 12,
+      "boundary_work": 20000,
+      "first_level_piece_masks": false,
+      "outlined_pixels": 0,
+      "fixture_checks": [
+        "multiple minimum-capture levels computed independently of coverage",
+        "coverage and center capture stored separately",
+        "no historical off-lens acceptance",
+        "forced first digit counts as one step; original alphabet tail"
+      ],
+      "raster_sha256": "4963082805a92e29577f6150fd3b73a00d7fce0284c826cdd14f49950247c02f",
+      "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=5&k=12&l=1000&tol=1e-8&q=3&cx=0.75&cy=1.67&pz=2&dz=8&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=0.75&pcy=1.67&dcx=0&dcy=0&backend=auto&pm=compare&mode=collinear&renderer=boundary&palette=research&capture=depth&focus=parameter&pl=&pd=0&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
+      "interactive_note": "Same view and shading; capture depth limit12, boundary depth starts at12 and adapts with zoom/resolution. The figure uses fixed-depth binary64 CPU rendering.",
+      "proof_status": "visual-approximation",
+      "limitations": "A minimum describes a completed numerical search at the pixel center, not the full geometric cell or an interval-certified theorem. Coverage can remain unresolved or survive without a center capture."
+    },
+    {
+      "id": "e2i5_capture",
+      "set": "E(2i,5)",
+      "kind": "dynamical",
+      "n": 5,
+      "parameter": {
+        "re": 0,
+        "im": 2,
+        "exact": "2i"
+      },
+      "parameter_layers": [],
+      "parameter_digits": [],
+      "viewport": {
+        "center": {
+          "x": 0,
+          "y": 0
+        },
+        "span_x": 11.95,
+        "span_y": 7.918674698795181,
+        "width": 664,
+        "height": 440
+      },
+      "coordinate_convention": "expanding-parameter; original unscaled E(c,n) dynamical coordinates",
+      "capture_style": "depth",
+      "capture_modulo": 3,
+      "capture_sampling": "pixel-center",
+      "capture_search": "iterative-deepening-with-independent-work-budget",
+      "minimum_depth_unknown": 255,
+      "minimum_depth_counts": {
+        "0": 154568,
+        "1": 7784,
+        "2": 8176,
+        "3": 1752,
+        "4": 2360,
+        "5": 592,
+        "255": 116928
+      },
+      "observed_minimum_depths": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "capture_depth_limit": 12,
+      "capture_work": 20000,
+      "coverage_sampling": "pixel-footprint",
+      "geometric_radius_world": 0.012725792221655485,
+      "coverage_codes": {
+        "EXTERIOR": 0,
+        "INTERIOR": 1,
+        "OFF_LENS": 2,
+        "DEPTH_CAP": 3,
+        "NODE_CAP": 4,
+        "OUTSIDE_DOMAIN": 5,
+        "NUMERICAL_RANGE": 6,
+        "WORK_CAP": 7,
+        "PRECISION": 8
+      },
+      "coverage_code_counts": {
+        "0": 115148,
+        "1": 173448,
+        "3": 3564
+      },
+      "escape_depth": 12,
+      "boundary_work": 20000,
+      "first_level_piece_masks": true,
+      "outlined_pixels": 4148,
+      "fixture_checks": [
+        "multiple minimum-capture levels computed independently of coverage",
+        "coverage and center capture stored separately",
+        "no historical off-lens acceptance",
+        "E(2i,5) fixture minima 0, 1, 2",
+        "black contours preserved under capture shading"
+      ],
+      "raster_sha256": "f76fd6602d18deb7b6f00ab8dc355ee0f23b1cf93310396852228785f3c4fa42",
+      "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=5&k=12&l=1000&tol=1e-8&q=3&cx=0&cy=2&pz=2.414&dz=11.95&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&capture=depth&focus=dynamical&pl=mn&pd=&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
+      "interactive_note": "Same view and shading; capture depth limit12, boundary depth starts at12 and adapts with zoom/resolution. The figure uses fixed-depth binary64 CPU rendering.",
+      "proof_status": "visual-approximation",
+      "limitations": "A minimum describes a completed numerical search at the pixel center, not the full geometric cell or an interval-certified theorem. Coverage can remain unresolved or survive without a center capture."
+    }
+  ]
+}

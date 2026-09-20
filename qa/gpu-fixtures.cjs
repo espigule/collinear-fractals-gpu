@@ -5,7 +5,7 @@
 // span; the explicitly focused off-lens fixture reduces camera roundoff.
 // Dedicated integration tests cover the deep-zoom fallback.
 // Classification channels are (primary code, depth, secondary code, depth):
-// 0 exterior; 1 lens trap; 2 exploratory off-lens trap; 3 depth cap;
+// 0 exterior; 1 canonical lens trap; 2 reserved historical off-lens code; 3 depth cap;
 // 4 queue cap; 5 unsupported domain; 6 numerical range; 7 work cap;
 // 8 precision uncertainty. These are display results, never certificates.
 const PARAMETER_JOB = {
@@ -42,22 +42,22 @@ const CORE_GPU_FIXTURES = [
     rationale: 'c=1+i=2-2/c gives digits [2,-2,0,...] in A3. Mn reaches its lens trap; original DFS survival does not assert interior without the canonical original trap.'
   },
   {
-    name: 'parameter: Mn and Rn have distinct outcomes',
+    name: 'parameter: off-lens Mn remains unresolved while M_n0 escapes',
     job: { ...PARAMETER_JOB, center: { x: 1.2, y: 0.9 }, n: 2 },
-    primary: [2, 8], secondary: [0], cpuRole: 'compare',
-    rationale: 'Mn reaches an exploratory off-lens trap at depth 7; a span-12 camera rounding allowance may grow to precision uncertainty before that hit. Independent Cartesian inverse enumeration exhausts Rn.'
+    primary: SURVIVAL_CODES, secondary: [0], cpuRole: 'compare',
+    rationale: 'No canonical trap is valid here, so Mn can remain a finite survivor or encounter a resource/precision limit. Independent Cartesian inverse enumeration exhausts M_n0.'
   },
   {
     name: 'parameter: conjugation preserves the separating outcomes',
     job: { ...PARAMETER_JOB, center: { x: 1.2, y: -0.9 }, n: 2 },
-    primary: [2, 8], secondary: [0], cpuRole: 'compare',
+    primary: SURVIVAL_CODES, secondary: [0], cpuRole: 'compare',
     rationale: 'Conjugation preserves the real digit alphabet and exercises negative-imaginary digit intervals without changing either classification.'
   },
   {
-    name: 'parameter: focused off-lens trap',
+    name: 'parameter: focused off-lens view never invents capture',
     job: { ...PARAMETER_JOB, center: { x: 1.2, y: 0.9 }, n: 2, spanX: 0.1 },
-    primary: [2], secondary: [0], cpuRole: 'compare',
-    rationale: 'A focused camera reduces the coordinate rounding allowance enough to distinguish the depth-seven off-lens trap from uncertainty.'
+    primary: SURVIVAL_CODES, secondary: [0], cpuRole: 'compare',
+    rationale: 'Camera precision cannot validate the old off-lens heuristic; current point rendering uses canonical capture only.'
   },
   {
     name: 'parameter: exterior beyond the independent disk bound',
@@ -111,6 +111,13 @@ const CORE_GPU_FIXTURES = [
     job: { ...DYNAMICAL_JOB, center: { x: 0, y: 2.25 } },
     primary: [0], secondary: [0], cpuRole: 'dynamical',
     rationale: 'The imaginary coordinate exceeds both displayed supports by 0.25; neither output may report survival or a trap hit.'
+  },
+  {
+    name: 'dynamical: former off-lens false capture is exterior',
+    job: { ...DYNAMICAL_JOB, n: 2, cx: 3, cy: 3, center: { x: 1 / 8, y: 1 / 40 },
+      spanX: 0.01, showOriginalSurvival: false },
+    primary: [0], cpuRole: 'dynamical',
+    rationale: 'For z=1/4+i/20 in E(c,3), every first inverse digit has imaginary magnitude at least 0.9, beyond the enclosure upper bound 2/3. The old off-lens rectangle incorrectly called this a depth-zero capture.'
   },
 
   // Budget and domain controls are semantic assertions, not visual tolerances.

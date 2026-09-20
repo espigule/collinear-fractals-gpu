@@ -10,7 +10,7 @@ import {
   getEffectiveC, inLens, computeEnclosureGeneral, getTrapHalfWidths,
   inverseIterationTestDetailed
 } from './src/compute/inverse_search_reference.mjs';
-import { PIECE_COLORS, parameterLayerColor, parameterLayerKeys } from './src/renderers/palettes.mjs';
+import { PIECE_COLORS, captureShade, parameterLayerColor, parameterLayerKeys } from './src/renderers/palettes.mjs';
 import { buildCertificatePayload } from './src/compute/certificate_builder.mjs';
 import { renderPrefixAttractor } from './src/renderers/attractor_prefix.mjs';
 import { renderHistogramAttractor } from './src/renderers/attractor_histogram.mjs';
@@ -204,15 +204,6 @@ function rgbToCss(rgb) {
   return `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
 }
 
-function mixWithWhite(rgb, amount) {
-  const t = Math.max(0, Math.min(1, amount));
-  return {
-    r: Math.round(rgb.r + (255 - rgb.r) * t),
-    g: Math.round(rgb.g + (255 - rgb.g) * t),
-    b: Math.round(rgb.b + (255 - rgb.b) * t)
-  };
-}
-
 function activePalette() {
   if (state.palette === 'custom') {
     return {
@@ -223,28 +214,15 @@ function activePalette() {
   return PALETTES[state.palette] || PALETTES.research;
 }
 
-// Map modulo capture levels to research grayscale colors
-function getColorForLevel(level, depth) {
-  const q = state.modulo;
-  if (state.palette !== 'research') {
-    const base = hexToRgb(activePalette().interior);
-    return mixWithWhite(base, Math.max(0, 0.7 - (level * 0.45) / q));
-  }
-  // Grayscale mapping for level = depth % q
-  const lightness = 70 - (level * 45) / q;
-  const gVal = Math.max(10, Math.min(240, Math.round(lightness * 2.55)));
-  return { r: gVal, g: gVal, b: gVal };
+function captureBaseColor(offLens = false) {
+  if (state.palette === 'research') return offLens ? [196, 212, 230] : [178, 178, 178];
+  const rgb = hexToRgb(activePalette()[offLens ? 'offLens' : 'interior']);
+  return [rgb.r, rgb.g, rgb.b];
 }
 
-function getOffLensInteriorColorForLevel(level, depth) {
-  const q = state.modulo;
-  if (state.palette !== 'research') {
-    const base = hexToRgb(activePalette().offLens);
-    return mixWithWhite(base, Math.max(0, 0.62 - (level * 0.4) / q));
-  }
-  const base = 112 - (level * 34) / q;
-  const v = Math.max(35, Math.min(210, Math.round(base * 2.0)));
-  return { r: Math.max(25, v - 28), g: Math.max(35, v - 12), b: Math.min(230, v + 18) };
+function captureColor(depth, offLens = false) {
+  const [r, g, b] = captureShade(captureBaseColor(offLens), offLens ? 2 : 1, depth, state);
+  return { r: Math.round(r), g: Math.round(g), b: Math.round(b) };
 }
 
 // Grayscale escape speed scheme with mod 11 (excluding white)
@@ -297,6 +275,7 @@ const elKmax = document.getElementById('param-kmax');
 const elLmax = document.getElementById('param-lmax');
 const elModulo = document.getElementById('param-modulo');
 const elModuloVal = document.getElementById('modulo-val');
+const elCaptureStyle = document.getElementById('capture-style');
 const elExamplePreset = document.getElementById('example-preset');
 const elComparisonMode = document.getElementById('comparison-mode');
 const elOriginalRendererMode = document.getElementById('original-renderer-mode');
@@ -424,6 +403,7 @@ function updateBoundaryMetadata(info = renderingInfo.dynamical) {
   const unavailable = ['outside-domain', 'numerical-range'].includes(info?.renderer) ? info.renderer : null;
   const gpuOnly = info?.active_backend === 'webgl2';
   const depth = gpuOnly ? (info.gpu?.effective?.escape_depth ?? boundaryDepthFor('dynamical')) : boundaryDepthFor('dynamical');
+  const captureDepth = gpuOnly ? (info.gpu?.effective?.capture_depth ?? Math.min(state.kMax, 100)) : Math.min(state.kMax, 100);
   lastAttractorMetadata = {
     renderer: 'capture-escape-boundary', algorithm: 'depth-first inverse search',
     alphabet_size: state.n, available: !unavailable, stop_reason: unavailable,
@@ -437,6 +417,11 @@ function updateBoundaryMetadata(info = renderingInfo.dynamical) {
     sampling: 'pixel-footprint', first_level_pieces: state.firstLevelPieces,
     piece_boundaries: state.firstLevelPieces ? 'independent coverage masks with one-pixel neighbor contours' : 'hidden',
     overlap_colors: 'mean of all covering pieces',
+    capture_style: state.captureStyle, capture_cycle: state.modulo,
+    capture_depth_sampling: 'pixel-center',
+    capture_maximum_depth: Math.min(state.kMax, 100),
+    effective_capture_depth: unavailable ? 0 : captureDepth,
+    minimum_capture_depth_convention: 'minimum inverse steps to canonical trap; whole attractor includes depth zero',
     coordinate_scale: 1, maps: 'z -> t + z/c',
     capture: 'canonical self-covering region only',
     finite_survival: 'finite-resolution coverage',
@@ -447,7 +432,7 @@ function updateBoundaryMetadata(info = renderingInfo.dynamical) {
     note.hidden = !state.showCollinear || state.rendererMode !== 'boundary';
     note.textContent = unavailable
       ? `Boundary unavailable · ${unavailable === 'outside-domain' ? 'outside the expanding nonreal domain' : 'numerical range exceeded'}`
-      : `${selfCovering ? 'Self-covering + escape' : 'Escape boundary'} · depth ${depth}${state.adaptiveBoundary ? ' · adapts to zoom' : ''}`;
+      : `Escape depth ${depth}${state.adaptiveBoundary ? ' · adapts to zoom' : ''}${selfCovering ? ` · capture limit ${captureDepth}` : ''}${state.captureStyle === 'depth' && selfCovering ? ` · mod ${state.modulo}` : ''}`;
   }
 }
 
@@ -462,9 +447,10 @@ function rasterJob(kind) {
     parameterLayers: state.parameterLayers, parameterDigits: state.parameterDigits,
     showOriginalSurvival: state.showCollinear && ['boundary', 'survival'].includes(state.rendererMode),
     originalRenderer: state.rendererMode === 'survival' ? 'survival' : 'boundary',
-    escapeDepth: boundaryDepthFor(kind), boundaryWork: BOUNDARY_WORK_LIMIT,
+    escapeDepth: boundaryDepthFor(kind), captureDepth: Math.min(state.kMax, 100), boundaryWork: BOUNDARY_WORK_LIMIT,
     firstLevelPieces: state.firstLevelPieces, originalOpacity: state.originalAttractorOpacity,
     showEscapeStrata: state.showEscapeStrata, survivalOpacity: state.survivalOverlayOpacity,
+    captureStyle: state.captureStyle, modulo: state.modulo,
     backend: state.backend
   };
 }
@@ -477,8 +463,8 @@ function rasterColors() {
     for (let depth = 0; depth <= 100; depth++) {
       let rgb = unknown;
       if (code === 0) rgb = state.showEscapeStrata ? getEscapeColor(depth) : exterior;
-      else if (code === 1) rgb = state.showEscapeStrata ? exterior : getColorForLevel(depth % state.modulo, depth);
-      else if (code === 2) rgb = state.showEscapeStrata ? exterior : getOffLensInteriorColorForLevel(depth % state.modulo, depth);
+      else if (code === 1) rgb = state.showEscapeStrata ? exterior : captureColor(depth);
+      else if (code === 2) rgb = state.showEscapeStrata ? exterior : captureColor(depth, true);
       else if (code === 5) rgb = { r: 203, g: 213, b: 225 };
       table.set([rgb.r, rgb.g, rgb.b, 255], (code * 101 + depth) * 4);
     }
@@ -488,7 +474,11 @@ function rasterColors() {
     const rgb = hexToRgb(color);
     return [rgb.r, rgb.g, rgb.b];
   }));
-  return { table, branch: [branch.r, branch.g, branch.b], exterior: [exterior.r, exterior.g, exterior.b], survivalOpacity: state.survivalOverlayOpacity, pieceColors };
+  return {
+    table, branch: [branch.r, branch.g, branch.b], exterior: [exterior.r, exterior.g, exterior.b],
+    captureInterior: captureBaseColor(), captureOffLens: captureBaseColor(true),
+    survivalOpacity: state.survivalOverlayOpacity, pieceColors
+  };
 }
 
 function startHybridPanel(kind) {
@@ -606,6 +596,8 @@ function updateControlsFromState() {
   if (elLmax) elLmax.value = state.LMax;
   if (elModulo) elModulo.value = state.modulo;
   if (elModuloVal) elModuloVal.textContent = state.modulo;
+  if (elCaptureStyle) elCaptureStyle.value = state.captureStyle;
+  if (elModulo) elModulo.disabled = state.captureStyle !== 'depth';
   if (elComparisonMode) elComparisonMode.value = state.comparisonMode || 'overlay';
   if (elOriginalRendererMode) elOriginalRendererMode.value = state.rendererMode || 'boundary';
   if (elRenderBackend) elRenderBackend.value = state.backend;
@@ -887,11 +879,23 @@ const ABOUT_TABS = {
     pixel's area so thin pieces remain visible. Detail increases as you zoom.
     Black contours trace every first-level piece, including boundaries inside
     overlaps. Prefix-cylinder and seeded-histogram views are available in Controls.</p>
+    <p>Finite-capture layers reveal the minimum number of inverse steps needed
+    to reach the trap at each pixel center, repeating modulo <code>q</code>.
+    Whole-attractor capture includes depth zero; an individual first-digit
+    subset includes its prescribed step. Solid color marks a capture whose
+    minimum remains unconfirmed, and pale color marks finite escape coverage.
+    The maximum search depth <code>k_max</code> also bounds this capture search,
+    independently of the adaptive boundary depth. At <code>k_max = 0</code> only
+    initial trap capture is tested. Parameter and Sharp boundary coverage account
+    for whole pixels; the half-difference uses point samples. Set colors in
+    Controls switches off depth shading without changing the computed sets.</p>
     <p>Automatic rendering starts with a bounded WebGL 2 GPU preview, then
     refines the image in double precision using background workers. CPU rendering
     takes over when acceleration is unavailable or the view needs more precision.
     The selected search record always uses the full chosen <code>k_max</code> and
-    <code>L_max</code>, independently of the preview. GPU-only images are explicitly
+    <code>L_max</code>, independently of the preview. Current searches use only
+    the canonical self-covering trap; outside its valid region they use escape
+    and finite survival. GPU-only images are explicitly
     marked as previews; neither renderer supplies an interval certificate.</p>
     <p><strong>Mₙ⁰</strong> tests <code>c ∈ E(c,n)</code>.
     <strong>Mₙ¹</strong> tests <code>c ∈ A_(n−1) + E(c,n)/c</code>:
@@ -1012,7 +1016,7 @@ const TOUR_STEPS = [
   },
   {
     title: 'Search limits',
-    body: 'The depth and node limits control the selected M_n search and its JSON record. Images use a separate boundary depth, increasing as you zoom. Self-covering capture accelerates the search where valid; finite escape coverage remains an approximation. Overlapping selected sets blend their colors, and unresolved work limits remain visible.'
+    body: 'Maximum depth k_max bounds both the selected-point search and minimum capture at pixel centers. Boundary depth separately controls escape coverage and grows with zoom. Dark bands repeat minimum capture levels modulo q; pale regions show finite escape coverage. Parameter sets and Sharp boundary cover whole pixels; the half-difference uses point samples. Colors & finite capture changes the shading while preserving the computed sets.'
   },
   {
     title: 'Reproducibility',
@@ -1057,7 +1061,8 @@ function saveExplorerImage() {
   ctx.font = '12px system-ui, sans-serif';
   const input = `${state.cx.toPrecision(9)} ${state.cy < 0 ? '−' : '+'} ${Math.abs(state.cy).toPrecision(9)}i`;
   ctx.fillText(`Input c = ${input}`, 12, 44, width - 24);
-  ctx.fillText(`Requested search: k_max = ${state.kMax} · L_max = ${state.LMax} per level · q = ${state.modulo}`, 12, 63, width - 24);
+  const captureLabel = state.captureStyle === 'depth' ? `capture levels mod ${state.modulo}` : 'set colors';
+  ctx.fillText(`Selected-point limits: k_max = ${state.kMax} · L_max = ${state.LMax} per level · ${captureLabel}`, 12, 63, width - 24);
   let x = 0;
   for (const canvas of canvases) {
     const parameterLabel = parameterSelectionLabel();
@@ -1269,8 +1274,15 @@ function startMainThreadRaster(kind, metadata) {
     pixel_radius_world: kind === 'dynamical' && fullJob.originalRenderer === 'boundary'
       ? Math.SQRT1_2 * fullJob.spanX / fullJob.width : 0,
     pixels_completed: 0, total_pixels: fullJob.width * fullJob.height,
+    capture_style: state.captureStyle, capture_cycle: state.modulo,
+    capture_sample_type: 'pixel-center',
+    capture_depth_convention: 'minimum inverse steps at the pixel center after every shallower search completes; a forced first digit counts as one step',
+    capture_depth_unknown: 255,
+    capture_coverage_relation: 'Pixel-center capture strata are separate from whole-pixel parameter and original-attractor boundary coverage; the half-difference is point-sampled',
     requested_limits: { depth: fullJob.kMax, frontier: fullJob.LMax,
-      escape_depth: fullJob.escapeDepth, boundary_work: fullJob.boundaryWork, tolerance: fullJob.tol } });
+      escape_depth: fullJob.escapeDepth, capture_depth: fullJob.captureDepth,
+      boundary_work: fullJob.boundaryWork, capture_work: fullJob.boundaryWork,
+      tolerance: fullJob.tol } });
 
   function prepareStage() {
     const width = Math.max(1, Math.ceil(fullJob.width / steps[run.stage]));
@@ -1424,7 +1436,7 @@ function drawParameterLensGuides(completedStage = false) {
 function selectedSearchResult() {
   const key = [state.cx, state.cy, state.n, state.kMax, state.LMax, state.tol].join('|');
   if (!selectedSearchCache || selectedSearchCache.key !== key) {
-    selectedSearchCache = { key, result: inverseIterationTestDetailed(state.cx, state.cy, state.n, state.kMax, state.LMax, state.tol) };
+    selectedSearchCache = { key, result: inverseIterationTestDetailed(state.cx, state.cy, state.n, state.kMax, state.LMax, state.tol, { canonicalOnly: true }) };
   }
   return selectedSearchCache.result;
 }
@@ -1436,7 +1448,8 @@ function selectedParameterViewResult() {
   if (!selectedParameterViewCache || selectedParameterViewCache.key !== key) {
     selectedParameterViewCache = { key, result: classifyParameterView(
       state.cx, state.cy, state.n, state.kMax, state.LMax, state.tol, state.parameterMode,
-      { escapeDepth: depth, boundaryWork: BOUNDARY_WORK_LIMIT, parameterRadius: 0,
+      { escapeDepth: depth, captureDepth: Math.min(state.kMax, 100), minimumCapture: true,
+        boundaryWork: BOUNDARY_WORK_LIMIT, parameterRadius: 0,
         parameterLayers: state.parameterLayers, parameterDigits: state.parameterDigits }
     ) };
   }
@@ -1542,7 +1555,7 @@ function drawDynamicalGuidesAndOverlays() {
   const cy = eff.y;
   const n = state.n;
   const rho = Math.hypot(cx, cy);
-  const isLensN = inLens(state.cx, state.cy, n);
+  const canonicalTrapAvailable = rho > 1 && cy !== 0 && Number.isFinite(rho) && rho * rho + 2 * Math.abs(cx) < 2 * n - 1;
   
   // Real and Imaginary axes
   ctxDyn.save();
@@ -1577,9 +1590,9 @@ function drawDynamicalGuidesAndOverlays() {
   }
   
   // Draw 1/2 Trap
-  if (state.showTrap && rho > 1 && cy !== 0 && Number.isFinite(rho)) {
+  if (state.showTrap && canonicalTrapAvailable) {
     const N = 2 * n - 1;
-    const { S, V } = getTrapHalfWidths(cx, cy, N, isLensN);
+    const { S, V } = getTrapHalfWidths(cx, cy, N, true);
     drawParallelogramScaled(S, V, 'rgba(5, 150, 105, 0.04)', '#059669', true);
   }
   
@@ -1733,14 +1746,35 @@ function drawWinningPathScaled(tree, word, verdict) {
   ctxDyn.restore();
 }
 
+function finiteCaptureMetadata() {
+  return {
+    capture_style: state.captureStyle,
+    cycle: state.modulo,
+    maximum_depth: Math.min(state.kMax, 100),
+    sample_type: 'pixel-center',
+    boundary_coverage_sampling: {
+      parameter: 'whole-pixel', original_attractor: 'whole-pixel', half_difference: 'pixel-center'
+    },
+    minimum_depth_convention: 'Minimum inverse steps to the canonical trap at the pixel center, after every shallower search completes',
+    whole_attractor_initial_depth: 0,
+    fixed_first_digit_initial_depth: 1,
+    unknown_minimum: null,
+    packed_unknown_minimum: 255,
+    witness_without_minimum: 'Capture retained; no minimum level assigned',
+    selected_point_record: 'Separate search with its own limits; image sampling does not change the selected-point record',
+    scope: 'All parameter rasters, the half-difference raster, and the original attractor Sharp boundary view; advanced original-attractor renderers retain their own colors'
+  };
+}
+
 function currentCertificatePayload() {
   const record = buildCertificatePayload(selectedSearchResult(), {
     n: state.n, c: { re: state.cx, im: state.cy },
-    kMax: state.kMax, LMax: state.LMax, tol: state.tol
+    kMax: state.kMax, LMax: state.LMax, tol: state.tol, canonicalOnly: true
   });
   const parameterView = selectedParameterViewResult();
   return {
     ...record,
+    finite_capture: finiteCaptureMetadata(),
     parameter_view: {
       mode: state.parameterMode,
       layers: [...state.parameterLayers], digits: [...state.parameterDigits],
@@ -1749,6 +1783,9 @@ function currentCertificatePayload() {
         mn1: 'c in (D_n minus A_n) + (1/c)E(c,n)', compare: 'Independently selected parameter subsets'
       }[state.parameterMode],
       search_record_set: 'M_n',
+      capture_style: state.captureStyle, capture_cycle: state.modulo,
+      capture_depth_sampling: 'pixel-center',
+      capture_maximum_depth: Math.min(state.kMax, 100),
       escape_depth: boundaryDepthFor('parameter'), work_limit: BOUNDARY_WORK_LIMIT,
       mn: parameterView.mn, mn0: parameterView.mn0, mn1: parameterView.mn1,
       digit_results: parameterView.digits,
@@ -1791,6 +1828,9 @@ function currentCertificatePayload() {
       visible: state.showCollinear && canvasDyn.width > 0 && canvasDyn.height > 0,
       render_status: canvasDyn.width > 0 && canvasDyn.height > 0 ? canvasDyn.dataset.renderState : 'hidden',
       ...lastAttractorMetadata,
+      capture_style: state.captureStyle, capture_cycle: state.modulo,
+      capture_depth_sampling: 'pixel-center',
+      capture_maximum_depth: Math.min(state.kMax, 100),
       proof_status: 'visual-approximation'
     },
     rendering: {
@@ -1850,7 +1890,10 @@ function updateStatusBar(test) {
       ];
       const descriptions = entries.map(([label, result]) => {
         if (!result) return `${label}: unavailable`;
-        const description = result.stopReason === 'trap-hit' ? 'self-covering reached'
+        const description = result.stopReason === 'trap-hit'
+          ? Number.isInteger(result.minimumCaptureDepth)
+            ? `minimum capture depth ${result.minimumCaptureDepth}`
+            : `capture at depth ${result.depth}; minimum unconfirmed`
           : result.displayReason === 'finite-survival' ? `survives depth ${result.depth}`
           : `${result.verdict} (${result.stopReason})`;
         return `${label}: ${description}`;
@@ -1890,6 +1933,43 @@ function updateStatusBar(test) {
   }
 }
 
+function updateCaptureLegend(id, bases, visible = true) {
+  const legend = document.getElementById(id);
+  if (!legend) return;
+  legend.hidden = !visible || state.showEscapeStrata;
+  const depthStyle = state.captureStyle === 'depth';
+  legend.querySelector('.capture-level-title').textContent = depthStyle
+    ? `Minimum capture level, mod ${state.modulo}` : 'Set colors · capture and finite coverage';
+  const gradient = (code, minimum) => {
+    const colors = bases.map(base => `rgb(${captureShade(base, code, minimum, state).map(Math.round).join(',')})`);
+    return colors.length > 1 ? `linear-gradient(90deg, ${colors.join(',')})` : colors[0] ?? getExteriorColorString();
+  };
+  const levels = legend.querySelector('.capture-level-swatches');
+  levels.hidden = !depthStyle;
+  levels.replaceChildren();
+  if (depthStyle) {
+    for (let level = 0; level < state.modulo; level++) {
+      const item = document.createElement('span');
+      item.className = 'capture-level-swatch';
+      const swatch = document.createElement('span');
+      swatch.className = 'legend-color';
+      swatch.setAttribute('aria-hidden', 'true');
+      swatch.style.background = gradient(1, level);
+      item.append(swatch, String(level));
+      levels.append(item);
+    }
+  }
+  for (const [selector, code] of [['.capture-witness-color', 1], ['.capture-survivor-color', 3]]) {
+    const swatch = legend.querySelector(selector);
+    if (swatch) {
+      swatch.style.background = gradient(code, 255);
+      swatch.closest('.legend-item').hidden = !depthStyle;
+    }
+  }
+  const unresolved = legend.querySelector('.capture-unresolved-color');
+  if (unresolved) unresolved.style.background = getUndeterminedColorString();
+}
+
 // Update color boxes in Legend overlays
 function updateLegendColors() {
   const swatch = (id, color) => {
@@ -1897,10 +1977,10 @@ function updateLegendColors() {
     if (element) element.style.background = color;
     return element;
   };
-  const interior = state.showEscapeStrata ? getExteriorColorString() : rgbToCss(getColorForLevel(0, 0));
+  const interior = state.showEscapeStrata ? getExteriorColorString() : rgbToCss(captureColor(0));
   swatch('legend-locus-color', interior);
   swatch('legend-diff-color', interior);
-  swatch('legend-offlens-color', state.showEscapeStrata ? getExteriorColorString() : rgbToCss(getOffLensInteriorColorForLevel(0, 0)));
+  swatch('legend-offlens-color', state.showEscapeStrata ? getExteriorColorString() : rgbToCss(captureColor(0, true)));
   swatch('legend-undetermined-color', getUndeterminedColorString());
   const exterior = swatch('legend-exterior-color', state.showEscapeStrata
     ? `linear-gradient(90deg, ${getEscapeColorString(0)}, ${getEscapeColorString(10)})` : getExteriorColorString());
@@ -1910,7 +1990,11 @@ function updateLegendColors() {
   for (const [selector, visible] of [
     ['#legend-diff-color', state.showDifference],
     ['#legend-coll-color', state.showCollinear],
-    ['.legend-trap', state.showTrap],
+    ['.legend-trap', state.showTrap && (() => {
+      const c = getEffectiveC(state.cx, state.cy);
+      const rho = Math.hypot(c.x, c.y);
+      return rho > 1 && c.y !== 0 && rho * rho + 2 * Math.abs(c.x) < 2 * state.n - 1;
+    })()],
     ['.legend-enclosure', state.showEnclosure]
   ]) {
     const element = document.querySelector(selector);
@@ -1921,7 +2005,7 @@ function updateLegendColors() {
   if (locus) {
     const layerColors = parameterLayerKeys(state).map(layer => parameterLayerColor(layer, state.n));
     locus.style.background = layerColors.length > 1 ? `linear-gradient(90deg, ${layerColors.join(', ')})` : layerColors[0] ?? getExteriorColorString();
-    locus.nextElementSibling.textContent = `${parameterSelectionLabel()} · capture / finite escape coverage`;
+    locus.nextElementSibling.textContent = parameterSelectionLabel();
   }
   // Parameter cells use only strict canonical capture. The archived off-lens
   // point-search palette is not a classification in the displayed cell layers.
@@ -1929,8 +2013,33 @@ function updateLegendColors() {
   const lens = document.querySelector('.legend-lens');
   if (lens?.nextElementSibling) lens.nextElementSibling.textContent = subsetOnly ? 'Original-attractor self-covering lens' : 'Parameter lens';
   const survivalLegend = document.getElementById('legend-subset-survival');
-  survivalLegend.lastElementChild.textContent = 'Pixel coverage from finite escape levels; overlaps blend';
-  survivalLegend.hidden = state.parameterLayers.length + state.parameterDigits.length === 0;
+  survivalLegend.hidden = true; // The common capture legend includes finite coverage.
+  const rgbArray = color => {
+    const { r, g, b } = hexToRgb(color);
+    return [r, g, b];
+  };
+  const parameterBases = parameterLayerKeys(state).map(layer => rgbArray(parameterLayerColor(layer, state.n)));
+  updateCaptureLegend('parameter-capture-legend', parameterBases, parameterBases.length > 0);
+  const dynamicalBases = [
+    ...(state.showCollinear && state.rendererMode === 'boundary'
+      ? state.firstLevelPieces ? PIECE_COLORS.slice(0, Math.min(state.n, 12)).map(rgbArray) : [rgbArray(activePalette().branch)] : []),
+    ...(state.showDifference ? [captureBaseColor()] : [])
+  ];
+  updateCaptureLegend('dynamical-capture-legend', dynamicalBases, dynamicalBases.length > 0);
+  const parameterNote = document.getElementById('parameter-capture-note');
+  parameterNote.hidden = !parameterBases.length || state.showEscapeStrata;
+  parameterNote.textContent = state.captureStyle === 'depth'
+    ? `Minimum capture at pixel centers, with requested depth limit ${state.kMax}; boundary coverage uses whole pixels. A fixed first digit counts as one step. The selected-point record is separate.`
+    : 'Captured points and finite escape coverage share each set’s color. Choose Finite-capture layers in Controls to reveal their distinction and minimum levels.';
+  const dynamicalNote = document.getElementById('dynamical-capture-note');
+  dynamicalNote.hidden = !dynamicalBases.length || state.showEscapeStrata;
+  const dynamicalSampling = [
+    ...(state.showCollinear && state.rendererMode === 'boundary' ? ['E(c,n) boundary coverage uses whole pixels.'] : []),
+    ...(state.showDifference ? ['The half-difference uses point samples.'] : [])
+  ].join(' ');
+  dynamicalNote.textContent = state.captureStyle === 'depth'
+    ? `Minimum capture at pixel centers, with requested depth limit ${state.kMax}. ${dynamicalSampling} Whole-attractor capture starts at depth 0, independently of piece hues and contours.`
+    : 'Set colors preserve piece hues and contours. Choose Finite-capture layers in Controls to reveal minimum capture levels.';
   const boundaryNote = document.getElementById('boundary-renderer-note');
   if (boundaryNote) boundaryNote.hidden = state.rendererMode !== 'boundary' || !state.showCollinear;
   if (state.rendererMode === 'boundary' && state.showCollinear) updateBoundaryMetadata();
@@ -2167,6 +2276,10 @@ elRenderBackend?.addEventListener('change', event => {
 });
 
 // Modulo & Palette inputs
+elCaptureStyle?.addEventListener('change', event => {
+  withHistory(() => { state.captureStyle = event.target.value; }, 'both');
+});
+
 elModulo.addEventListener('input', (e) => {
   withHistory(() => {
     state.modulo = Math.max(1, parseInt(e.target.value) || 3);

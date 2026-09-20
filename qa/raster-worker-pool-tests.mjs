@@ -423,7 +423,11 @@ test('independent layer and halo-mask buffers reach the compositor without copyi
     await turn();
     const worker = h.workers.find(value => value.pending);
     const response = worker.response();
-    if (kind === 'parameter') response.layerData = new Uint8Array(24).fill(3);
+    response.captureDepths = new Uint8Array(8).fill(255);
+    if (kind === 'parameter') {
+      response.layerData = new Uint8Array(24).fill(3);
+      response.layerCaptureDepths = new Uint8Array(12).fill(1);
+    }
     else {
       response.pieceMasks = new Uint32Array(16).fill(3);
       response.pieceUncertainMasks = new Uint32Array(16);
@@ -433,7 +437,7 @@ test('independent layer and halo-mask buffers reach the compositor without copyi
     await turn();
     assert.equal(observed.errors.length, 0);
     assert.equal(observed.completed.length, 1);
-    for (const key of ['layerData', 'pieceMasks', 'pieceUncertainMasks']) {
+    for (const key of ['captureDepths', 'layerData', 'layerCaptureDepths', 'pieceMasks', 'pieceUncertainMasks']) {
       assert.equal(observed.tiles[0][key], response[key]);
     }
   }
@@ -442,7 +446,9 @@ test('independent layer and halo-mask buffers reach the compositor without copyi
 test('a truncated layer or halo mask triggers fallback before it can erase geometry', async t => {
   for (const attachment of [
     { layerData: new Uint8Array(7) }, { pieceMasks: new Uint32Array(15) },
-    { pieceUncertainMasks: new Uint8Array(16) }
+    { pieceUncertainMasks: new Uint8Array(16) }, { captureDepths: new Uint8Array(7) },
+    { captureDepths: new Uint32Array(8) }, { layerCaptureDepths: new Uint8Array(3) },
+    { layerCaptureDepths: new Uint32Array(4) }
   ]) {
     const h = harness({ maxWorkers: 1 });
     t.after(() => h.pool.dispose());
