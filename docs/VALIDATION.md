@@ -55,6 +55,10 @@ The regression suite targets meaningful failure modes:
 - all four verdicts and explicit termination reasons;
 - depth-zero searches and conservative frontier-cap handling;
 - reference/fast-kernel consistency and executable package comparisons;
+- separate geometric coverage and pixel-center minimum-capture fields,
+  including finite-survivor siblings preceding shorter capture witnesses;
+- strict canonical-only capture in current browser searches, with historical
+  off-lens replay explicitly distinguished;
 - deterministic sampling and bounded renderer workloads;
 - share-state parsing, backend preference, canonical `mn0`/`mn1` modes, `rn` compatibility, and legacy-link precedence;
 - tiled raster agreement at full-frame pixel centers and correct full/half attractor scales;
@@ -188,8 +192,10 @@ Automation complements a visual review of the final Pages artifact:
 3. Move the parameter locator and confirm the displayed parameter, search
    result, and exported JSON agree. Check a reciprocal input and a real input.
 4. Reload a shared URL, exercise undo/redo, and confirm layers and limits return.
-5. Export an image and search JSON. Reproduce a simple interior, exterior, and
-   off-lens case in a reference package.
+5. Export an image and search JSON. Reproduce a simple interior and exterior
+   case in a reference package with the same capture policy. A historical
+   off-lens record must be identified as historical replay; it is not a
+   current accepted capture.
 6. Change rendering backends on the same saved view. Inspect the active backend,
    preview limits, refinement completion, and exported rendering metadata.
    Check a precision-guarded deep zoom and CPU fallback with WebGL disabled.
@@ -203,8 +209,61 @@ Automation complements a visual review of the final Pages artifact:
 9. Disable all parameter layers, restore a subset through history, and change
    $n$ while some digits are selected. Check that Compare and the digit-group
    controls affect exactly the groups described by their labels.
+10. In **Colors & finite capture**, compare **Finite-capture layers** with
+    **Set colors** and vary the depth cycle. Capture bands should preserve
+    set/piece hue and every black piece contour. Check both dynamical scenes,
+    all three parameter aggregates, and a fixed-digit subset. Confirm the
+    legend distinguishes a known minimum, a witness without an established
+    minimum, and finite escape coverage.
+11. At $E(2i,5)$, inspect depth-zero capture in the central trap and later
+    capture in its edge strips. Toggle first-level pieces: the whole-set
+    capture field must not shift by one. In $\mathcal M_n^0$, confirm the
+    strict original-lens region remains depth zero.
 
 Record the revision, runtime/browser versions, commands and exit statuses,
 material observations, and remaining limitations. Keep generated screenshots,
 traces, and local runtime output outside the source history unless selected as
 curated review evidence.
+
+## Minimum-capture correction — 19 September 2026
+
+The prior cell-coverage implementation stopped at the first depth-first
+survivor or capture witness. Such a witness need not have minimum depth, and
+an earlier finite-survivor branch can hide a capture in another branch.
+First-piece geometry also cannot supply the whole-attractor depth-zero
+field. The minimum-capture correction therefore has its own regression
+scope; the earlier 62 browser / 34 GPU checks do not validate this revision.
+
+Final-commit checks must establish:
+
+- capture-only search completes every shallower depth before assigning a
+  minimum, and one work budget covers all iterative-deepening passes;
+- `captureDepths` and `layerCaptureDepths` are separate from coverage bytes,
+  preserve the 255 unknown sentinel, survive real worker transfer, and are
+  rejected when malformed;
+- a known witness is preserved when minimum search exhausts its budget,
+  without assigning that witness's depth as a minimum;
+- every aggregate and first-digit subset has a sampled capture field using
+  its correct first/tail alphabets, while finite cell coverage remains intact;
+- the $E(2i,5)$ points $0$, $5.1$, and $2.55i$ have numerical minima 0, 1,
+  and 2 respectively; the latter two are independently checked with words
+  $[4]$ and $[0,-4]$ and exclusion of shallower capture;
+- unrestricted $E(c,n)$ depth zero does not depend on piece-color visibility,
+  and $\mathcal M_n^0$ does not invent positive strata inside its strict lens;
+- the old false-positive off-lens fixture at $m=3$, $c=3+3i$,
+  $z=1/4+i/20$ is rejected by current canonical-only rendering, including
+  its half-difference display coordinate;
+- production CPU/GPU palettes agree on minimum levels, unknown-witness
+  solid color, finite-survivor pale color, cycle $q=1$, and overlapping
+  pieces with black contours;
+- `capture` and `q` roundtrip through URLs/history and exports disclose
+  sampled-center capture independently of cell/footprint geometry;
+- multi-layer GPU preview budgets include the added capture searches and
+  still complete within their recorded work and resolution limits;
+- committed capture diagrams regenerate byte for byte from production
+  modules, with coordinate, digit-tail, and capture-depth fixture checks.
+
+These checks establish the behavior of the implemented floating-point
+searches and UI. They do not prove interval correctness or physical GPU
+performance. Record actual commands and counts for the final commit rather
+than carrying earlier results forward.

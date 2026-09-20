@@ -100,7 +100,22 @@ export function membershipDepthForView(m, spanX, {
  * inverse maps. Exterior depth is the greatest exhaustion level encountered.
  */
 export function classifyAttractorPoint(context, zx, zy, depth, options = {}) {
-  return classifyMembership(context, zx, zy, depth, options, 0);
+  return classifyWithOptionalMinimum(context, zx, zy, depth, options, 0);
+}
+
+/**
+ * Minimum finite-capture level at one point, independently of raster coverage.
+ *
+ * Each depth-limited pass visits all admitted siblings before increasing the
+ * limit. A first hit therefore has minimum depth for this numerical trap test;
+ * an ordinary first-success DFS does not have that property. One candidate-map
+ * budget covers all passes, and the reusable workspace remains O(depth).
+ * A compulsory first digit counts as the first inverse step. The unrestricted
+ * original search may capture at depth zero, independently of piece coloring.
+ */
+export function classifyAttractorCapture(context, zx, zy, depth, options = {}) {
+  return classifyMembership(context, zx, zy, depth,
+    { ...options, firstLevelPieces: false, pixelRadius: 0 }, 0, true);
 }
 
 /**
@@ -121,16 +136,35 @@ export function classifyAttractorParameterCell(context, depth, {
   assertFiniteNumber(parameterRadius, 'parameterRadius');
   if (parameterRadius < 0) throw new RangeError('parameterRadius must be nonnegative');
   assertPositiveNumber(markedPointScale, 'markedPointScale');
-  return classifyMembership(context, markedPointScale * context?.x,
+  return classifyWithOptionalMinimum(context, markedPointScale * context?.x,
     markedPointScale * context?.y, depth,
     { firstLevelPieces: false, ...options, pixelRadius: 0, markedPointScale }, parameterRadius);
+}
+
+function classifyWithOptionalMinimum(context, zx, zy, depth, options, parameterRadius) {
+  const minimumCapture = options.minimumCapture ?? false;
+  if (typeof minimumCapture !== 'boolean') throw new TypeError('minimumCapture must be boolean');
+  const coverage = classifyMembership(context, zx, zy, depth, options, parameterRadius);
+  if (!minimumCapture || coverage.minimumCaptureDepth !== null || coverage.verdict === 'Exterior') {
+    return coverage;
+  }
+  const remaining = (options.maxWork ?? ATTRACTOR_MEMBERSHIP_LIMITS.defaultWork) - coverage.work;
+  if (remaining <= 0) return { ...coverage, captureSearchStopReason: 'work-cap' };
+  const capture = classifyMembership(context, zx, zy, depth,
+    { ...options, maxWork: remaining }, parameterRadius, true);
+  const combinedWork = coverage.work + capture.work;
+  const combinedNodes = coverage.nodesExplored + capture.nodesExplored;
+  return capture.minimumCaptureDepth !== null
+    ? { ...capture, work: combinedWork, nodesExplored: combinedNodes }
+    : { ...coverage, work: combinedWork, nodesExplored: combinedNodes,
+      captureSearchStopReason: capture.captureSearchStopReason };
 }
 
 function classifyMembership(context, zx, zy, depth, {
   firstStep = 'original', maxWork = ATTRACTOR_MEMBERSHIP_LIMITS.defaultWork,
   firstLevelPieces = true, pixelRadius = 0, firstDigit: requestedFirstDigit = null,
   markedPointScale = 1
-} = {}, parameterRadius = 0) {
+} = {}, parameterRadius = 0, captureOnly = false) {
   if (!context || typeof context !== 'object') throw new TypeError('context is required');
   assertInteger(depth, 'depth');
   assertInteger(maxWork, 'maxWork', 1, ATTRACTOR_MEMBERSHIP_LIMITS.maxWork);
@@ -149,6 +183,13 @@ function classifyMembership(context, zx, zy, depth, {
   const sampleType = isParameterCell ? 'parameter-cell' : pixelRadius > 0 ? 'pixel-footprint' : 'point';
   const result = (verdict, stopReason, status, resultDepth, retainDigit = false) => ({
     verdict, depth: resultDepth, stopReason, status, nodesExplored, work,
+    minimumCaptureDepth: stopReason === 'trap-hit' && (captureOnly || resultDepth <= 1)
+      ? resultDepth : null,
+    captureDepthSemantics: stopReason === 'trap-hit'
+      ? (captureOnly || resultDepth <= 1 ? 'minimum-verified' : 'witness-upper-bound') : 'not-captured',
+    captureSearchStopReason: stopReason === 'trap-hit' && (captureOnly || resultDepth <= 1)
+      ? 'minimum-found' : captureOnly
+        ? (stopReason === 'depth-cap' ? 'no-capture-through-depth' : stopReason) : 'disabled',
     firstDigit: retainDigit ? firstDigit : null,
     firstLevelIndex: retainDigit && firstDigit !== null
       ? Math.floor((firstDigit + context.m - 1) / 2) : null,
@@ -184,6 +225,11 @@ function classifyMembership(context, zx, zy, depth, {
   const minimumY = Math.max(0, Math.abs(y) - parameterRadius);
   const cellTrap = isParameterCell && useTrap && minimumY > 0
     && parameterRhoUpper ** 2 + 2 * (Math.abs(x) + parameterRadius) < m;
+  // Point-center capture shading deliberately has no pixel radius. A separate
+  // coverage search retains the whole raster footprint and its own verdict.
+  if (captureOnly && !(isParameterCell ? cellTrap : useTrap)) {
+    return result('Undetermined', 'trap-unavailable', 'no-capture', 0);
+  }
   const cellS = m * (minimumY / rho) * (1 - 64 * EPS);
   const cellV = (m - 2 * (Math.abs(x) + parameterRadius))
     * (minimumY / parameterRhoUpper) / parameterRhoUpper * (1 - 64 * EPS);
@@ -258,65 +304,75 @@ function classifyMembership(context, zx, zy, depth, {
   if (root < 0) return result('Exterior', 'enclosure-escape', 'escaped', 0);
   if (root > 0) return result('Interior', 'trap-hit', 'captured', 0, true);
   if (depth === 0) return result('Undetermined', 'depth-cap', 'finite-survivor', 0, true);
-  if (!prepareDigits(0)) return result('Undetermined', 'numerical-range', 'numerical-range', 0);
-
-  let level = 0;
-  while (level >= 0) {
-    if (nextDigits[level] > lastDigits[level]) {
-      maxReached = Math.max(maxReached, level + 1);
-      level--;
-      continue;
+  for (let searchDepth = captureOnly ? 1 : depth; searchDepth <= depth; searchDepth++) {
+    if (!prepareDigits(0)) return result('Undetermined', 'numerical-range', 'numerical-range', 0);
+    let survived = false;
+    maxReached = 0;
+    let level = 0;
+    while (level >= 0) {
+      if (nextDigits[level] > lastDigits[level]) {
+        maxReached = Math.max(maxReached, level + 1);
+        level--;
+        continue;
+      }
+      if (work >= maxWork) return result('Undetermined', 'work-cap', 'capped', maxReached);
+      const t = nextDigits[level];
+      nextDigits[level] += 2;
+      work++;
+      const u = xs[level], v = ys[level];
+      const shifted = u - t;
+      const childX = x * shifted - y * v;
+      const childY = y * shifted + x * v;
+      const error = errors[level] * rhoUpper
+        + operationFactor * (Math.abs(u) + Math.abs(v) + Math.abs(t)) + TINY;
+      let radius = radii[level] * rhoUpper;
+      let derivativeX = 0, derivativeY = 0, remainder = 0;
+      if (isParameterCell) {
+        const dx = derivativeXs[level], dy = derivativeYs[level];
+        derivativeX = shifted + x * dx - y * dy;
+        derivativeY = v + y * dx + x * dy;
+        const derivativeError = 32 * EPS * (Math.abs(shifted) + Math.abs(v)
+          + (Math.abs(x) + Math.abs(y)) * (Math.abs(dx) + Math.abs(dy))) + TINY;
+        remainder = (parameterRhoUpper * remainders[level]
+          + Math.hypot(dx, dy) * parameterRadius ** 2
+          + (derivativeError + errors[level]) * parameterRadius) * (1 + 64 * EPS) + TINY;
+        radius = (Math.hypot(derivativeX, derivativeY) * parameterRadius + remainder)
+          * (1 + 64 * EPS) + TINY;
+      }
+      const childLevel = level + 1;
+      maxReached = Math.max(maxReached, childLevel);
+      if (!Number.isFinite(childX) || !Number.isFinite(childY)
+        || !Number.isFinite(error) || !Number.isFinite(radius)) {
+        return result('Undetermined', 'numerical-range', 'numerical-range', childLevel);
+      }
+      const decision = inspect(childX, childY, error, radius, true);
+      if (decision < 0) continue;
+      nodesExplored++;
+      if (level === 0) firstDigit = t;
+      if (decision > 0) return result('Interior', 'trap-hit', 'captured', childLevel, true);
+      if (error > 0.25 * (precisionScale + radius)) {
+        return result('Undetermined', 'precision-limit', 'numerical-range', childLevel);
+      }
+      if (childLevel >= searchDepth) {
+        if (!captureOnly) return result('Undetermined', 'depth-cap', 'finite-survivor', childLevel, true);
+        // A surviving branch does not rule out a capture in a later sibling.
+        survived = true;
+        continue;
+      }
+      if (childLevel >= ATTRACTOR_MEMBERSHIP_LIMITS.maxDepth) {
+        return result('Undetermined', 'stack-cap', 'capped', childLevel);
+      }
+      xs[childLevel] = childX; ys[childLevel] = childY;
+      errors[childLevel] = error; radii[childLevel] = radius;
+      derivativeXs[childLevel] = derivativeX; derivativeYs[childLevel] = derivativeY;
+      remainders[childLevel] = remainder;
+      if (!prepareDigits(childLevel)) {
+        return result('Undetermined', 'numerical-range', 'numerical-range', childLevel);
+      }
+      level = childLevel;
     }
-    if (work >= maxWork) return result('Undetermined', 'work-cap', 'capped', maxReached);
-    const t = nextDigits[level];
-    nextDigits[level] += 2;
-    work++;
-    const u = xs[level], v = ys[level];
-    const shifted = u - t;
-    const childX = x * shifted - y * v;
-    const childY = y * shifted + x * v;
-    const error = errors[level] * rhoUpper
-      + operationFactor * (Math.abs(u) + Math.abs(v) + Math.abs(t)) + TINY;
-    let radius = radii[level] * rhoUpper;
-    let derivativeX = 0, derivativeY = 0, remainder = 0;
-    if (isParameterCell) {
-      const dx = derivativeXs[level], dy = derivativeYs[level];
-      derivativeX = shifted + x * dx - y * dy;
-      derivativeY = v + y * dx + x * dy;
-      const derivativeError = 32 * EPS * (Math.abs(shifted) + Math.abs(v)
-        + (Math.abs(x) + Math.abs(y)) * (Math.abs(dx) + Math.abs(dy))) + TINY;
-      remainder = (parameterRhoUpper * remainders[level]
-        + Math.hypot(dx, dy) * parameterRadius ** 2
-        + (derivativeError + errors[level]) * parameterRadius) * (1 + 64 * EPS) + TINY;
-      radius = (Math.hypot(derivativeX, derivativeY) * parameterRadius + remainder)
-        * (1 + 64 * EPS) + TINY;
-    }
-    const childLevel = level + 1;
-    maxReached = Math.max(maxReached, childLevel);
-    if (!Number.isFinite(childX) || !Number.isFinite(childY)
-      || !Number.isFinite(error) || !Number.isFinite(radius)) {
-      return result('Undetermined', 'numerical-range', 'numerical-range', childLevel);
-    }
-    const decision = inspect(childX, childY, error, radius, true);
-    if (decision < 0) continue;
-    nodesExplored++;
-    if (level === 0) firstDigit = t;
-    if (decision > 0) return result('Interior', 'trap-hit', 'captured', childLevel, true);
-    if (error > 0.25 * (precisionScale + radius)) {
-      return result('Undetermined', 'precision-limit', 'numerical-range', childLevel);
-    }
-    if (childLevel >= depth) return result('Undetermined', 'depth-cap', 'finite-survivor', childLevel, true);
-    if (childLevel >= ATTRACTOR_MEMBERSHIP_LIMITS.maxDepth) {
-      return result('Undetermined', 'stack-cap', 'capped', childLevel);
-    }
-    xs[childLevel] = childX; ys[childLevel] = childY;
-    errors[childLevel] = error; radii[childLevel] = radius;
-    derivativeXs[childLevel] = derivativeX; derivativeYs[childLevel] = derivativeY;
-    remainders[childLevel] = remainder;
-    if (!prepareDigits(childLevel)) {
-      return result('Undetermined', 'numerical-range', 'numerical-range', childLevel);
-    }
-    level = childLevel;
+    if (!survived) return result('Exterior', 'tree-exhausted', 'escaped', maxReached);
+    if (searchDepth === depth) return result('Undetermined', 'depth-cap', 'finite-survivor', depth);
   }
-  return result('Exterior', 'tree-exhausted', 'escaped', maxReached);
+  return result('Undetermined', 'depth-cap', 'finite-survivor', depth);
 }

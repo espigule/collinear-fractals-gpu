@@ -4,7 +4,10 @@ import {
 import {
   GPU_SEARCH_CODES, GPU_SEARCH_FRAGMENT_SOURCE, GPU_SEARCH_LIMITS
 } from '../compute/gpu_search_shader.mjs';
-import { PIECE_COLORS, PIECE_OUTLINE_COLOR, hexToRgb, parameterLayerKeys, parameterLayerColor } from './palettes.mjs';
+import {
+  PIECE_COLORS, PIECE_OUTLINE_COLOR, CAPTURE_SHADING, UNKNOWN_CAPTURE_DEPTH,
+  hexToRgb, parameterLayerKeys, parameterLayerColor
+} from './palettes.mjs';
 
 export const GPU_PREVIEW_LIMITS = Object.freeze({
   pixels: 120000,
@@ -46,6 +49,10 @@ uniform int u_n;
 uniform int u_rasterHalo;
 uniform int u_layerCount;
 uniform bool u_showEscapeStrata;
+uniform bool u_captureDepthStyle;
+uniform int u_modulo;
+uniform vec3 u_captureInterior;
+uniform vec3 u_captureOffLens;
 uniform vec3 u_outline;
 uniform int u_kind;
 uniform bool u_showDifference;
@@ -60,6 +67,20 @@ out vec4 outColor;
 
 vec3 palette(int code, int depth) {
   return texelFetch(u_palette, ivec2(clamp(depth, 0, 100), clamp(code, 0, 8)), 0).rgb;
+}
+
+bool knownCapture(int minimumDepth) { return minimumDepth >= 0 && minimumDepth <= 100; }
+
+vec3 captureShade(vec3 base, int code, int minimumDepth) {
+  if (!u_captureDepthStyle) return base;
+  if (knownCapture(minimumDepth)) {
+    int q = clamp(u_modulo, 1, 12);
+    float scale = q == 1 ? ${CAPTURE_SHADING.singleBandScale}
+      : ${CAPTURE_SHADING.minimumScale} + ${CAPTURE_SHADING.scaleRange} * float(minimumDepth % q) / float(q - 1);
+    return base * scale;
+  }
+  if (code == 3) return mix(base, vec3(1.0), ${CAPTURE_SHADING.survivorWhite});
+  return base;
 }
 
 uint maskAt(sampler2D source, ivec2 coordinate) {
@@ -79,6 +100,7 @@ int diagnosticPriority(int code) {
 void main() {
   ivec2 coordinate = ivec2(gl_FragCoord.xy) + ivec2(u_rasterHalo);
   ivec4 result = ivec4(round(texelFetch(u_classification, coordinate, 0) * 255.0));
+  ivec4 pieceRecord = ivec4(round(texelFetch(u_pieces, coordinate, 0) * 255.0));
   vec3 color = palette(result.r, result.g);
   if (u_kind != 3 && u_layerCount >= 0) {
     vec3 sum = vec3(0.0);
@@ -88,9 +110,9 @@ void main() {
     int escapeDepth = 0;
     for (int index = 0; index < ${MAX_PARAMETER_LAYERS}; ++index) {
       if (index >= u_layerCount) break;
-      ivec2 layer = ivec2(round(texelFetch(u_layers, ivec3(coordinate, index), 0).rg * 255.0));
-      if (layer.x == 1 || layer.x == 2 || layer.x == 3) {
-        sum += texelFetch(u_layerColors, ivec2(index, 0), 0).rgb;
+      ivec3 layer = ivec3(round(texelFetch(u_layers, ivec3(coordinate, index), 0).rgb * 255.0));
+      if (knownCapture(layer.z) || layer.x == 1 || layer.x == 2 || layer.x == 3) {
+        sum += captureShade(texelFetch(u_layerColors, ivec2(index, 0), 0).rgb, layer.x, layer.z);
         ++covered;
       } else if (diagnosticPriority(layer.x) > diagnosticPriority(diagnostic)) {
         diagnostic = layer.x;
@@ -114,13 +136,19 @@ void main() {
     }
   } else if (u_kind == 3) {
     color = u_showDifference ? color : u_exterior;
+    if (u_showDifference && (knownCapture(pieceRecord.b) || result.r == 1 || result.r == 2 || result.r == 3)) {
+      color = u_showEscapeStrata ? u_exterior : captureShade(
+        result.r == 2 ? u_captureOffLens : u_captureInterior, result.r, pieceRecord.b);
+    }
     if (u_showOriginal) {
       if (u_originalBoundary) {
-        if (result.b == ${GPU_SEARCH_CODES.INTERIOR} || result.b == ${GPU_SEARCH_CODES.DEPTH_CAP}) {
-          int encodedPiece = int(round(texelFetch(u_pieces, coordinate, 0).g * 255.0));
+        uint occupied = u_firstLevelPieces ? maskAt(u_occupied, coordinate) : 0u;
+        if (occupied != 0u || knownCapture(pieceRecord.a) || result.b == ${GPU_SEARCH_CODES.INTERIOR} ||
+            result.b == ${GPU_SEARCH_CODES.OFF_LENS} || result.b == ${GPU_SEARCH_CODES.DEPTH_CAP}) {
+          int encodedPiece = pieceRecord.g;
           vec3 fill = u_branch;
+          bool outline = false;
           if (u_firstLevelPieces) {
-            uint occupied = maskAt(u_occupied, coordinate);
             vec3 sum = vec3(0.0);
             int count = 0;
             for (int index = 0; index < 32; ++index) {
@@ -133,15 +161,15 @@ void main() {
             if (count > 0) fill = sum / float(count);
             else if (encodedPiece > 0) fill = texelFetch(u_piecePalette,
               ivec2((encodedPiece - 1) % u_pieceCount, 0), 0).rgb;
-            bool outline = false;
             ivec2 offsets[4] = ivec2[4](ivec2(-1,0), ivec2(1,0), ivec2(0,-1), ivec2(0,1));
             for (int neighbor = 0; neighbor < 4; ++neighbor) {
               ivec2 adjacent = coordinate + offsets[neighbor];
               uint absent = ~(maskAt(u_occupied, adjacent) | maskAt(u_uncertain, adjacent));
               outline = outline || (occupied & absent) != 0u;
             }
-            if (outline) fill = u_outline;
           }
+          int coveredCode = result.b == 1 || result.b == 2 ? result.b : 3;
+          fill = outline ? u_outline : captureShade(fill, coveredCode, pieceRecord.a);
           color = mix(color, fill, u_originalOpacity);
         } else if (result.b != ${GPU_SEARCH_CODES.EXTERIOR} && result.b != ${GPU_SEARCH_CODES.DOMAIN}) {
           color = palette(result.b, result.a);
@@ -151,7 +179,7 @@ void main() {
       } else if (result.b == ${GPU_SEARCH_CODES.INTERIOR} || result.b == ${GPU_SEARCH_CODES.OFF_LENS} ||
                  result.b == ${GPU_SEARCH_CODES.DEPTH_CAP} || result.b == ${GPU_SEARCH_CODES.NODE_CAP} ||
                  result.b == ${GPU_SEARCH_CODES.WORK_CAP}) {
-        color = mix(color, u_branch, u_survivalOpacity);
+        color = mix(color, captureShade(u_branch, result.b, pieceRecord.a), u_survivalOpacity);
       }
     }
   }
@@ -164,14 +192,14 @@ const SEARCH_UNIFORMS = [
   'u_kind', 'u_center', 'u_span', 'u_resolution', 'u_c', 'u_n', 'u_kMax', 'u_lMax',
   'u_showDifference', 'u_showOriginal', 'u_fixedEnclosure', 'u_fixedTrap', 'u_fixedLens',
   'u_fixedOriginalTrap', 'u_fixedOriginalLens', 'u_originalBoundary', 'u_firstLevelPieces',
-  'u_escapeDepth', 'u_boundaryWork', 'u_pixelRadius', 'u_parameterRadius', 'u_firstDigit', 'u_rasterHalo'
+  'u_escapeDepth', 'u_captureDepth', 'u_boundaryWork', 'u_pixelRadius', 'u_parameterRadius', 'u_firstDigit', 'u_rasterHalo', 'u_layerOutput'
 ];
 const PALETTE_UNIFORMS = [
   'u_classification', 'u_palette', 'u_kind', 'u_showDifference', 'u_showOriginal',
   'u_exterior', 'u_branch', 'u_survivalOpacity', 'u_originalOpacity', 'u_originalBoundary',
   'u_firstLevelPieces', 'u_pieces', 'u_piecePalette', 'u_pieceCount',
   'u_occupied', 'u_uncertain', 'u_layers', 'u_layerColors', 'u_layerCount', 'u_n',
-  'u_rasterHalo', 'u_showEscapeStrata', 'u_outline'
+  'u_rasterHalo', 'u_showEscapeStrata', 'u_outline', 'u_captureDepthStyle', 'u_modulo', 'u_captureInterior', 'u_captureOffLens'
 ];
 
 function finite(value) {
@@ -431,8 +459,8 @@ export function createWebGLPreview({ onUnavailable } = {}) {
     const parameterKinds = { mn: 0, mn0: 1, rn: 1, compare: 2, mn1: 4 };
     const kind = job.kind === 'dynamical' ? 3 : parameterKinds[job.parameterMode ?? 'mn'];
     if (kind === undefined) throw new Error('The parameter preview mode is unsupported.');
-    const hasParameterLayers = kind !== 3 && (Array.isArray(job.parameterLayers) || Array.isArray(job.parameterDigits));
-    const parameterLayerIds = hasParameterLayers ? parameterLayerKeys(job) : null;
+    // Legacy single-mode jobs use the same layer/color path as explicit arrays.
+    const parameterLayerIds = kind !== 3 ? parameterLayerKeys(job) : null;
     if (parameterLayerIds && (parameterLayerIds.length > MAX_PARAMETER_LAYERS || parameterLayerIds.some(id =>
       !['mn', 'mn0', 'mn1'].includes(id) &&
       !(id.startsWith('digit:') && Number.isSafeInteger(Number(id.slice(6))) && Math.abs(Number(id.slice(6))) < n)))) {
@@ -442,13 +470,23 @@ export function createWebGLPreview({ onUnavailable } = {}) {
       throw new Error('The parameter-cell radius must be finite and nonnegative.');
     }
     const escapeDepth = job.escapeDepth ?? (n === 2 ? 16 : 12);
+    const captureDepth = Math.min(kMax, 100);
+    if (job.captureDepth !== undefined && job.captureDepth !== captureDepth) {
+      throw new Error('Capture depth is derived from kMax; an explicit value must equal min(kMax, 100).');
+    }
     const boundaryWork = job.boundaryWork ?? 20000;
     if (!Number.isSafeInteger(escapeDepth) || escapeDepth < 0 || escapeDepth > 100 ||
+        !Number.isSafeInteger(captureDepth) || captureDepth < 0 || captureDepth > 100 ||
         !Number.isSafeInteger(boundaryWork) || boundaryWork < 1 || boundaryWork > MAX_GL_INT) {
       throw new Error('The original-attractor search requires finite bounded depth and work limits.');
     }
     const originalRenderer = job.originalRenderer ?? 'boundary';
     if (!['boundary', 'survival'].includes(originalRenderer)) throw new Error('Unknown original-attractor renderer.');
+    const captureStyle = job.captureStyle ?? 'depth';
+    const modulo = job.modulo ?? 3;
+    if (!['depth', 'sets'].includes(captureStyle) || !Number.isInteger(modulo) || modulo < 1 || modulo > 12) {
+      throw new Error('Capture shading requires depth or sets mode and a modulus between one and twelve.');
+    }
     const spanY = (spanX / width) * height;
     const coordinateScale = Math.max(1, Math.hypot(center.x, center.y), spanX, spanY);
     const unitsPerPixel = spanX / width;
@@ -487,7 +525,7 @@ export function createWebGLPreview({ onUnavailable } = {}) {
         const difference = computeEnclosureGeneral(c.x, c.y, 2 * n - 1, tol);
         const original = computeEnclosureGeneral(c.x, c.y, n, tol);
         const lens = inLens(c.x, c.y, n);
-        const trap = getTrapHalfWidths(c.x, c.y, 2 * n - 1, lens);
+        const trap = lens ? getTrapHalfWidths(c.x, c.y, 2 * n - 1, true) : { S: 0, V: 0 };
         const originalLens = rho * rho + 2 * Math.abs(c.x) < n;
         const originalTrap = originalLens ? getTrapHalfWidths(c.x, c.y, n, true) : { S: 0, V: 0 };
         if (difference.err || original.err ||
@@ -502,16 +540,19 @@ export function createWebGLPreview({ onUnavailable } = {}) {
     const originalBoundary = originalRenderer === 'boundary';
     const firstLevelPieces = kind === 3 && job.firstLevelPieces !== false;
     const searchPasses = kind === 3
-      ? Math.max(1, (job.showOriginalSurvival === true ? (firstLevelPieces && originalBoundary ? n : 1) : 0) +
+      ? Math.max(1, (job.showOriginalSurvival === true ? (firstLevelPieces && originalBoundary ? n + 1 : 1) : 0) +
         (job.showDifference === true ? 1 : 0))
+      : (parameterLayerIds?.length ?? 0) + 1;
+    const captureSearchPasses = kind === 3
+      ? (job.showOriginalSurvival === true && originalBoundary ? 1 : 0)
       : (parameterLayerIds?.length ?? 0) + 1;
     const largestAlphabet = kind === 3 ? (job.showDifference === true ? 2 * n - 1 : n)
       : (kind === 0 || kind === 2 || parameterLayerIds?.includes('mn') ? 2 * n - 1 : n);
     // The same number of pixels can cost much more with a large alphabet.
-    // Keep E4 and the n4 comparison at their current resolution; reduce only
-    // the visual preview as the per-node candidate work increases.
+    // Include each separately budgeted center-capture search as well as pixel
+    // coverage. Invalid traps exit immediately but the upper bound remains safe.
     const previewWorkWeight = Math.max(1, largestAlphabet / 8);
-    const weightedSearchPasses = searchPasses * previewWorkWeight;
+    const weightedSearchPasses = (searchPasses + captureSearchPasses) * previewWorkWeight;
     const previewPixelBudget = Math.min(GPU_PREVIEW_LIMITS.pixels,
       Math.floor(GPU_PREVIEW_LIMITS.totalSearchSamples / weightedSearchPasses));
     const halo = firstLevelPieces && originalBoundary && job.showOriginalSurvival === true ? 1 : 0;
@@ -531,9 +572,10 @@ export function createWebGLPreview({ onUnavailable } = {}) {
     const halfDiagonal = 0.5 * Math.hypot(spanX / previewWidth, spanY / previewHeight);
     return {
       kind, kMax, LMax, tol, spanX, spanY, context,
-      escapeDepth, boundaryWork, originalBoundary, originalOpacity, pieceColors,
+      escapeDepth, captureDepth, boundaryWork, originalBoundary, originalOpacity, pieceColors,
       parameterLayerIds,
-      searchPasses, previewPixelBudget, previewWorkWeight, weightedSearchPasses,
+      searchPasses, captureSearchPasses, previewPixelBudget, previewWorkWeight, weightedSearchPasses,
+      captureStyle, modulo,
       parameterRadius: kind === 3 ? 0 : (job.parameterRadius ?? halfDiagonal),
       halo,
       // Parameter M_n0 may capture at the root. M_n1 independently requires its
@@ -624,11 +666,13 @@ export function createWebGLPreview({ onUnavailable } = {}) {
       gl.uniform1i(u.u_originalBoundary, p.originalBoundary ? 1 : 0);
       gl.uniform1i(u.u_firstLevelPieces, p.firstLevelPieces ? 1 : 0);
       gl.uniform1i(u.u_escapeDepth, p.escapeDepth);
+      gl.uniform1i(u.u_captureDepth, p.captureDepth);
       gl.uniform1i(u.u_boundaryWork, Math.min(p.boundaryWork, GPU_SEARCH_LIMITS.boundaryWork));
       gl.uniform1f(u.u_pixelRadius, p.pixelRadius * (1 + 16 * FLOAT32_UNIT));
       gl.uniform1f(u.u_parameterRadius, p.parameterRadius * (1 + 16 * FLOAT32_UNIT));
       gl.uniform1i(u.u_firstDigit, 0);
       gl.uniform1i(u.u_rasterHalo, p.halo);
+      gl.uniform1i(u.u_layerOutput, 0);
       const fixed = p.context;
       gl.uniform2f(u.u_c, fixed?.c.x ?? 0, fixed?.c.y ?? 0);
       gl.uniform4f(u.u_fixedEnclosure,
@@ -641,6 +685,7 @@ export function createWebGLPreview({ onUnavailable } = {}) {
       if (!p.parameterLayerIds) gl.drawArrays(gl.TRIANGLES, 0, 3);
 
       if (p.parameterLayerIds) {
+        gl.uniform1i(u.u_layerOutput, 1);
         for (let index = 0; index < p.parameterLayerIds.length; index++) {
           const id = p.parameterLayerIds[index];
           const layerKind = { mn: 0, mn0: 1, mn1: 4 }[id] ?? 5;
@@ -655,6 +700,7 @@ export function createWebGLPreview({ onUnavailable } = {}) {
         // layers. The normal display path never reads these bytes to the CPU.
         gl.uniform1i(u.u_kind, p.kind);
         gl.uniform1i(u.u_firstDigit, 0);
+        gl.uniform1i(u.u_layerOutput, 0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
 
@@ -706,6 +752,14 @@ export function createWebGLPreview({ onUnavailable } = {}) {
       gl.uniform1i(color.u_n, job.n);
       gl.uniform1i(color.u_rasterHalo, p.halo);
       gl.uniform1i(color.u_showEscapeStrata, job.showEscapeStrata === true ? 1 : 0);
+      gl.uniform1i(color.u_captureDepthStyle, p.captureStyle === 'depth' ? 1 : 0);
+      gl.uniform1i(color.u_modulo, p.modulo);
+      const captureColor = code => {
+        const value = code === 2 ? colors.captureOffLens : colors.captureInterior;
+        return rgbBytes(value) ? value : colors.table.subarray(code * PALETTE_WIDTH * 4, code * PALETTE_WIDTH * 4 + 3);
+      };
+      gl.uniform3f(color.u_captureInterior, ...Array.from(captureColor(1), value => value / 255));
+      gl.uniform3f(color.u_captureOffLens, ...Array.from(captureColor(2), value => value / 255));
       gl.uniform3f(color.u_outline, ...PIECE_OUTLINE_COLOR.map(value => value / 255));
       gl.uniform1i(color.u_kind, p.kind);
       gl.uniform1i(color.u_showDifference, p.showDifference ? 1 : 0);
@@ -733,13 +787,16 @@ export function createWebGLPreview({ onUnavailable } = {}) {
         requestedWidth: job.width, requestedHeight: job.height,
         downsampled: p.width !== job.width || p.height !== job.height,
         requested: { depth: p.kMax, frontier: p.LMax, tolerance: p.tol,
-          escape_depth: p.escapeDepth, boundary_work: p.boundaryWork },
+          escape_depth: p.escapeDepth, capture_depth: p.captureDepth,
+          boundary_work: p.boundaryWork, capture_work: p.boundaryWork },
         effective: {
           depth: Math.min(p.kMax, GPU_SEARCH_LIMITS.depth),
           frontier: Math.min(p.LMax, GPU_SEARCH_LIMITS.frontier),
           work: GPU_SEARCH_LIMITS.work,
           escape_depth: Math.min(p.escapeDepth, GPU_SEARCH_LIMITS.depth),
+          capture_depth: Math.min(p.captureDepth, GPU_SEARCH_LIMITS.depth),
           boundary_work: Math.min(p.boundaryWork, GPU_SEARCH_LIMITS.boundaryWork),
+          capture_work: Math.min(p.boundaryWork, GPU_SEARCH_LIMITS.boundaryWork),
           tail: fixed ? Math.max(fixed.difference.truncationDepth, fixed.original.truncationDepth) : GPU_SEARCH_LIMITS.tail
         },
         enclosureArithmetic: fixed ? 'binary64' : 'float32',
@@ -757,9 +814,19 @@ export function createWebGLPreview({ onUnavailable } = {}) {
         parameter_layer_ids: p.parameterLayerIds,
         parameter_cell_model: p.parameterRadius > 0 ? 'complex-taylor-disk' : null,
         boundary_work_scope: p.kind === 3 && p.firstLevelPieces ? 'per-first-level-piece' : 'per-selected-layer',
+        capture_sample_type: 'pixel-center',
+        capture_depth_convention: 'minimum center capture depth; 255 means unknown or unavailable',
+        capture_arithmetic: 'padded-binary32',
+        capture_search: 'iterative-deepening-with-independent-work-budget',
+        capture_work_scope: 'per-original-union-or-selected-layer; separate from pixel coverage',
+        difference_capture_search: 'canonical-breadth-first',
+        capture_style: p.captureStyle,
+        capture_modulo: p.modulo,
+        capture_depth_encoding: { attachment: 1, channels: ['blue-primary', 'alpha-secondary'], unknown: 255 },
         piece_boundaries: p.halo ? 'all-piece-coverage-with-uncertainty-aware-neighbors' : null,
         raster_halo: p.halo,
         search_passes: p.searchPasses,
+        capture_search_passes: p.captureSearchPasses,
         preview_pixel_budget: p.previewPixelBudget,
         preview_work_weight: p.previewWorkWeight,
         weighted_search_passes: p.weightedSearchPasses,
@@ -816,6 +883,29 @@ export function createWebGLPreview({ onUnavailable } = {}) {
       encoding: 'primary/secondary firstLevelIndex+1; zero means absent', metadata: lastMetadata };
   }
 
+  /** Pixel-center minimum capture depths; independent of coverage verdicts. */
+  function readCaptureDepths() {
+    if (!classificationReady || !supported || disposed || lost || !resources || gl.isContextLost()) return null;
+    const rgba = new Uint8Array(resources.width * resources.height * 4);
+    const previousFramebuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+    try {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, resources.framebuffer);
+      gl.readBuffer(gl.COLOR_ATTACHMENT1);
+      gl.readPixels(resources.halo, resources.halo, resources.width, resources.height, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+    } finally {
+      gl.readBuffer(gl.COLOR_ATTACHMENT0);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, previousFramebuffer);
+    }
+    const data = new Uint8Array(resources.width * resources.height * 2);
+    for (let pixel = 0; pixel < data.length / 2; pixel++) {
+      data[pixel * 2] = rgba[pixel * 4 + 2];
+      data[pixel * 2 + 1] = rgba[pixel * 4 + 3];
+    }
+    return { width: resources.width, height: resources.height, data, origin: 'bottom-left',
+      sampleType: 'pixel-center', unknown: UNKNOWN_CAPTURE_DEPTH,
+      encoding: 'primary/secondary minimum capture depth; 255 means unknown', metadata: lastMetadata };
+  }
+
   function readPieceMasks() {
     if (!classificationReady || !supported || disposed || lost || !resources || gl.isContextLost()) return null;
     const width = resources.rasterWidth, height = resources.rasterHeight;
@@ -846,6 +936,7 @@ export function createWebGLPreview({ onUnavailable } = {}) {
     const { width, height } = resources;
     const ids = lastMetadata.parameter_layer_ids;
     const data = new Uint8Array(width * height * ids.length * 2);
+    const captureDepths = new Uint8Array(width * height * ids.length).fill(UNKNOWN_CAPTURE_DEPTH);
     const previousFramebuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING);
     try {
       gl.bindFramebuffer(gl.FRAMEBUFFER, resources.framebuffer);
@@ -857,14 +948,16 @@ export function createWebGLPreview({ onUnavailable } = {}) {
         for (let pixel = 0; pixel < width * height; pixel++) {
           data[(pixel * ids.length + layer) * 2] = bytes[pixel * 4];
           data[(pixel * ids.length + layer) * 2 + 1] = bytes[pixel * 4 + 1];
+          captureDepths[pixel * ids.length + layer] = bytes[pixel * 4 + 2];
         }
       }
     } finally {
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, resources.classificationTexture, 0);
       gl.bindFramebuffer(gl.FRAMEBUFFER, previousFramebuffer);
     }
-    return { width, height, layerIds: [...ids], layerCount: ids.length, data,
-      encoding: 'pixel-major code/depth pairs', origin: 'bottom-left', metadata: lastMetadata };
+    return { width, height, layerIds: [...ids], layerCount: ids.length, data, captureDepths,
+      encoding: 'pixel-major code/depth pairs with separate pixel-center minimum capture depths',
+      unknownCaptureDepth: UNKNOWN_CAPTURE_DEPTH, origin: 'bottom-left', metadata: lastMetadata };
   }
 
   function handleContextLost(event) {
@@ -907,7 +1000,7 @@ export function createWebGLPreview({ onUnavailable } = {}) {
     get supported() { return supported; },
     get reason() { return reason; },
     get capabilities() { return capabilities; },
-    canvas, render, readClassification, readPieces, readPieceMasks, readLayers, dispose
+    canvas, render, readClassification, readPieces, readPieceMasks, readCaptureDepths, readLayers, dispose
   };
   if (!canvas) {
     unavailable('WebGL preview requires a browser canvas.');

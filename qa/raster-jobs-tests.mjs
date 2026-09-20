@@ -28,7 +28,7 @@ test('parameter bytes retain Mn results and independent M0/M1 finite-orbit outco
   const fixtures = [
     { x: 0.5, y: 1.1, n: 3, k: 12, mn: [1, 0] },
     { x: 1, y: 1, n: 3, k: 8, mn: [1, 1] },
-    { x: 1.2, y: 0.9, n: 2, k: 12, mn: [2, 7] },
+    { x: 1.2, y: 0.9, n: 2, k: 12, mn: [3, 12] },
     { x: 3, y: 3, n: 3, k: 12, mn: [0, 0] },
     { x: 1.2, y: 0.9, n: 2, k: 0, mn: [3, 0] }
   ];
@@ -65,7 +65,7 @@ test('off-origin, non-square partial tiles agree with the detailed reference at 
       const pitch = input.spanX / input.width;
       const x = left + (pixelX + 0.5) * pitch;
       const y = top - (pixelY + 0.5) * pitch;
-      const detailed = inverseIterationTestDetailed(x, y, input.n, input.kMax, input.LMax, input.tol);
+      const detailed = inverseIterationTestDetailed(x, y, input.n, input.kMax, input.LMax, input.tol, { canonicalOnly: true });
       const offset = 4 * (row * 4 + column);
       assert.deepEqual([...tile.data.slice(offset, offset + 2)], pair(detailed));
       const effective = getEffectiveC(x, y);
@@ -164,8 +164,12 @@ test('job and tile validation bounds allocations and refuses depth-byte truncati
     { width: 0 }, { height: 16385 }, { kMax: 256 }, { LMax: 10001 },
     { spanX: Infinity }, { center: { x: NaN, y: 0 } }, { survivalOpacity: -1 },
     { parameterMode: 'unknown' }, { n: 1 }, { n: 101 }, { escapeDepth: 101 }, { boundaryWork: 200001 },
-    { boundaryWork: 0 }, { originalOpacity: 1.01 }, { originalRenderer: 'unknown' }, { firstLevelPieces: 1 }
+    { boundaryWork: 0 }, { originalOpacity: 1.01 }, { originalRenderer: 'unknown' }, { firstLevelPieces: 1 },
+    { captureStyle: 'unknown' }, { modulo: 0 }, { modulo: 13 }, { modulo: 2.5 },
+    { kMax: 12, captureDepth: 0 }, { kMax: 12, captureDepth: 13 }, { captureDepth: NaN }
   ]) assert.throws(() => normalizeRasterJob({ ...base, ...invalid }));
+  assert.equal(normalizeRasterJob({ ...base, kMax: 12, captureDepth: 12 }).captureDepth, 12);
+  assert.equal(normalizeRasterJob({ ...base, kMax: 255, captureDepth: 100 }).captureDepth, 100);
   const prepared = prepareRasterJob({ ...base, width: 16384, height: 16384 });
   assert.equal(renderRasterTile(prepared, { x: 16383, y: 16383, width: 1, height: 1 }).data.byteLength, 4);
   for (const tile of [
@@ -179,6 +183,66 @@ test('job and tile validation bounds allocations and refuses depth-byte truncati
   assert.throws(() => rasterResultCode({ verdict: 'Undetermined', stopReason: 'unrecognized' }));
 });
 
+test('minimum capture colors are sampled independently of whole-pixel coverage and piece colors', () => {
+  // E(2i,5) is exactly [-16/3,16/3] × [-8/3,8/3], with canonical
+  // trap |Re z|<5, |Im z|<5/2. These witnesses require 0, 1 and 2 maps.
+  const bounds = { x: 0, y: 0, width: 1, height: 1 };
+  for (const [x, y, minimum] of [[1, 1, 0], [5.1, 1, 1], [1, 2.6, 2]]) {
+    const input = { ...base, kind: 'dynamical', n: 5, cx: 0, cy: 2,
+      center: { x, y }, spanX: 0.0001, originalRenderer: 'boundary',
+      showDifference: false, escapeDepth: 12, captureStyle: 'depth' };
+    for (const firstLevelPieces of [false, true]) {
+      const tile = renderRasterTile(prepareRasterJob({ ...input, firstLevelPieces }), bounds);
+      assert.equal(tile.captureDepths[1], minimum, `${x}+${y}i, pieces=${firstLevelPieces}`);
+      const baseOnly = renderRasterTile(prepareRasterJob({ ...input, firstLevelPieces, kMax: 0 }), bounds);
+      assert.equal(baseOnly.captureDepths[1], minimum === 0 ? 0 : 255, 'capture limit follows kMax');
+      assert.deepEqual(baseOnly.data, tile.data, 'capture limit cannot alter original boundary coverage');
+    }
+  }
+  // A long-lived first branch formerly hid another digit's one-step capture.
+  const input = { ...base, kind: 'dynamical', n: 3, cx: 0.3, cy: 1.2,
+    center: { x: -0.7, y: -2 }, spanX: 0.0001, originalRenderer: 'boundary',
+    showDifference: false, escapeDepth: 12, captureStyle: 'depth' };
+  const tile = renderRasterTile(prepareRasterJob(input), bounds);
+  assert.equal(tile.captureDepths[1], 1);
+  const limited = renderRasterTile(prepareRasterJob({ ...input, boundaryWork: 1 }), bounds);
+  assert.equal(limited.captureDepths[1], 255, 'unfinished minimum search cannot invent a level');
+});
+
+test('each parameter layer retains its own center capture while coverage stays a separate record', () => {
+  const bounds = { x: 0, y: 0, width: 1, height: 1 };
+  const fixtures = [
+    { n: 2, x: 0.617, y: 1.023, layer: 'mn', minimum: 1 },
+    { n: 4, x: 0.3, y: 1.2, layer: 'mn0', minimum: 0 },
+    { n: 3, x: 0.717, y: 1.023, layer: 'mn1', minimum: 1 },
+    { n: 4, x: 0.017, y: 1.173, digit: 3, minimum: 2 }
+  ];
+  for (const fixture of fixtures) {
+    const input = { ...base, n: fixture.n, center: { x: fixture.x, y: fixture.y },
+      spanX: 0.001, parameterRadius: undefined, captureStyle: 'depth', escapeDepth: 12,
+      parameterMode: fixture.layer ?? 'mn0', parameterLayers: fixture.layer ? [fixture.layer] : [],
+      parameterDigits: fixture.digit === undefined ? [] : [fixture.digit] };
+    const tile = renderRasterTile(prepareRasterJob(input), bounds);
+    assert.equal(tile.layerCaptureDepths.length, 1);
+    assert.equal(tile.layerCaptureDepths[0], fixture.minimum, fixture.layer ?? `digit:${fixture.digit}`);
+    const flat = renderRasterTile(prepareRasterJob({ ...input, captureStyle: 'sets' }), bounds);
+    assert.deepEqual(flat.layerData, tile.layerData, 'color mode cannot change parameter coverage');
+    assert.deepEqual(flat.layerCaptureDepths, tile.layerCaptureDepths, 'color mode cannot erase captured centers');
+  }
+});
+
+test('current difference rendering does not use an unsupported off-lens rectangle as a trap', () => {
+  // At c=3+3i, each inverse child of z=1/4+i/20 has |Im|>=0.9,
+  // beyond the disk bound 2/(sqrt(18)-1)<2/3 for E(c,3).
+  const input = { ...base, kind: 'dynamical', n: 2, cx: 3, cy: 3,
+    center: { x: 1 / 8, y: 1 / 40 }, spanX: 0.001,
+    originalRenderer: 'boundary', showOriginalSurvival: false, showDifference: true };
+  const tile = renderRasterTile(prepareRasterJob(input), { x: 0, y: 0, width: 1, height: 1 });
+  assert.equal(tile.data[0], 0, 'half-difference point is exterior');
+  assert.equal(tile.data[1], 1, 'all first inverse branches escape');
+  assert.equal(tile.captureDepths[0], 255);
+});
+
 test('worker wire messages transfer tile ownership, cache preparation, and report errors', async () => {
   const oldSelf = Object.getOwnPropertyDescriptor(globalThis, 'self');
   let onMessage;
@@ -187,14 +251,14 @@ test('worker wire messages transfer tile ownership, cache preparation, and repor
     addEventListener(type, listener) { assert.equal(type, 'message'); onMessage = listener; },
     postMessage(message, transfer = []) {
       if (message.type === 'tile') {
-        assert.deepEqual(transfer, ['data', 'pieces', 'layerData', 'pieceMasks', 'pieceUncertainMasks']
+        assert.deepEqual(transfer, ['data', 'pieces', 'captureDepths', 'layerData', 'layerCaptureDepths', 'pieceMasks', 'pieceUncertainMasks']
           .filter(key => message[key]).map(key => message[key].buffer));
       }
       const copy = structuredClone(message, { transfer });
       if (message.type === 'tile') {
         assert.equal(message.data.byteLength, 0, 'worker relinquishes the output buffer');
         if (message.pieces) assert.equal(message.pieces.byteLength, 0, 'piece ownership is transferred too');
-        for (const key of ['layerData', 'pieceMasks', 'pieceUncertainMasks']) {
+        for (const key of ['captureDepths', 'layerData', 'layerCaptureDepths', 'pieceMasks', 'pieceUncertainMasks']) {
           if (message[key]) assert.equal(message[key].byteLength, 0, `${key} ownership is transferred too`);
         }
       }

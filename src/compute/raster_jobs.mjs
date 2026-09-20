@@ -1,7 +1,7 @@
 import { createInverseSearchContext, inverseSearchPointFast } from './inverse_search_kernel.mjs';
 import { inLens, validateSearchLimits } from './inverse_search_reference.mjs';
 import { classifyParameterView, normalizeMembershipLimits, normalizeParameterViewMode } from './parameter_views.mjs';
-import { createAttractorMembershipContext, classifyAttractorPoint } from './attractor_membership.mjs';
+import { createAttractorMembershipContext, classifyAttractorPoint, classifyAttractorCapture } from './attractor_membership.mjs';
 import { assertArity, assertFiniteNumber, assertInteger, assertPositiveNumber } from '../math/validation.mjs';
 
 /** Display records, never proof records. RGBA bytes carry two [code, depth] pairs. */
@@ -81,6 +81,16 @@ export function normalizeRasterJob(input) {
   assertFiniteNumber(parameterRadius, 'parameterRadius');
   if (parameterRadius < 0) throw new RangeError('parameterRadius must be nonnegative');
   const { escapeDepth, boundaryWork } = normalizeMembershipLimits(input.n, input);
+  // Finite-capture strata follow the selected search limit, not the separate
+  // resolution-dependent escape approximation. The reusable stack holds 100.
+  const captureDepth = Math.min(kMax, 100);
+  if (input.captureDepth !== undefined && input.captureDepth !== captureDepth) {
+    throw new RangeError('raster captureDepth must equal min(kMax, 100)');
+  }
+  const captureStyle = input.captureStyle ?? 'depth';
+  if (!['depth', 'sets'].includes(captureStyle)) throw new RangeError('invalid captureStyle');
+  const modulo = input.modulo ?? 3;
+  assertInteger(modulo, 'modulo', 1, 12);
   const originalRenderer = input.originalRenderer ?? 'boundary';
   if (!['boundary', 'survival'].includes(originalRenderer)) throw new RangeError('invalid originalRenderer');
   const firstLevelPieces = input.firstLevelPieces ?? true;
@@ -104,7 +114,8 @@ export function normalizeRasterJob(input) {
     showDifference: input.showDifference === true,
     showOriginalSurvival: input.showOriginalSurvival === true,
     showEscapeStrata: input.showEscapeStrata === true,
-    survivalOpacity, escapeDepth, boundaryWork, originalRenderer, firstLevelPieces, originalOpacity
+    survivalOpacity, escapeDepth, captureDepth, boundaryWork, originalRenderer, firstLevelPieces, originalOpacity,
+    captureStyle, modulo
   });
 }
 
@@ -126,7 +137,8 @@ export function prepareRasterJob(input) {
       }
     };
     if (job.showDifference) {
-      differenceContext = context(2 * job.n - 1, inLens(job.cx, job.cy, job.n), true);
+      const lens = inLens(job.cx, job.cy, job.n);
+      differenceContext = context(2 * job.n - 1, lens, lens);
     }
     if (job.showOriginalSurvival) {
       if (job.originalRenderer === 'survival') originalContext = context(job.n, false, false);
@@ -160,6 +172,13 @@ function writePiece(pieces, offset, result) {
   pieces[offset] = Number.isInteger(index) && index >= 0 && index < 255 ? index + 1 : 0;
 }
 
+// Minimum capture is sampled at the pixel center, independently from the
+// coverage disk. 255 means that no minimum was established by that search.
+function minimumCaptureByte(result) {
+  const value = result?.minimumCaptureDepth;
+  return Number.isInteger(value) && value >= 0 && value <= 100 ? value : 255;
+}
+
 /**
  * Compute one bounded tile in row-major order. Coordinates are full-frame pixel
  * centers, independent of tile boundaries. Parameter compare uses M_n/M_n^0;
@@ -173,18 +192,23 @@ export function renderRasterTile(prepared, tile) {
   validateTile(job, tile);
   const data = new Uint8Array(4 * tile.width * tile.height);
   const output = { x: tile.x, y: tile.y, width: tile.width, height: tile.height, data };
+  const captureDepths = new Uint8Array(2 * tile.width * tile.height).fill(255);
+  output.captureDepths = captureDepths;
   const pieces = job.firstLevelPieces ? new Uint8Array(2 * tile.width * tile.height) : null;
   if (pieces) output.pieces = pieces;
   const layerKeys = job.parameterLayers.concat(job.parameterDigits.map(digit => `digit:${digit}`));
   const layerData = job.kind === 'parameter' ? new Uint8Array(2 * layerKeys.length * tile.width * tile.height) : null;
   if (layerData) output.layerData = layerData;
+  const layerCaptureDepths = layerData ? new Uint8Array(layerKeys.length * tile.width * tile.height).fill(255) : null;
+  if (layerCaptureDepths) output.layerCaptureDepths = layerCaptureDepths;
   if (job.kind === 'dynamical' && !differenceContext && !originalContext) return output;
-  const { center, spanX, width, height, n, kMax, LMax, tol, parameterMode, escapeDepth, boundaryWork } = job;
+  const { center, spanX, width, height, n, kMax, LMax, tol, parameterMode, escapeDepth, captureDepth, boundaryWork } = job;
   const pixelRadius = Math.SQRT1_2 * spanX / width;
-  const membershipOptions = { escapeDepth, boundaryWork, parameterRadius: job.parameterRadius,
-    parameterLayers: job.parameterLayers, parameterDigits: job.parameterDigits };
+  const membershipOptions = { escapeDepth, captureDepth, boundaryWork, parameterRadius: job.parameterRadius,
+    parameterLayers: job.parameterLayers, parameterDigits: job.parameterDigits,
+    captureStyle: job.captureStyle };
   const boundaryOptions = { firstStep: 'original', maxWork: boundaryWork,
-    firstLevelPieces: job.firstLevelPieces, pixelRadius };
+    firstLevelPieces: false, minimumCapture: false, pixelRadius };
   for (let row = 0; row < tile.height; row++) {
     const py = tile.y + row;
     const y = center.y + (0.5 - (py + 0.5) / height) * spanX * height / width;
@@ -204,21 +228,29 @@ export function renderRasterTile(prepared, tile) {
         }
         const result = classifyParameterView(x, y, n, kMax, LMax, tol, parameterMode, membershipOptions);
         writeResult(data, offset, result);
+        captureDepths[offset / 2] = minimumCaptureByte(result.captureSample ?? result);
         writePiece(pieces, offset / 2, result);
         if (parameterMode === 'compare') {
           writeResult(data, offset + 2, result.mn0 ?? EMPTY_RESULT);
+          captureDepths[offset / 2 + 1] = minimumCaptureByte(result.mn0?.captureSample ?? result.mn0);
           writePiece(pieces, offset / 2 + 1, result.mn0 ?? EMPTY_RESULT);
         }
         for (let layer = 0; layer < layerKeys.length; layer++) {
           const key = layerKeys[layer];
           const value = key.startsWith('digit:') ? result.digits?.[key.slice(6)] : result.layers?.[key];
           writeResult(layerData, (offset / 4 * layerKeys.length + layer) * 2, value ?? RANGE_RESULT);
+          layerCaptureDepths[offset / 4 * layerKeys.length + layer] = minimumCaptureByte(value?.captureSample ?? value);
         }
       } else {
         if (differenceContext) {
           const result = finite && Number.isFinite(2 * x) && Number.isFinite(2 * y)
             ? inverseSearchPointFast(differenceContext, 2 * x, 2 * y, kMax, LMax) : RANGE_RESULT;
           writeResult(data, offset, result);
+          // The reference search is breadth-first; its strict-lens capture
+          // depth is already minimal. Historical off-lens tests are separate.
+          if (result.verdict === 'Interior' && result.stopReason === 'trap-hit' && result.depth <= 100) {
+            captureDepths[offset / 2] = result.depth;
+          }
         } else writeResult(data, offset, EMPTY_RESULT);
         if (originalContext) {
           const result = !finite ? RANGE_RESULT : job.originalRenderer === 'survival'
@@ -226,6 +258,10 @@ export function renderRasterTile(prepared, tile) {
             : classifyAttractorPoint(originalContext, x, y, escapeDepth, boundaryOptions);
           writeResult(data, offset + 2, result);
           writePiece(pieces, offset / 2 + 1, result);
+          if (finite && job.originalRenderer === 'boundary' && originalContext.useTrap) {
+            const capture = classifyAttractorCapture(originalContext, x, y, captureDepth, { maxWork: boundaryWork });
+            captureDepths[offset / 2 + 1] = minimumCaptureByte(capture);
+          }
         }
       }
     }
@@ -240,7 +276,7 @@ export function renderRasterTile(prepared, tile) {
     const uncertain = new Uint32Array(length);
     output.pieceMasks = masks;
     output.pieceUncertainMasks = uncertain;
-    const options = { ...boundaryOptions, firstLevelPieces: false };
+    const options = { ...boundaryOptions, firstLevelPieces: false, minimumCapture: false };
     for (let row = -1; row <= tile.height; row++) {
       const y = center.y + (0.5 - (tile.y + row + 0.5) / height) * spanX * height / width;
       for (let column = -1; column <= tile.width; column++) {

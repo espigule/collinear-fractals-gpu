@@ -105,7 +105,7 @@ export function undetermined(reason, depth = 0, nodesExplored = 0, tree = []) {
   return { verdict: 'Undetermined', depth, nodesExplored, word: [], tree, stopReason: reason };
 }
 
-export function inverseIterationTestDetailed(x, y, n, kMax = 37, LMax = 1000, tol = 1e-8) {
+export function inverseIterationTestDetailed(x, y, n, kMax = 37, LMax = 1000, tol = 1e-8, options = {}) {
   assertArity(n);
   validateSearchLimits(kMax, LMax);
   assertPositiveNumber(tol, 'tol');
@@ -118,6 +118,9 @@ export function inverseIterationTestDetailed(x, y, n, kMax = 37, LMax = 1000, to
 
   const N = 2 * n - 1;
   const isLens = inLens(x, y, n);
+  // Archived records retain the historical off-lens rule by default. Current
+  // exploration opts into canonicalOnly: that rule is not a general trap.
+  const useTrap = options.canonicalOnly !== true || isLens;
   const enc = computeEnclosureGeneral(x, y, N, tol);
   if (enc.err) return undetermined(enc.reason);
   const { se, ve } = enc;
@@ -131,7 +134,7 @@ export function inverseIterationTestDetailed(x, y, n, kMax = 37, LMax = 1000, to
   if (Math.abs(s0) > se || Math.abs(v0) > ve) {
     return { verdict: 'Exterior', depth: 0, word: [], nodesExplored: 1, tree, stopReason: 'enclosure-escape' };
   }
-  if (Math.abs(s0) < S && Math.abs(v0) < V) {
+  if (useTrap && Math.abs(s0) < S && Math.abs(v0) < V) {
     return {
       verdict: interiorVerdict(isLens), depth: 0, word: [], nodesExplored: 1, tree,
       trapRegion: isLens ? 'lens' : 'off-lens', stopReason: 'trap-hit'
@@ -169,7 +172,7 @@ export function inverseIterationTestDetailed(x, y, n, kMax = 37, LMax = 1000, to
         if (Math.abs(sPrime) > se) continue;
         const nextNode = { s: sPrime, v: vPrime, depth: k, parentIdx: pIdx, t };
         next.push(nextNode);
-        if (Math.abs(sPrime) < S && Math.abs(vPrime) < V) {
+        if (useTrap && Math.abs(sPrime) < S && Math.abs(vPrime) < V) {
           tree.push(next);
           const path = new Array(k);
           let curr = nextNode;

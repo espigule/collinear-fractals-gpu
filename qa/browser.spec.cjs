@@ -138,6 +138,41 @@ async function dynamicalPatch(page, point, worldSpan = 12) {
   }, { point, worldSpan });
 }
 
+// Read colors at declared mathematical coordinates, independently of the
+// app's transforms and search buffers. The most frequent color in a 3×3 patch
+// resists a faint grid line while retaining actual rendered-pixel evidence.
+async function canvasColors(page, selector, points, { spanX, center = { x: 0, y: 0 } }) {
+  return page.locator(selector).evaluate((canvas, { points, spanX, center }) => {
+    const context = canvas.getContext('2d');
+    const scale = canvas.width / spanX;
+    return points.map(point => {
+      const x = Math.round(canvas.width / 2 + (point.x - center.x) * scale);
+      const y = Math.round(canvas.height / 2 - (point.y - center.y) * scale);
+      if (x < 2 || y < 2 || x >= canvas.width - 2 || y >= canvas.height - 2) {
+        throw new Error(`Color witness (${point.x},${point.y}) is outside the displayed canvas`);
+      }
+      const pixels = context.getImageData(x - 1, y - 1, 3, 3).data;
+      const counts = new Map();
+      for (let offset = 0; offset < pixels.length; offset += 4) {
+        const key = Array.from(pixels.slice(offset, offset + 3)).join(',');
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      const [key, count] = [...counts].sort((a, b) => b[1] - a[1])[0];
+      return { rgb: key.split(',').map(Number), count };
+    });
+  }, { points, spanX, center });
+}
+
+const brightness = color => color.rgb.reduce((sum, channel) => sum + channel, 0);
+
+async function setCaptureCycle(page, q) {
+  const input = await reveal(page, '#param-modulo');
+  await input.focus();
+  await input.press('Home');
+  for (let value = 1; value < q; value++) await input.press('ArrowRight');
+  await expect(input).toHaveValue(String(q));
+}
+
 test('served deployment manifest identifies the checkout and fingerprints public assets', async ({ request }) => {
   const response = await request.get('/deployment.json');
   expect(response.ok()).toBe(true);
@@ -266,7 +301,9 @@ test('black first-piece boundaries remain visible inside overlapping exact recta
       for (let row = 0; row < bottom - top; row++) {
         for (let column = 0; column < width; column++) {
           const offset = (row * width + column) * 4;
-          if (Math.max(data[offset], data[offset + 1], data[offset + 2]) < 70) {
+          // Capture shading can make the unsegmented fill dark olive. Count
+          // the genuinely black contour, not every dark capture-band pixel.
+          if (Math.max(data[offset], data[offset + 1], data[offset + 2]) < 30) {
             darkRows++;
             break;
           }
@@ -285,6 +322,94 @@ test('black first-piece boundaries remain visible inside overlapping exact recta
   await page.locator('#btn-close-controls').click();
   await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
   for (const coverage of (await probe()).boundaries) expect(coverage, 'Hiding the first pieces also hides their internal outlines').toBeLessThan(0.1);
+});
+
+test('finite capture colors actual E levels and preserves the minimum when pieces change', async ({ page }, testInfo) => {
+  test.setTimeout(90000);
+  await page.setViewportSize({ width: Math.min(page.viewportSize().width, 640), height: 620 });
+  // E(2i,5) is the exact rectangle [-16/3,16/3]×[-8/3,8/3]. Its
+  // canonical trap is |x|<5, |y|<5/2. These witnesses have minimum depths
+  // 0, 1 and 2 respectively: (5.1+i) -> -2+2.2i; and
+  // (1+2.58i) -> -5.16+2i -> -4-2.32i. Every first inverse image of
+  // the last point has real part -5.16, excluding an earlier capture.
+  // The fourth witness lies in just piece t=2, and already in the trap.
+  const points = [{ x: 1, y: 1 }, { x: 5.1, y: 1 }, { x: 1, y: 2.58 }, { x: 2, y: 1 }];
+  await page.goto('/#n=5&cx=0&cy=2&dcx=0&dcy=0&dz=12&focus=dynamical&mode=collinear&layers=0100000&backend=cpu&renderer=boundary&pieces=0&aop=1&bdepth=12&badapt=0&q=3');
+  const canvas = page.locator('#dynamical-canvas');
+  const colors = () => canvasColors(page, '#dynamical-canvas', points, { spanX: 12 });
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  await expect(page.locator('#capture-style')).toHaveValue('depth');
+  const initial = await colors();
+  for (const color of initial) expect(color.count, 'Stable interior color fills the witness patch').toBeGreaterThanOrEqual(5);
+  expect(brightness(initial[1]) - brightness(initial[0]), 'Minimum level 1 is visibly distinct from level 0').toBeGreaterThan(30);
+  expect(brightness(initial[2]) - brightness(initial[1]), 'Minimum level 2 is visibly distinct from level 1').toBeGreaterThan(30);
+  await reveal(page, '#dynamical-capture-legend');
+  await expect(page.locator('#dynamical-capture-legend .capture-level-title')).toContainText('Minimum capture level');
+  await expect(page.locator('#dynamical-capture-legend .capture-level-swatch')).toHaveCount(3);
+  await page.locator('#legend-dynamical > summary').click();
+  await page.screenshot({ path: testInfo.outputPath('exact-rectangle-finite-capture-levels.png') });
+
+  await select(page, '#capture-style', 'sets');
+  await expect(page.locator('#param-modulo')).toBeDisabled();
+  await page.locator('#btn-close-controls').click();
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  const solid = await colors();
+  expect(solid.slice(0, 3).map(color => color.rgb), 'Set colors intentionally hide the capture bands').toEqual([solid[0].rgb, solid[0].rgb, solid[0].rgb]);
+  const levelZeroFactor = brightness(initial[3]) / brightness(solid[3]);
+
+  await select(page, '#capture-style', 'depth');
+  await expect(page.locator('#param-modulo')).toBeEnabled();
+  await fillNumber(page, '#param-kmax', 0);
+  await page.locator('#btn-close-controls').click();
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  const zeroBudget = await colors();
+  expect(zeroBudget[0].rgb, 'The initial trap remains minimum level 0 at k=0').toEqual(initial[0].rgb);
+  expect(zeroBudget.slice(1, 3).map(color => color.rgb), 'Positive capture levels retain occupied coverage with an unconfirmed minimum').toEqual([solid[1].rgb, solid[2].rgb]);
+  const limited = await readRecord(page);
+  expect(limited.k_max).toBe(0);
+  expect(limited.finite_capture.maximum_depth).toBe(0);
+  expect(limited.visual_renderer.effective_depth, 'Boundary coverage keeps its independent depth').toBe(12);
+  await fillNumber(page, '#param-kmax', 12);
+  await page.locator('#btn-close-controls').click();
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  expect((await colors()).slice(0, 3).map(color => color.rgb), 'Restoring capture depth restores the minimum levels').toEqual(initial.slice(0, 3).map(color => color.rgb));
+
+  await setCaptureCycle(page, 1);
+  await page.locator('#btn-close-controls').click();
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  const oneBand = await colors();
+  expect(oneBand.slice(0, 3).map(color => color.rgb), 'q=1 identifies one capture band for all three depths').toEqual([oneBand[0].rgb, oneBand[0].rgb, oneBand[0].rgb]);
+  await expect(page.locator('#dynamical-capture-legend .capture-level-swatch')).toHaveCount(1);
+  const record = await readRecord(page);
+  expect(record.finite_capture).toMatchObject({ capture_style: 'depth', cycle: 1 });
+  expect(record.visual_renderer).toMatchObject({ capture_style: 'depth', capture_cycle: 1 });
+  const url = await shareUrl(page);
+  const hash = new URLSearchParams(new URL(url).hash.slice(1));
+  expect(hash.get('capture')).toBe('depth');
+  expect(hash.get('q')).toBe('1');
+  await page.goto('/');
+  await page.goto(url);
+  await expect(page.locator('#capture-style')).toHaveValue('depth');
+  await expect(page.locator('#param-modulo')).toHaveValue('1');
+
+  // Changing geometric piece colors must not shift an existing depth-0
+  // capture to depth 1 merely because a first-digit address was requested.
+  await setCaptureCycle(page, 3);
+  await (await reveal(page, '#first-level-pieces')).check();
+  await page.locator('#btn-close-controls').click();
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  const pieceDepth = (await colors())[3];
+  await select(page, '#capture-style', 'sets');
+  await page.locator('#btn-close-controls').click();
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  const pieceSolid = (await colors())[3];
+  expect(brightness(pieceDepth) / brightness(pieceSolid), 'Piece coloring preserves the same minimum-depth shade').toBeCloseTo(levelZeroFactor, 2);
+  expect(pieceSolid.rgb, 'The first piece keeps its own identifying hue').not.toEqual(solid[3].rgb);
+  const setsUrl = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
+  expect(setsUrl.get('capture')).toBe('sets');
+  const setsRecord = await readRecord(page);
+  expect(setsRecord.finite_capture).toMatchObject({ capture_style: 'sets', cycle: 3 });
+  expect(setsRecord.visual_renderer).toMatchObject({ capture_style: 'sets', capture_cycle: 3 });
 });
 
 test('boundary detail follows zoom and preserves manual depth independently of search limits', async ({ page }) => {
@@ -470,8 +595,8 @@ test('M_n, M_n^0, M_n^1 and comparison pixels preserve their definitions and M_n
     await setParameterLayers(page, mode === 'compare' ? ['mn', 'mn0', 'mn1'] : [mode]);
     await expect(page.locator(`#btn-locus-${mode}`)).toHaveAttribute('aria-pressed', 'true');
     await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
-    await expect(page.locator('#stat-verdict')).toHaveText('Interior-offLens');
-    // The independent n=2 witness has an off-lens M_n trap hit but is outside
+    await expect(page.locator('#stat-verdict')).toHaveText('Undetermined');
+    // The n=2 neighborhood has finite M_n escape survivors but is outside
     // M_n^0. It is also outside M_n^1: for n=2, the complementary first digit
     // is 0, so M_n^1 requires c² in E(c,2). Im(c²)=2.16 exceeds the vertical
     // support sum Σ|Im(c^-j)|≈1.4113. Probe the stable neighborhood at c=1.202+.901i, away from the
@@ -487,13 +612,14 @@ test('M_n, M_n^0, M_n^1 and comparison pixels preserve their definitions and M_n
       return marked / 81;
     });
     if (mode === 'mn0' || mode === 'mn1') expect(coverage, `${mode} exterior is white`).toBeLessThan(0.01);
-    else expect(coverage, `${mode} shows the M_n off-lens result`).toBeGreaterThan(0.9);
+    else expect(coverage, `${mode} preserves finite M_n escape coverage`).toBeGreaterThan(0.9);
     const record = await readRecord(page);
     expect(record.n).toBe(2);
     expect(record.N).toBe(3);
     expect(record.input_parameter).toEqual({ re: 1.2, im: 0.9 });
-    expect(record.verdict).toBe('Interior-offLens');
-    expect(record.proof_status).toBe('exploratory');
+    expect(record.verdict).toBe('Undetermined');
+    expect(record.stop_reason).toBe('depth-cap');
+    expect(record.proof_status).toBe('bounded-search-undetermined');
     expect(record.parameter_view.mode).toBe(mode);
     expect(record.parameter_view.search_record_set).toBe('M_n');
     if (mode === 'mn') {
@@ -543,6 +669,141 @@ test('complementary first digits distinguish M_n^1 from M_n^0 in actual paramete
       expect(record.parameter_view.mn1.verdict).toBe('Exterior');
     }
   }
+});
+
+for (const fixture of [
+  { name: 'M_n', layers: ['mn'], digits: [], minimum: 0 },
+  { name: 'M_n^0', layers: ['mn0'], digits: [], minimum: 0 },
+  { name: 'M_n^1', layers: ['mn1'], digits: [], minimum: 1 },
+  { name: 'original first digit 0', layers: [], digits: [0], minimum: 1 },
+  { name: 'complementary first digit 1', layers: [], digits: [1], minimum: 1 },
+]) {
+  test(`finite capture and escape coverage remain distinct for ${fixture.name}`, async ({ page }, testInfo) => {
+    test.setTimeout(75000);
+    await page.setViewportSize({ width: Math.min(page.viewportSize().width, 420), height: 520 });
+    // At n=5, c=2i is in the original trap. M_n and M_n^0 therefore
+    // capture at level 0; the complementary and fixed-first-digit searches
+    // capture after their mandatory first step. At c=i√5, the exact
+    // rectangles E(c,5)=[-5,5]×[-√5,√5] and
+    // E(c,9)=[-10,10]×[-2√5,2√5] put every selected witness on a
+    // boundary. Both original digit 0 and complementary digit 1 contain c.
+    // The first has c²=-5; the second has c(c-1)=-5-i√5.
+    // These are finite escape survivors, never strict trap captures.
+    await open(page, '#n=5&cx=1.2&cy=.9&focus=parameter&layers=0000000&backend=cpu&pl=&pd=');
+    const canvas = page.locator('#parameter-canvas');
+    const dimensions = await canvas.evaluate(element => ({ width: element.width, height: element.height }));
+    const spanX = 0.32;
+    const step = spanX / dimensions.width;
+    const pixel = { x: Math.floor(dimensions.width / 2), y: Math.floor(dimensions.height * 0.1) };
+    // Put the exact boundary witness at a pixel center, so its center-depth
+    // result is not accidentally replaced by that of a nearby interior point.
+    const center = {
+      x: (dimensions.width / 2 - pixel.x - 0.5) * step,
+      y: Math.sqrt(5) + (pixel.y + 0.5 - dimensions.height / 2) * step,
+    };
+    const hash = new URLSearchParams({
+      n: '5', cx: '1.2', cy: '.9', focus: 'parameter', layers: '0000000', backend: 'cpu',
+      pl: fixture.layers.join(','), pd: fixture.digits.join(','),
+      pcx: String(center.x), pcy: String(center.y), pz: String(spanX),
+      bdepth: '12', badapt: '0', q: '3', capture: 'depth',
+    });
+    await page.goto(`/#${hash}`);
+    await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+    const probe = async () => ({
+      captured: (await canvasColors(page, '#parameter-canvas', [{ x: 0.01, y: 2 }], { spanX, center }))[0],
+      boundary: await canvas.evaluate((element, pixel) => ({
+        rgb: Array.from(element.getContext('2d').getImageData(pixel.x, pixel.y, 1, 1).data.slice(0, 3)),
+      }), pixel),
+    });
+    const initial = await probe();
+    // The original-lens guide crosses this exact boundary. Compare each
+    // pixel against its own set-color rendering below, so guide antialiasing
+    // cannot masquerade as a change in mathematical capture classification.
+    expect(Math.min(...initial.boundary.rgb), 'The exact boundary remains visibly occupied').toBeLessThan(230);
+    await reveal(page, '#parameter-capture-legend');
+    await expect(page.locator('#legend-parameter')).toContainText('pixel centers');
+    await expect(page.locator('#parameter-capture-legend .capture-level-swatch')).toHaveCount(3);
+    await page.locator('#legend-parameter > summary').click();
+    await page.screenshot({ path: testInfo.outputPath(`capture-and-survival-${fixture.layers[0] || `digit-${fixture.digits[0]}`}.png`) });
+
+    const q = fixture.minimum === 0 ? 1 : 2;
+    await setCaptureCycle(page, q);
+    await page.locator('#btn-close-controls').click();
+    await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+    const recolored = await probe();
+    expect(recolored.captured.rgb, `q changes the ${fixture.minimum}-step capture band`).not.toEqual(initial.captured.rgb);
+    expect(recolored.boundary.rgb, 'Changing q cannot relabel the boundary survivor as capture').toEqual(initial.boundary.rgb);
+
+    await select(page, '#capture-style', 'sets');
+    await page.locator('#btn-close-controls').click();
+    await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+    const solid = await probe();
+    expect(brightness(solid.captured) - brightness(initial.captured), 'Set mode restores the full identifying hue').toBeGreaterThan(25);
+    expect(brightness(initial.boundary) - brightness(solid.boundary), 'The boundary coverage tint disappears only in set-color mode').toBeGreaterThan(25);
+    const record = await readRecord(page);
+    expect(record.parameter_view).toMatchObject({ layers: fixture.layers, digits: fixture.digits,
+      capture_style: 'sets', capture_cycle: q, raster_sampling: 'parameter-cell', selected_point_sampling: 'point' });
+    expect(record.finite_capture).toMatchObject({ capture_style: 'sets', cycle: q,
+      sample_type: 'pixel-center', boundary_coverage_sampling: { parameter: 'whole-pixel' } });
+    const shared = new URLSearchParams(new URL(await shareUrl(page)).hash.slice(1));
+    expect(shared.get('capture')).toBe('sets');
+    expect(shared.get('q')).toBe(String(q));
+    expect(shared.get('pl')).toBe(fixture.layers.join(','));
+    expect(shared.get('pd')).toBe(fixture.digits.join(','));
+  });
+}
+
+test('later sibling captures are visible at their actual minimum parameter depth', async ({ page }) => {
+  test.setTimeout(75000);
+  await page.setViewportSize({ width: Math.min(page.viewportSize().width, 420), height: 520 });
+  // These witnesses have earlier surviving DFS branches. Returning that first
+  // finite survivor hides a shallower capture on a later sibling. A complete
+  // minimum-depth search gives 1 and 2 respectively, which have opposite
+  // lightness changes when the cycle changes from 3 to 2.
+  for (const fixture of [
+    { n: 2, x: 0.617, y: 1.023, layers: 'mn', digits: '', minimum: 1 },
+    { n: 4, x: 0.017, y: 1.173, layers: '', digits: '3', minimum: 2 },
+  ]) {
+    const center = { x: fixture.x, y: fixture.y };
+    const spanX = 0.0002;
+    const hash = new URLSearchParams({
+      n: String(fixture.n), cx: '2', cy: '2', pcx: String(center.x), pcy: String(center.y),
+      pz: String(spanX), focus: 'parameter', layers: '0000000', backend: 'cpu',
+      pl: fixture.layers, pd: fixture.digits, bdepth: '12', badapt: '0', capture: 'depth', q: '3',
+    });
+    await page.goto(`/#${hash}`);
+    const canvas = page.locator('#parameter-canvas');
+    await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+    const probe = async () => (await canvasColors(page, '#parameter-canvas', [center], { spanX, center }))[0];
+    const q3 = await probe();
+    await setCaptureCycle(page, 2);
+    await page.locator('#btn-close-controls').click();
+    await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+    const q2 = await probe();
+    if (fixture.minimum === 1) {
+      expect(brightness(q2) - brightness(q3), 'The later sibling is a minimum-level-1 capture').toBeGreaterThan(30);
+    } else {
+      expect(brightness(q3) - brightness(q2), 'The fixed first digit contributes to the minimum level 2').toBeGreaterThan(30);
+    }
+  }
+});
+
+test('an off-lens enclosure cannot paint an escaping difference point as captured', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: Math.min(page.viewportSize().width, 640), height: 520 });
+  // For E(3+3i,3), z=1/4+i/20 is excluded after the first inverse step.
+  // The historical off-lens rectangle nevertheless contained it. The
+  // displayed difference attractor is at half scale, so inspect z/2.
+  await page.goto('/#n=2&cx=3&cy=3&dcx=.125&dcy=.025&dz=.3&focus=dynamical&mode=difference&layers=1000000&backend=cpu&k=12');
+  const canvas = page.locator('#dynamical-canvas');
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  const [color] = await canvasColors(page, '#dynamical-canvas', [{ x: 0.125, y: 0.025 }], {
+    spanX: 0.3, center: { x: 0.125, y: 0.025 },
+  });
+  expect(Math.min(...color.rgb), 'The independently escaping point is white exterior').toBeGreaterThan(245);
+  const record = await readRecord(page);
+  expect(record.trap).toBeNull();
+  await page.locator('#btn-close-controls').click();
+  await page.screenshot({ path: testInfo.outputPath('off-lens-rectangle-is-not-a-trap.png') });
 });
 
 test('independent aggregates and digit subsets survive sharing, export and arity changes', async ({ page }, testInfo) => {
@@ -923,15 +1184,17 @@ test('canonical presets load parameters and finite-search records honor chosen d
 
   await select(page, '#example-preset', 'off_lens_witnesses_n2_to_n19');
   await expect(page.locator('#arity-slider')).toHaveValue('3');
-  await expect(page.locator('#stat-verdict')).toHaveText('Interior-offLens');
+  await expect(page.locator('#stat-verdict')).toHaveText('Undetermined');
   const record = await readRecord(page);
   expect(record.n).toBe(3);
   expect(record.N).toBe(5);
   expect(record.input_parameter).toEqual({ re: 1.419643377607, im: 0.606290729207 });
-  expect(record.word).toEqual([4, 0]);
-  expect(record.depth).toBe(2);
-  expect(record.stop_reason).toBe('trap-hit');
-  expect(record.proof_status).toBe('exploratory');
+  // This archived preset lies outside the canonical self-covering lens.
+  // Its historical off-lens heuristic hit is no longer exposed as a capture.
+  expect(record.word).toEqual([]);
+  expect(record.stop_reason).toBe('node-cap');
+  expect(record.proof_status).toBe('bounded-search-undetermined');
+  expect(record.trap).toBeNull();
   expect(record.arithmetic).toBe('binary64');
 
   await fillNumber(page, '#param-kmax', 1);
@@ -951,7 +1214,7 @@ test('share URL restores custom colors, renderer settings, exact coordinates and
   await fillNumber(page, '#histogram-samples', 1000);
   await (await reveal(page, '#first-level-pieces')).uncheck();
   await select(page, '#palette-mode', 'custom');
-  for (const [id, color] of [['palette-interior', '#13579b'], ['palette-offlens', '#2468ac']]) {
+  for (const [id, color] of [['palette-interior', '#13579b'], ['palette-undetermined', '#2468ac']]) {
     const input = await reveal(page, `#${id}`);
     await input.evaluate((element, value) => { element.value = value; }, color);
     await input.dispatchEvent('input');
@@ -964,7 +1227,7 @@ test('share URL restores custom colors, renderer settings, exact coordinates and
   expect(hash.get('hseed')).toBe('314159');
   expect(hash.get('hsamples')).toBe('1000');
   expect(hash.get('ci')).toBe('#13579b');
-  expect(hash.get('co')).toBe('#2468ac');
+  expect(hash.get('cu')).toBe('#2468ac');
 
   await page.goto('/');
   await page.goto(url);
@@ -976,7 +1239,7 @@ test('share URL restores custom colors, renderer settings, exact coordinates and
   await expect(page.locator('#first-level-pieces')).not.toBeChecked();
   await expect(page.locator('#show-winning-path')).not.toBeChecked();
   await expect(page.locator('#palette-interior')).toHaveValue('#13579b');
-  await expect(page.locator('#palette-offlens')).toHaveValue('#2468ac');
+  await expect(page.locator('#palette-undetermined')).toHaveValue('#2468ac');
   expect(await shareUrl(page)).toBe(url);
 });
 

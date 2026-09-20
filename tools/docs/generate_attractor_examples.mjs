@@ -19,8 +19,9 @@ import { deflateSync } from 'node:zlib';
 import { alphabet } from '../../src/math/alphabets.mjs';
 import { attractorBounds } from '../../src/math/attractor_bounds.mjs';
 import { prepareRasterJob, renderRasterTile, RASTER_CODES } from '../../src/compute/raster_jobs.mjs';
+import { createAttractorMembershipContext, classifyAttractorCapture } from '../../src/compute/attractor_membership.mjs';
 import { colorizeRasterTile } from '../../src/renderers/hybrid_renderer.mjs';
-import { colorForPiece, PIECE_OUTLINE_COLOR } from '../../src/renderers/palettes.mjs';
+import { captureShade, colorForPiece, hexToRgb, parameterLayerColor, PIECE_OUTLINE_COLOR } from '../../src/renderers/palettes.mjs';
 import {
   DEFAULT_EXPLORER_STATE, decodeExplorerState, encodeExplorerState, normalizeExplorerState
 } from '../../src/state/explorer_state.mjs';
@@ -28,6 +29,8 @@ import {
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const SVG_PATH = 'docs/figures/attractor-examples.svg';
 const JSON_PATH = 'docs/figures/attractor-examples.json';
+const CAPTURE_SVG_PATH = 'docs/figures/finite-capture-layers.svg';
+const CAPTURE_JSON_PATH = 'docs/figures/finite-capture-layers.json';
 const EXPLORER_URL = 'https://complextrees.com/collinear-fractals-gpu/';
 const CHECK = process.argv.includes('--check');
 assert.ok(process.argv.slice(2).every(value => value === '--check'), 'Only --check is supported');
@@ -97,6 +100,7 @@ function interactiveView(example, spanX, depth) {
     showCollinear: true, showDifference: false, showTrap: false,
     showEnclosure: false, showTree: false, showPath: false, showEscapeStrata: false,
     firstLevelPieces: true, palette: 'research', originalAttractorOpacity: PIECE_OPACITY,
+    captureStyle: 'sets', modulo: 3,
     focusedPanel: 'dynamical',
     dynCenter: { x: 0, y: 0 }, dynZoom: spanX, backend: 'auto'
   }, DEFAULT_EXPLORER_STATE);
@@ -107,6 +111,7 @@ function interactiveView(example, spanX, depth) {
     interactive_rendering: {
       corresponding_view_only: true,
       renderer_mode: 'boundary',
+      capture_style: 'sets',
       requested_boundary_depth: depth,
       adaptive_boundary: true,
       maximum_effective_boundary_depth: 100,
@@ -131,6 +136,7 @@ function plot(example) {
     n, cx: c.re, cy: c.im, tol: 1e-8, kMax: 37, LMax: 1000,
     originalRenderer: 'boundary', showOriginalSurvival: true, showDifference: false,
     firstLevelPieces: true, originalOpacity: PIECE_OPACITY,
+    captureStyle: 'sets', modulo: 3,
     escapeDepth: depth, boundaryWork: BOUNDARY_WORK
   };
   const prepared = prepareRasterJob(job);
@@ -230,7 +236,8 @@ function plot(example) {
       set: 'E(c,n)', n, parameter: { ...c, exact: example.exactParameter },
       parameter_convention: 'expanding-parameter', displayed_coordinate_scale: 1,
       digits: alphabet(n), maps: 'z -> t + z/c', inverse_maps: 'z -> c(z-t)',
-      renderer: 'capture-escape-boundary', escape_depth: depth,
+      renderer: 'capture-escape-boundary', escape_depth: depth, capture_depth_limit: 37,
+      capture_style: 'sets',
       boundary_work_per_piece: BOUNDARY_WORK, self_covering_trap_enabled: prepared.originalContext.useTrap,
       pixel_radius_world: Math.SQRT1_2 / pixelsPerUnit,
       first_level_piece_masks: true, uncertain_neighbor_guard: true, raster_halo: 1,
@@ -281,6 +288,176 @@ function panel(example, result, index) {
   </g>`;
 }
 
+function capturePlot(specification) {
+  const width = PLOT_WIDTH * RASTER_SCALE;
+  const height = PLOT_HEIGHT * RASTER_SCALE;
+  const { center, spanX, n, kind } = specification;
+  const depth = 12;
+  const input = {
+    kind, n, width, height, center, spanX, escapeDepth: depth,
+    boundaryWork: BOUNDARY_WORK, kMax: depth, LMax: 1000, tol: 1e-8,
+    captureStyle: 'depth', modulo: 3,
+    parameterLayers: specification.layers ?? [], parameterDigits: specification.digits ?? [],
+    cx: 0, cy: 2, originalRenderer: 'boundary', firstLevelPieces: true,
+    showOriginalSurvival: kind === 'dynamical', showDifference: false,
+    originalOpacity: 1
+  };
+  const prepared = prepareRasterJob(input);
+  const table = new Uint8Array(9 * 101 * 4);
+  for (let code = 0; code < 9; code++) for (let level = 0; level <= 100; level++) {
+    table.set(code === RASTER_CODES.EXTERIOR ? [255, 255, 255, 255]
+      : code === RASTER_CODES.DEPTH_CAP ? [190, 200, 215, 255]
+        : code === RASTER_CODES.INTERIOR ? [105, 123, 152, 255]
+          : [225, 229, 235, 255], (code * 101 + level) * 4);
+  }
+  const colors = { table, exterior: [255, 255, 255], branch: [66, 169, 149] };
+  const rgba = Buffer.alloc(width * height * 4);
+  const minima = new Uint8Array(width * height).fill(255);
+  const coverageCodes = new Uint8Array(width * height);
+  const minimumCounts = {};
+  const coverageCounts = {};
+  let outlines = 0;
+  for (let y = 0; y < height; y += 16) for (let x = 0; x < width; x += 64) {
+    const tile = renderRasterTile(prepared, { x, y, width: Math.min(64, width - x), height: Math.min(16, height - y) });
+    const pixels = colorizeRasterTile(tile.data, prepared.job, colors, tile.pieces, tile);
+    for (let row = 0; row < tile.height; row++) for (let column = 0; column < tile.width; column++) {
+      const local = row * tile.width + column;
+      const index = (y + row) * width + x + column;
+      const minimum = kind === 'parameter' ? tile.layerCaptureDepths[local]
+        : tile.captureDepths[local * 2 + 1];
+      const code = kind === 'parameter' ? tile.layerData[local * 2] : tile.data[local * 4 + 2];
+      minima[index] = minimum;
+      coverageCodes[index] = code;
+      minimumCounts[minimum] = (minimumCounts[minimum] ?? 0) + 1;
+      coverageCounts[code] = (coverageCounts[code] ?? 0) + 1;
+      rgba.set(pixels.subarray(local * 4, local * 4 + 4), index * 4);
+      if (PIECE_OUTLINE_COLOR.every((value, channel) => rgba[index * 4 + channel] === value)) outlines++;
+      if (code === RASTER_CODES.EXTERIOR && minimum === 255) rgba[index * 4 + 3] = 0;
+    }
+  }
+  const observedLevels = Object.keys(minimumCounts).map(Number).filter(value => value !== 255).sort((a, b) => a - b);
+  assert.ok(observedLevels.length >= 3, 'Each capture panel must contain multiple computed levels');
+  assert.ok((coverageCounts[RASTER_CODES.EXTERIOR] ?? 0) > 0, 'Each capture panel must retain visible exterior');
+  assert.equal(coverageCounts[RASTER_CODES.OFF_LENS] ?? 0, 0, 'No historical off-lens captures in current figures');
+  const checks = ['multiple minimum-capture levels computed independently of coverage',
+    'coverage and center capture stored separately', 'no historical off-lens acceptance'];
+  if (kind === 'parameter') {
+    assert.ok((coverageCounts[RASTER_CODES.DEPTH_CAP] ?? 0) > 0, 'Parameter figures retain finite cell coverage');
+    if (specification.digits?.length) {
+      assert.equal(minimumCounts[0] ?? 0, 0, 'Required first digit cannot capture at level zero');
+      checks.push('forced first digit counts as one step; original alphabet tail');
+    } else {
+      assert.ok((minimumCounts[0] ?? 0) > 0, 'The full locus includes its base capture set');
+      checks.push('unrestricted base capture level zero retained');
+    }
+  } else {
+    assert.ok(outlines > 0, 'Capture shading must preserve black piece contours');
+    const context = createAttractorMembershipContext(0, 2, 5);
+    const fixturePoints = [[0, 0, 0], [5.1, 0, 1], [0, 2.55, 2]];
+    for (const [zx, zy, expected] of fixturePoints) {
+      const result = classifyAttractorCapture(context, zx, zy, depth, { maxWork: BOUNDARY_WORK });
+      assert.equal(result.minimumCaptureDepth, expected, 'Exact rectangle fixture must keep its capture level');
+      const px = Math.floor((zx - center.x + spanX / 2) * width / spanX);
+      const py = Math.floor((center.y + spanX * height / width / 2 - zy) * width / spanX);
+      assert.equal(minima[py * width + px], expected, 'Displayed rectangle samples must match fixture levels');
+    }
+    checks.push('E(2i,5) fixture minima 0, 1, 2', 'black contours preserved under capture shading');
+  }
+  const state = normalizeExplorerState({
+    n, cx: kind === 'dynamical' ? 0 : center.x, cy: kind === 'dynamical' ? 2 : center.y,
+    comparisonMode: 'collinear', rendererMode: 'boundary', boundaryDepth: depth,
+    adaptiveBoundary: true, captureStyle: 'depth', modulo: 3, kMax: depth,
+    parameterLayers: specification.layers ?? ['mn'], parameterDigits: specification.digits ?? [],
+    firstLevelPieces: true, originalAttractorOpacity: 1, palette: 'research',
+    showCollinear: true, showDifference: false, showTrap: false, showEnclosure: false,
+    showTree: false, showPath: false, showEscapeStrata: false,
+    focusedPanel: kind, backend: 'auto',
+    ...(kind === 'parameter' ? { paramCenter: center, paramZoom: spanX }
+      : { dynCenter: center, dynZoom: spanX })
+  }, DEFAULT_EXPLORER_STATE);
+  const encoded = encodeExplorerState(state);
+  assert.deepEqual(decodeExplorerState(encoded), state, 'Capture link must preserve its complete state');
+  const png = encodePng(width, height, rgba);
+  return {
+    png,
+    metadata: {
+      id: specification.id, set: specification.set, kind, n,
+      parameter: kind === 'dynamical' ? { re: 0, im: 2, exact: '2i' } : null,
+      parameter_layers: specification.layers ?? [], parameter_digits: specification.digits ?? [],
+      viewport: { center, span_x: spanX, span_y: spanX * height / width, width, height },
+      coordinate_convention: 'expanding-parameter; original unscaled E(c,n) dynamical coordinates',
+      capture_style: 'depth', capture_modulo: 3, capture_sampling: 'pixel-center',
+      capture_search: 'iterative-deepening-with-independent-work-budget',
+      minimum_depth_unknown: 255, minimum_depth_counts: minimumCounts,
+      observed_minimum_depths: observedLevels, capture_depth_limit: depth, capture_work: BOUNDARY_WORK,
+      coverage_sampling: kind === 'parameter' ? 'complex-taylor-parameter-disk' : 'pixel-footprint',
+      geometric_radius_world: Math.SQRT1_2 * spanX / width,
+      coverage_codes: RASTER_CODES, coverage_code_counts: coverageCounts,
+      escape_depth: depth, boundary_work: BOUNDARY_WORK,
+      first_level_piece_masks: kind === 'dynamical', outlined_pixels: outlines,
+      fixture_checks: checks, raster_sha256: sha256(png),
+      interactive_url: `${EXPLORER_URL}#${encoded}`,
+      interactive_note: 'Same view and shading; capture depth limit12, boundary depth starts at12 and adapts with zoom/resolution. The figure uses fixed-depth binary64 CPU rendering.',
+      proof_status: 'visual-approximation',
+      limitations: 'A minimum describes a completed numerical search at the pixel center, not the full geometric cell or an interval-certified theorem. Coverage can remain unresolved or survive without a center capture.'
+    }
+  };
+}
+
+function capturePanel(specification, result, index) {
+  const x = 24 + index * 390;
+  const plotX = x + 20;
+  const plotY = 166;
+  const { center, span_x: spanX, span_y: spanY } = result.metadata.viewport;
+  const baseHex = specification.kind === 'parameter'
+    ? parameterLayerColor(specification.layers?.[0] ?? `digit:${specification.digits[0]}`, specification.n)
+    : colorForPiece(0);
+  const rgb = hexToRgb(baseHex);
+  const base = [rgb.r, rgb.g, rgb.b];
+  const shade = level => `rgb(${captureShade(base, 1, level, { captureStyle: 'depth', modulo: 3 }).map(Math.round).join(',')})`;
+  const legend = [0, 1, 2].map(level => `<rect x="${x + 21 + level * 82}" y="418" width="16" height="12" rx="2" fill="${shade(level)}"/><text x="${x + 44 + level * 82}" y="429" class="key">${level} mod 3</text>`).join('');
+  const extent = value => rounded(value).toFixed(2).replace('-', '−');
+  const axes = specification.kind === 'parameter' ? ['Re c', 'Im c'] : ['Re z', 'Im z'];
+  return `<g aria-label="${xml(specification.description)}">
+    <rect x="${x}" y="94" width="372" height="371" rx="13" fill="#fff" stroke="#dbe3ec"/>
+    <text x="${x + 20}" y="126" class="set">${specification.heading}</text>
+    <text x="${x + 352}" y="122" text-anchor="end" class="tag">${xml(specification.tag)}</text>
+    <text x="${x + 20}" y="150" class="parameter">${xml(specification.subtitle)}</text>
+    <image x="${plotX}" y="${plotY}" width="${PLOT_WIDTH}" height="${PLOT_HEIGHT}" xlink:href="data:image/png;base64,${result.png.toString('base64')}"/>
+    <rect x="${plotX}" y="${plotY}" width="${PLOT_WIDTH}" height="${PLOT_HEIGHT}" fill="none" stroke="#d5dfe8" stroke-width=".7"/>
+    <text x="${plotX}" y="402" class="extent">${extent(center.x - spanX / 2)}</text>
+    <text x="${plotX + PLOT_WIDTH}" y="402" text-anchor="end" class="extent">${extent(center.x + spanX / 2)}</text>
+    <text x="${plotX + PLOT_WIDTH / 2}" y="402" text-anchor="middle" class="axis">${axes[0]}</text>
+    <text transform="translate(${plotX - 6} ${plotY + PLOT_HEIGHT / 2}) rotate(-90)" text-anchor="middle" class="extent">${axes[1]}: ${extent(center.y - spanY / 2)} to ${extent(center.y + spanY / 2)}</text>
+    ${legend}
+    <text x="${x + 20}" y="452" class="key">${xml(specification.note)}</text>
+  </g>`;
+}
+
+const captureSpecifications = [
+  {
+    id: 'mn3_capture', set: 'M_3', kind: 'parameter', n: 3, layers: ['mn'], digits: [],
+    center: { x: .9, y: 1.6 }, spanX: 1.8,
+    heading: 'M<tspan baseline-shift="sub" font-size="16">3</tspan>', tag: 'CONNECTEDNESS',
+    subtitle: '2c ∈ E(c,5)', note: 'Base capture and successive inverse levels',
+    description: 'M3 parameter cells with minimum capture of 2c in the five-map difference attractor.'
+  },
+  {
+    id: 'f5_0_capture', set: 'F_(5,0)', kind: 'parameter', n: 5, layers: [], digits: [0],
+    center: { x: .75, y: 1.67 }, spanX: 2,
+    heading: 'F<tspan baseline-shift="sub" font-size="16">5,0</tspan>', tag: 'FIXED FIRST DIGIT',
+    subtitle: 'c ∈ 0 + E(c,5)/c', note: 'First digit 0; every later digit belongs to A₅',
+    description: 'The F5,0 parameter subset with first digit0 and original A5 tail; minimum capture begins at one.'
+  },
+  {
+    id: 'e2i5_capture', set: 'E(2i,5)', kind: 'dynamical', n: 5,
+    center: { x: 0, y: 0 }, spanX: 11.95,
+    heading: 'E(2i,5)', tag: 'DYNAMICAL PLANE',
+    subtitle: 'Five overlapping rectangular pieces', note: 'Whole-set depth starts at 0; piece edges stay black',
+    description: 'E(2i,5) with minimum center capture levels and black contours around every overlapping first-level piece.'
+  }
+];
+
 const examples = [
   await preset('e_c4_overlap', 'OVERLAP PRESET', 'c = (3 + i√11)/2'),
   await preset('e_c5_plane_filling', 'PLANE-FILLING PRESET', 'c = 1 + 2i'),
@@ -290,6 +467,7 @@ const examples = [
   }
 ];
 const results = examples.map(plot);
+const captureResults = captureSpecifications.map(capturePlot);
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1200" height="525" viewBox="0 0 1200 525" role="img" aria-labelledby="gallery-title gallery-description">
   <title id="gallery-title">Three collinear attractors in their original coordinates</title>
   <desc id="gallery-description">Original E(c,n), using f_t(z)=t+z/c, depth-twelve capture/escape coverage and independently outlined first-level pieces. Left: n=4, c=(3+i sqrt(11))/2. Middle: n=5, c=1+2i. Right: the overlapping rectangular pieces of n=5, c=2i. Colors identify the first digit and blend in overlaps; black contours trace every first-level piece. Each panel has an independently fitted view. These finite-resolution visual approximations are not proof records.</desc>
@@ -322,7 +500,7 @@ const sourceModules = [
 const moduleHashes = Object.fromEntries(await Promise.all(sourceModules.map(async source =>
   [source, sha256(await readFile(join(ROOT, source)))])));
 const metadata = {
-  schema_version: '2.0.0', artifact: SVG_PATH, artifact_sha256: sha256(svg),
+  schema_version: '3.0.0', artifact: SVG_PATH, artifact_sha256: sha256(svg),
   title: 'Three collinear attractors in their original coordinates',
   generator: 'tools/docs/generate_attractor_examples.mjs',
   regenerate: 'node tools/docs/generate_attractor_examples.mjs',
@@ -341,10 +519,48 @@ const metadata = {
     tile_halo_raster_pixels: 1,
     first_level_piece_opacity: PIECE_OPACITY
   },
+  capture_style: 'sets',
   proof_status: 'visual-approximation', rounding_verified: false,
   examples: results.map(result => result.metadata)
 };
-const files = [[SVG_PATH, svg], [JSON_PATH, `${JSON.stringify(metadata, null, 2)}\n`]];
+const captureSvg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1200" height="575" viewBox="0 0 1200 575" role="img" aria-labelledby="capture-title capture-description">
+  <title id="capture-title">Finite capture in parameter and dynamical planes</title>
+  <desc id="capture-description">Three independently computed binary64 production rasters: M3, the fixed-first-digit subset F5,0, and E(2i,5). Shade cycles by the minimum inverse depth at each pixel center. Geometric parameter-cell or dynamical-footprint coverage remains separate and pale when it survives without capture. E(2i,5) retains the color and black boundary of every first-level piece. Minimum depths are numerical search results, not full-cell or interval certificates.</desc>
+  <style>
+    text { font-family: Arial, Helvetica, sans-serif; fill: #183047; }
+    .set { font-family: Georgia, 'Times New Roman', serif; font-size: 25px; font-style: italic; }
+    .parameter { font-family: Georgia, 'Times New Roman', serif; font-size: 18px; fill: #385268; }
+    .tag { font-size: 10px; letter-spacing: .7px; font-weight: 700; fill: #63778b; }
+    .axis { font-size: 12px; fill: #52677b; font-style: italic; }
+    .extent { font-size: 11px; fill: #52677b; }
+    .key { font-size: 11px; fill: #52677b; }
+  </style>
+  <rect width="1200" height="575" rx="18" fill="#f5f8fc"/>
+  <text x="24" y="38" font-size="26" font-weight="700">Finite capture in parameter and dynamical planes</text>
+  <text x="24" y="67" font-size="16" fill="#536b80">Shade records minimum inverse depth at the pixel center. Whole-pixel coverage keeps the fine structure visible.</text>
+  ${captureSpecifications.map((specification, index) => capturePanel(specification, captureResults[index], index)).join('\n')}
+  <text x="24" y="495" font-size="14" fill="#52677b">Dark bands: minimum capture depth mod 3 · solid hue: capture with minimum unconfirmed · pale hue: finite escape coverage</text>
+  <text x="24" y="521" font-size="13" fill="#52677b">Capture limit 12 · escape depth 12 · canonical strict-lens capture only · fixed first digits count as one step</text>
+  <text x="24" y="547" font-size="13" fill="#52677b">Inside the original lens: M⁰ₙ captures at 0, M¹ₙ at 1. Individual first digits can require later capture.</text>
+</svg>
+`;
+assert.ok(Buffer.byteLength(captureSvg) < 500000, 'Keep the capture figure under 500 kB');
+const captureMetadata = {
+  schema_version: '1.0.0', artifact: CAPTURE_SVG_PATH, artifact_sha256: sha256(captureSvg),
+  title: 'Finite capture in parameter and dynamical planes',
+  generator: metadata.generator, regenerate: metadata.regenerate, verify: metadata.verify,
+  generator_sha256: metadata.generator_sha256, source_modules_sha256: moduleHashes,
+  svg_size: { width: 1200, height: 575 }, arithmetic: 'binary64', rounding_verified: false,
+  proof_status: 'visual-approximation',
+  mathematical_reference: 'https://arxiv.org/html/2603.07397v1',
+  capture_field: 'Minimum inverse depth to the canonical trap at each pixel center, with all shallower numerical searches completed before a minimum is assigned.',
+  coverage_field: 'Separate finite parameter-cell or dynamical-footprint search; capture of a center is not capture of the full cell.',
+  shade_encoding: { modulo: 3, known_minimum_rgb_scale: '.6+.3*(depth%3)/2',
+    witness_unknown_minimum: 'base hue', finite_survivor: '72% base hue +28% white' },
+  panels: captureResults.map(result => result.metadata)
+};
+const files = [[SVG_PATH, svg], [JSON_PATH, `${JSON.stringify(metadata, null, 2)}\n`],
+  [CAPTURE_SVG_PATH, captureSvg], [CAPTURE_JSON_PATH, `${JSON.stringify(captureMetadata, null, 2)}\n`]];
 for (const [relativePath, content] of files) {
   const path = join(ROOT, relativePath);
   if (CHECK) {
@@ -355,3 +571,4 @@ for (const [relativePath, content] of files) {
   }
 }
 console.log(`${CHECK ? 'Verified' : 'Generated'} ${SVG_PATH} (${Buffer.byteLength(svg)} bytes), ${JSON_PATH}`);
+console.log(`${CHECK ? 'Verified' : 'Generated'} ${CAPTURE_SVG_PATH} (${Buffer.byteLength(captureSvg)} bytes), ${CAPTURE_JSON_PATH}`);

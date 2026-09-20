@@ -9,7 +9,9 @@ refinement at the requested settings. The visible parameter and dynamical
 canvases remain Canvas 2D surfaces, so overlays, labels, image export, and
 fallback rendering share one composition path.
 The default original-attractor renderer is `boundary`: a capture-and-escape
-raster with adaptive depth and first-level piece colors. Prefix and histogram
+raster with adaptive depth and first-level piece colors. Its separate
+pixel-center finite-capture field supplies minimum-depth shading by default.
+Prefix and histogram
 geometry remain explicit advanced renderers.
 
 ## Preferences, completion, and fallback
@@ -39,7 +41,7 @@ binary64 detailed reference search with the requested limits.
 | [`hybrid_renderer.mjs`](../src/renderers/hybrid_renderer.mjs) | Coordinates one auxiliary WebGL context and a shared pool of at most two raster workers. Maintains separate parameter/dynamical jobs, frame callbacks, cancellation, and backend status. |
 | [`webgl_preview.mjs`](../src/renderers/webgl_preview.mjs) | Checks context capabilities, shader precision, view precision, and dimensions; draws classification and palette passes; releases and rebuilds resources across context loss. |
 | [`gpu_search_shader.mjs`](../src/compute/gpu_search_shader.mjs) | Bounded float32 inverse search with explicit depth, frontier, work, domain, and precision outcomes. |
-| [`attractor_membership.mjs`](../src/compute/attractor_membership.mjs) | Shared binary64 membership context, depth-first capture/escape search, fixed or complementary first digits, parameter-cell propagation, and adaptive depth calculation. |
+| [`attractor_membership.mjs`](../src/compute/attractor_membership.mjs) | Shared binary64 membership context, depth-first capture/escape coverage, a level-ordered minimum-capture search, fixed or complementary first digits, parameter-cell propagation, and adaptive depth calculation. |
 | [`parameter_views.mjs`](../src/compute/parameter_views.mjs) | Keeps the full connectedness search, aggregate marked-point layers, and individually selected first-digit subsets separate. |
 | [`raster_jobs.mjs`](../src/compute/raster_jobs.mjs) | Validates numerical raster jobs and evaluates pixel cells with the binary64 kernels. Uses full-frame coordinates independently of tile boundaries and records independent first-piece coverage for composition. |
 | [`raster_worker_pool.mjs`](../src/compute/raster_worker_pool.mjs), [`raster-worker.mjs`](../workers/raster-worker.mjs) | Schedules bounded tiles, transfers classification bytes, validates replies, and rejects stale or malformed work. |
@@ -88,8 +90,9 @@ locations. Every visible parameter layer now evaluates a disk containing its
 pixel cell. For the marked-point layers it starts from $z(c)=c$; for the full
 $\mathcal M_n$ layer it starts from $z(c)=2c$ with alphabet $A_{2n-1}$.
 All use the adaptive boundary depth for the image. The selected full
-connectedness record retains its independent breadth-first reference search,
-requested `kMax`/`LMax`, and original verdict semantics.
+connectedness record retains its independent breadth-first reference search
+and requested `kMax`/`LMax`, with `canonicalOnly: true` for current browser
+capture. Historical off-lens records use a separate replay policy.
 
 For a disk $c=c_0+\delta$, $|\delta|\leq r$, each inverse word is represented
 by
@@ -185,6 +188,81 @@ coloring, and self-covering condition. The portable keys are `bdepth` and
 `badapt`; the codec preserves zero as automatic instead of storing a
 viewport-dependent effective depth.
 
+### Finite capture and boundary coverage
+
+The coverage search and the finite-capture field answer different questions.
+Coverage asks whether a full parameter cell or dynamical footprint can be
+discarded at the requested escape depth. The capture field asks for the
+smallest inverse depth at which the **pixel center** enters the canonical
+trap. A footprint may remain admissible when its center does not capture;
+a captured center need not imply capture of the whole footprint. Both fields
+are preserved in the raster result.
+
+`classifyAttractorCapture` searches successive depth limits in increasing
+order, visiting every admissible sibling at each shallower limit before
+moving deeper. This establishes a minimum for the implemented numerical
+trap test. An ordinary depth-first coverage search can stop on a long-lived
+branch before reaching a capture in a sibling, or return a longer witness
+before a shorter one. Its first witness depth must not be used as a minimum.
+The capture search uses `min(kMax,100)` on the CPU, independently of the
+adaptive escape depth (16 for two maps, 12 otherwise before zoom increments).
+Its candidate budget covers all passes
+and reuses an $O(k)$ stack. It does not materialize a full breadth-first tree.
+
+| Field | Initial point | Tail alphabet | Earliest capture depth |
+|---|---|---|---:|
+| $\mathcal M_n$ | $2c$ | $A_{2n-1}$ | 0 |
+| $\mathcal M_n^0$ | $c$ | $A_n$ | 0 |
+| $\mathcal M_n^1$ | $c$, followed by one digit in $A_{n-1}$ | $A_n$ | 1 |
+| $F_{n,t}$ | $c$, followed by the chosen $t$ | $A_n$ | 1 |
+| $E(c,n)$ | Displayed point $z$ | $A_n$ | 0 |
+| $\tfrac12 E(c,2n-1)$ | Twice the displayed point | $A_{2n-1}$ | 0 |
+
+The unrestricted $E(c,n)$ field includes its initial trap test even when
+first-level pieces are colored; toggling piece identity must not shift the
+filtration by one. Likewise, $c$ already lies in the original trap throughout
+the strict original-alphabet lens, so $\mathcal M_n^0$ has capture level zero
+there. The fixed first digit in each $F_{n,t}$ is still compulsory and counts
+as one step. The complementary aggregate also has a uniform level: choose
+its first digit nearest to $2\mathrm{Re}\,c$; the resulting point lies in
+the original trap, so $\mathcal M_n^1$ captures at one throughout that
+strict lens. Higher levels remain meaningful for fixed-digit fields,
+$\mathcal M_n$, and dynamical points. They are not fabricated for these
+two uniform aggregate regions.
+
+The difference-attractor point raster already uses a breadth-first search,
+so a canonical trap hit has the required minimum ordering. Current browser
+selected-point searches and difference rendering permit capture only in the
+strict difference-alphabet lens. The historical off-lens rectangle can
+produce false positives and is retained only for explicitly historical
+reference/replay behavior; see the [policy and counterexample](IMPLEMENTATION_NOTES.md#current-capture-policy-and-historical-replay).
+
+For CPU tiles, `captureDepths` stores two bytes per pixel for the primary and
+secondary fields; `layerCaptureDepths` stores one byte per selected parameter
+layer per pixel. Values 0–100 carry an established numerical minimum; 255
+means that no center minimum was established. Coverage codes and their
+depths remain in `data` and `layerData`. Worker replies validate and transfer
+the additional arrays. A known capture witness stays available even if a
+separate minimum search exhausts its budget.
+
+The portable setting `capture=depth` is the default. It modulates each set or
+piece hue by minimum depth modulo `q` (1–12). A capture without an established
+minimum retains the base hue; finite escape coverage is paler. The flat
+`capture=sets` view keeps the base hues. Original-attractor shading describes
+the whole-attractor field and applies to the blend of covering piece colors;
+every black piece contour is composed afterwards and remains unchanged. Both display styles compute the same
+capture field and preserve its occupancy and diagnostics; `sets` only changes
+the color encoding.
+Prefix, histogram, and explicit capture-disabled survival views keep their
+separate numerical or sampling meaning.
+
+For `q>1`, a known minimum $k$ scales RGB channels by
+$0.6+0.3(k\bmod q)/(q-1)$; `q=1` uses 0.75. A finite survivor without a
+center minimum mixes 72% base color with 28% white. CPU and WebGL use the
+same formula. Shade is a display encoding; it is not an interval-verified
+classification of the full pixel or an assertion that an unresolved center
+belongs to the set.
+
 ### First-level piece colors and boundaries
 
 Sharp boundary rendering evaluates each $E_t=t+c^{-1}E(c,n)$ separately,
@@ -229,6 +307,7 @@ The following constants are implemented limits, not benchmark results:
 | Breadth-first candidate work | At most 2,048 digit evaluations per pixel search. |
 | Capture/escape boundary depth | At most 64 for original pieces and parameter cells; a deeper request ending at the shader cap remains unresolved. |
 | Capture/escape candidate work | At most 4,096 digit evaluations independently for each selected parameter layer or first-level piece. |
+| Minimum-capture search | At most `min(kMax,64)` inverse steps and 4,096 candidate evaluations across all iterative-deepening passes, independently of the corresponding coverage budget. Required lower user limits remain effective. |
 | Simultaneous parameter layers | Up to 66: three aggregates plus all 63 digits at the GPU arity limit $n=32$. Larger unsupported selections use CPU rendering. |
 | Parameter-plane enclosure series | 48 terms plus a tail allowance. Fixed dynamical enclosures are prepared in binary64 using the requested tolerance. |
 | Raster size | At most 120,000 pixels; neither dimension exceeds 768 or the device's smaller limit. |
@@ -265,19 +344,42 @@ fallback reason, worker count, and timing where available.
 Cell metadata records `parameter_sample_type`, `parameter_radius_world`,
 `parameter_layer_ids`, and `parameter_cell_model: "complex-taylor-disk"`.
 `boundary_work_scope` identifies the per-layer or per-piece budget.
-`search_passes`, `preview_work_weight`, `weighted_search_passes`, and
+`search_passes`, `capture_search_passes`, `preview_work_weight`,
+`weighted_search_passes`, and
 `preview_pixel_budget` record the resolution reduction used to keep a
 many-layer preview bounded. The work weight is the larger of one and the
-largest active alphabet size divided by eight. The pixel budget is the
-smaller of 120,000 and 480,000 divided by the weighted search-pass count.
-This preserves common four-map preview quality while reducing large-alphabet
-workloads. CPU refinement retains full output resolution. This sample budget
+largest active alphabet size divided by eight. The weighted pass count
+includes both coverage and separate center-capture searches. The pixel
+budget is the smaller of 120,000 and 480,000 divided by that weighted count.
+This limits preview cost as the alphabet and active selections grow. CPU
+refinement retains full output resolution. This sample budget
 is separate from the digit-evaluation work cap of each search.
 Piece metadata names the occupied/uncertain attachments, bit encoding, and
 `raster_halo`, so diagnostic readback can reconstruct the same outlines.
 The GPU's propagated float32 uncertainty is distinct from the geometric
 parameter radius and from the Taylor remainder. A shader fixture can request
 zero parameter radius to compare selected-point behavior explicitly.
+
+Capture metadata records `capture_sample_type: "pixel-center"`,
+`capture_arithmetic: "padded-binary32"`, the minimum-depth convention,
+`capture_search: "iterative-deepening-with-independent-work-budget"`,
+`capture_style`, `capture_modulo`, `requested.capture_depth`,
+`effective.capture_depth`, and `effective.capture_work`.
+Independent piece masks do not repeat the whole-attractor minimum search.
+The existing breadth-first half-difference search already supplies ordered
+capture and adds no separate minimum-search pass. Parameter diagnostics and
+each selected parameter layer account for their own center searches in both
+display styles. `readLayers().captureDepths` exposes the sampled field
+separately from coverage bytes for GPU/CPU QA.
+
+To measure the added CPU search work separately from coverage, run
+`node tools/bench/finite_capture_bench.mjs` (optionally `--width=96`). The
+benchmark reuses the same prepared geometry, performs warmups, and reports
+candidate-map counts and median times for the parameter aggregates, a fixed
+digit, and a larger alphabet. Its capture limit is 37 and escape depth is
+12. Context preparation is excluded from both timed paths. Operation counts
+describe the recorded grid and search settings; timings are local CPU
+measurements, not browser-frame or physical-GPU guarantees.
 
 ## Attractor coordinates and numerical records
 

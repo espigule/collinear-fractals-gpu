@@ -80,10 +80,42 @@ to $2c$; a depth-zero hit has an empty word.
 | `Undetermined` | `node-cap`, `depth-cap` | The finite computation stopped without a decision. |
 | `Undetermined` | `outside-domain`, `numerical-range` | Unsupported geometry or a calculation outside finite numerical range. |
 
-`Interior-offLens` is exploratory evidence unless its specific trap hypotheses
-and arithmetic are independently justified. `Undetermined` does not classify
-a parameter as a boundary point. Native search results use `stopReason`
+The `Interior-offLens` row applies to historical reference/replay behavior;
+the current browser disables that acceptance rule. `Undetermined` does not
+classify a parameter as a boundary point. Native search results use `stopReason`
 (JavaScript/Swift) or `stop_reason` (Python); JSON exports use `stop_reason`.
+
+## Current capture policy and historical replay
+
+Current browser selected searches use `canonicalOnly: true`: for an alphabet
+of size $m$, trap entry is permitted only when
+$|c|^2+2|\mathrm{Re}\,c|<m$ in the non-real expanding domain.
+The $\mathcal M_n$ and difference-attractor searches use $m=2n-1$;
+the original attractor and its first-digit subsets use $m=n$.
+Enclosure escape and finite survival remain available outside those lenses.
+
+The former off-lens rectangle is not a general self-covering trap. For
+$m=3$, $c=3+3i$, and $z=1/4+i/20$, its old test returns immediate
+`Interior-offLens`. But for every $t\in\{-2,0,2\}$,
+
+$$
+|\mathrm{Im}(c(z-t))|=|0.9-3t|\geq0.9.
+$$
+
+All points of $E(c,3)$ satisfy
+$|\mathrm{Im}\,z|\leq2/(\sqrt{18}-1)<2/3$, since the first digit is
+real and the remaining series has that absolute tail bound. Thus every
+first inverse image is outside the attractor, and the original point is
+exterior. In the half-difference display the same point is
+$(1/8,1/40)$. This exact counterexample prevents treating the historical
+off-lens rule as numerical evidence of membership.
+
+Reference defaults and archived search records retain that old behavior to
+allow reproduction; current browser calls explicitly select the canonical
+policy. A historical `Interior-offLens` result must carry its original
+provenance and must not silently become a current accepted capture. The
+same distinction applies when loading an old preset: the current explorer
+recomputes it under the current policy.
 
 ## Enclosure truncation and arithmetic
 
@@ -152,7 +184,10 @@ Automatic boundary depth starts at 16 for two maps and 12 otherwise. A nonzero
 result at 100. With adaptation disabled, depth stays at the selected base.
 The browser's boundary work budget is 20,000 digit evaluations per selected
 parameter layer, digit subset, or first-level piece at a pixel; the base
-original-attractor search has its own budget. More visible layers therefore
+original-attractor search has its own budget. The point-center minimum search
+receives a separate bounded allowance in both capture display styles, so
+coverage cannot spend its entire budget before capture is considered.
+More visible layers therefore
 increase total work. The GPU preview has smaller depth/work limits. None of
 these visual controls changes the selected $\mathcal M_n$ search's `kMax`,
 `LMax`, or tolerance.
@@ -211,6 +246,74 @@ piece fills, so a boundary inside another piece remains visible. Overlapping
 fills average the relevant piece colors. The first-level-pieces control
 toggles this combined color-and-outline view; sampled prefix and histogram
 renderers retain their separate visual interpretation.
+
+## Finite-capture fields
+
+The [finite-capture paper](https://arxiv.org/html/2603.07397v1) defines
+capture time through entry into a canonical trap and the resulting
+filtration. The current renderer keeps its geometric boundary approximation
+and a sampled capture-time field as separate data.
+
+For one eligible parameter and point, `classifyAttractorCapture` applies
+depth-limited inverse searches at increasing limits. Every shallower search
+finishes before the limit increases. A reported `minimumCaptureDepth` is
+therefore the smallest depth accepted by this numerical search, rather than
+the length of the first depth-first witness. The minimum search uses `min(kMax,100)` on the CPU, while geometric
+coverage keeps its separate adaptive escape depth. The total work cap covers
+all minimum-search passes. Precision or work exhaustion leaves the minimum unknown, without
+discarding a capture already found by the independent coverage search.
+
+| Result field | Meaning |
+|---|---|
+| `minimumCaptureDepth` | Integer numerical minimum, or `null` if not established. |
+| `captureDepthSemantics` | `minimum-verified`, `witness-upper-bound`, or `not-captured`; “verified” here refers to search ordering, not directed-rounding certification. |
+| `captureSearchStopReason` | `minimum-found`, `no-capture-through-depth`, `trap-unavailable`, or an explicit resource/numerical termination. |
+| `captureSample` on a parameter cell | Separate zero-radius result at its marked center, with the marked point, scale, arithmetic, and trap availability. |
+
+The center search uses $2c$ and $A_{2n-1}$ for $\mathcal M_n$; it uses
+$c$ and $A_n$ for $\mathcal M_n^0$. The complementary aggregate and
+individual digit subsets must apply their first digit before capture,
+and all later steps use $A_n$. That first step contributes one to the
+depth. Unrestricted whole-attractor capture begins at zero and is independent
+of whether first-piece colors are enabled. The half-difference view applies
+its original difference-attractor search to twice the displayed coordinate.
+
+Throughout the strict original-alphabet lens, $c$ is already in the canonical
+trap. Hence the $\mathcal M_n^0$ capture field is zero there. Individual
+$F_{n,t}$ fields can have later levels because their prescribed first step
+cannot be bypassed. The renderer must not introduce extra positive-depth
+strata merely by decomposing the aggregate into first-level pieces.
+
+The complementary aggregate has minimum one throughout the same strict
+lens. Write $c=x+iy$, $\rho=|c|$, and choose a digit
+$t\in A_{n-1}$ nearest to $2x$. The lens implies
+$|2x|<n-1$, so $|2x-t|\leq1$. Its first inverse image satisfies
+
+$$
+v'=y(2x-t),\qquad
+s'=\frac{y}{\rho}\bigl(2x(2x-t)-\rho^2\bigr).
+$$
+
+Thus $|v'|\leq|y|<V$ and
+$|s'|\leq |y|(\rho^2+2|x|)/\rho<S$. This proves one-step entry
+for the aggregate; a prescribed digit can still require a later level.
+Numerical implementations retain padded strict comparisons at the lens
+edge instead of turning this argument into unguarded floating-point equality.
+
+Pixel-center capture does not assert capture across the geometric footprint.
+Conversely, a surviving parameter cell can cover structure that does not
+pass through its center. `captureDepths` and `layerCaptureDepths` encode
+these sampled minima separately from the coverage codes; 255 is the packed
+unknown sentinel. The compositor darkens known levels cyclically while
+retaining set and piece hues, leaves a capture with unknown minimum solid,
+and makes finite escape coverage pale. Black piece contours remain visible.
+
+State `captureStyle` maps to `capture=depth` (default) or `capture=sets`;
+`modulo` maps to `q`, from 1 to 12. Changing these controls cannot change
+geometric pruning, numerical acceptance, or the selected-point search
+record. Both display styles compute the same center minima; flat set colors
+do not remove their contribution to occupancy or diagnostics. Prefix and
+histogram displays retain their sampling colors.
 
 ## First-digit parameter subsets
 
@@ -299,6 +402,13 @@ Boundary visual metadata also records the requested base depth, adaptation,
 effective depth and work limit, pixel footprint, and self-covering condition.
 Finite survival, numerical capture, and resource-cap outcomes remain distinct
 from the selected connectedness record.
+
+Current browser records include `trap_policy: "canonical-only"`, and the
+trap geometry is `null` when no eligible canonical trap is available.
+Rendering metadata records center capture sampling, maximum depth,
+arithmetic, packed unknown minimum, display style, and cycle independently
+of boundary coverage. The half-difference raster uses point samples;
+original sharp-boundary and parameter layers retain footprint/cell coverage.
 
 `parameter_view.layers` and `parameter_view.digits` retain the complete
 parameter selection. Its `mn`, `mn0`, `mn1`, and `digit_results` fields are

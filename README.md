@@ -16,7 +16,9 @@ default automatic mode displays a bounded GPU approximation, then refines the
 pixel search at the requested settings in Web Workers. The default original
 attractor view uses adaptive capture-and-escape boundary rendering, with
 coordinated first-level piece colors and black outlines for each piece,
-including boundaries inside overlaps. Unsupported GPU views
+including boundaries inside overlaps. **Finite-capture layers** reveal the
+minimum number of inverse steps to the canonical trap at pixel centers,
+while separate whole-pixel searches retain sharp boundary coverage. Unsupported GPU views
 use CPU rendering; the existing progressive main-thread renderer is retained
 for environments without working workers.
 
@@ -87,6 +89,30 @@ and raster resolution. Prefix, seeded histogram, and survival rendering remain
 available as advanced views. The selected $\mathcal M_n$ search keeps its
 independent depth and frontier-width limits.
 
+**Finite-capture layers** is the default color view for every numerical set:
+$\mathcal M_n$, $\mathcal M_n^0$, $\mathcal M_n^1$, each $F_{n,t}$,
+$E(c,n)$, and the half-difference scene. Shade repeats by minimum capture
+depth modulo $q$, preserving the hue of the set or piece. Pale color marks
+finite escape coverage; a capture whose minimum is still unknown retains
+the solid hue. In **Controls → Colors & finite capture**, change $q$ or
+choose **Set colors** for a flat view. These display choices do not turn
+finite survival into membership.
+
+![Computed capture layers of M3, the digit subset F(5,0), and E(2i,5), with shade cycling by minimum inverse depth while pale regions retain finite escape coverage.](docs/figures/finite-capture-layers.svg)
+
+The capture field is sampled at pixel centers, independently of geometric
+pixel coverage. Its search completes every shallower level before assigning
+a minimum. Its depth limit follows the search-depth control (`kMax`, default
+37), independently of adaptive escape depth. For the whole attractor, capture
+starts at depth zero even when
+first-level pieces are colored. A required first digit counts as one step.
+In particular, $\mathcal M_n^0$ has depth-zero capture throughout the strict
+original-alphabet lens, and $\mathcal M_n^1$ captures at depth one there.
+Individual digits can require later capture even when their aggregate has
+already captured; additional aggregate bands in that lens would be misleading.
+[Computed capture examples and reproduction](docs/figures/README.md#finite-capture-layers)
+give the exact viewports, observed levels, and numerical limits.
+
 Share links, captioned image export, search JSON, and undo/redo retain the
 reproducible research workflow. The drawer becomes a modal on narrow screens;
 canvas navigation, dialogs, and controls support keyboard operation.
@@ -126,17 +152,18 @@ flowchart TD
     S -->|Prefix or histogram| G["CPU geometry"]
     B -->|auto or gpu| P["WebGL 2 preview"]
     B -->|cpu| W["Binary64 worker raster"]
-    P -->|Show preview| C["Canvas image"]
+    P -->|Preview coverage and capture| C["Canvas image"]
     P -->|auto only: refine| W
     P -.->|GPU unavailable or lost| W
-    W -->|Refined raster| C
+    W -->|Refined coverage and capture| C
     W -.->|Worker unavailable or failed| F["Progressive main-thread raster"]
     F --> C
     G --> C
 ```
 
 In automatic mode, the preview appears first and workers refine the raster at
-the requested limits. In GPU mode, a successful preview remains the displayed
+the requested limits. Coverage and center-capture fields remain independent
+through classification and are combined only for display. In GPU mode, a successful preview remains the displayed
 raster. Prefix and histogram geometry can render alone or be composited over
 raster layers. The selected search record follows its separate reference path.
 
@@ -187,7 +214,8 @@ real-axis and unit-circle inputs are not classified by it. See
 
 CPU pixel rendering uses a scalar kernel with reusable typed-array frontiers,
 scheduled in bounded worker tiles; original-attractor boundaries use a bounded
-depth-first search. GPU preview classification and palette
+depth-first search. A separate level-ordered search supplies minimum-capture
+shading at pixel centers without changing the boundary coverage. GPU preview classification and palette
 composition run in separate WebGL 2 passes, with independent evaluations for
 the selected parameter layers and first-level pieces. The selected-parameter
 search retains its
@@ -239,9 +267,10 @@ layers and the sharp $n\geq20$ lens-containment threshold. The explorer
 implements numerical searches associated with this framework; running it
 does not independently verify those theorems or their full certificate corpus.
 
-## Verdicts: Interior, Interior-offLens, Exterior, Undetermined
+## Current search verdicts
 
-These are the selected $\mathcal{M}_n$ search labels. The optional
+The current browser uses only the canonical strict-lens trap for the selected
+$\mathcal{M}_n$ search, with difference alphabet $A_{2n-1}$. The optional
 $\mathcal M_n^0$ and $\mathcal M_n^1$ views have separate original-alphabet
 membership searches. They allow capture only when
 $|c|^2+2|\mathrm{Re}\,c|<n$, including valid even alphabets.
@@ -252,14 +281,20 @@ countable restricted-polynomial root set $\mathcal R_n$ in the finite-capture pa
 | Verdict | Meaning of the numerical search result |
 |---|---|
 | `Interior` | Strict trap entry for an in-lens parameter. |
-| `Interior-offLens` | Strict trap entry using the separate off-lens rule. |
 | `Exterior` | Initial enclosure escape or exhaustion of the enclosure-admissible inverse tree. |
 | `Undetermined` | A depth/width limit, unsupported input domain, or numerical-range limit prevented a conclusion. |
 
 `Undetermined` does not assert boundary membership, connectedness, or
-disconnectedness. `Interior-offLens` records a different trap rule and must
-retain that provenance. All four labels describe the computation performed in
-floating point, including the enclosure comparisons.
+disconnectedness. Outside the applicable strict lens, the current browser
+uses enclosure escape and finite survival, with no trap acceptance. These
+labels describe floating-point computation, including enclosure comparisons.
+
+Historical reference packages and archived records retain the
+`Interior-offLens` label for replay. The former off-lens rectangle is not a
+general self-covering trap: it can accept points that are already excluded
+after one inverse step. Current browser searches opt into `canonicalOnly`
+and do not use that rule. [Implementation notes](docs/IMPLEMENTATION_NOTES.md#current-capture-policy-and-historical-replay)
+record an explicit counterexample and the compatibility boundary.
 
 The defaults are `k_max = 37`, `L_max = 1000`, and `tol = 1e-8`.
 `L_max` caps the retained nodes **at one depth**, not the total nodes explored.
@@ -274,7 +309,7 @@ geometric tail, not a bound on all floating-point rounding errors.
 | `theta0_base_capture`, `trap_enclosure_n3` | Initial trap/enclosure cases plus a one-step inverse word, with compact search JSON. |
 | `e_c4_overlap` | Original attractor at $c=(3+i\sqrt{11})/2$, $n=4$; the default search is `Undetermined`. |
 | `e_c5_plane_filling` | Original attractor at $c=1+2i$, $n=5$; the default search is `Undetermined`. |
-| `off_lens_witnesses_n2_to_n19` | One numerical off-lens example for $n=3$; the directory name is retained for existing links. |
+| `off_lens_witnesses_n2_to_n19` | Historical off-lens search record for $n=3$; the current browser re-evaluates it with canonical-only capture. The directory name is retained for existing links. |
 | `hole_zoom_n13` | An `Exterior` sample near an $n=13$ hole; one sample does not establish the topology of a hole. |
 | `finite_capture_layers_n3` | View for comparing finite-search depth layers. |
 | `threshold_n20` | Exploratory starting point at $n=20$. |
@@ -301,6 +336,9 @@ two digit subsets visible together. Empty lists deliberately hide those
 layers. The older `pm` field remains a compatibility projection; explicit
 `pl`/`pd` selections take precedence. Old `pm=rn` links import as `mn0`,
 and old `pm=compare` links retain their original two-layer selection.
+Capture style uses `capture=depth` or `capture=sets`; `q` stores the shade
+cycle, from 1 to 12. The field always measures minimum inverse steps under
+the stated numerical search, not a first successful branch's depth.
 A share link restores the view; a search JSON export records the numerical
 result.
 
@@ -435,7 +473,7 @@ Documentation and non-code repository materials use **Creative Commons
 Attribution 4.0 International** unless otherwise stated; see
 [LICENSE-docs.md](LICENSE-docs.md) and [the full license](LICENSES/CC-BY-4.0.txt).
 
-[view-e4]: https://complextrees.com/collinear-fractals-gpu/#n=4&k=37&l=1000&tol=1e-8&q=3&cx=1.5&cy=1.6583123951777&pz=2.414&dz=9.730607775891547&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pl=mn&pd=&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
-[view-e5]: https://complextrees.com/collinear-fractals-gpu/#n=5&k=37&l=1000&tol=1e-8&q=3&cx=1&cy=2&pz=2.414&dz=12.923663597204854&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pl=mn&pd=&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
+[view-e4]: https://complextrees.com/collinear-fractals-gpu/#n=4&k=37&l=1000&tol=1e-8&q=3&cx=1.5&cy=1.6583123951777&pz=2.414&dz=9.730607775891547&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&capture=sets&focus=dynamical&pl=mn&pd=&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
+[view-e5]: https://complextrees.com/collinear-fractals-gpu/#n=5&k=37&l=1000&tol=1e-8&q=3&cx=1&cy=2&pz=2.414&dz=12.923663597204854&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&capture=sets&focus=dynamical&pl=mn&pd=&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
 [view-e3]: https://complextrees.com/collinear-fractals-gpu/#n=3&k=37&l=1000&tol=1e-8&q=3&cx=3&cy=3&pz=2.414&dz=5.284458204387503&bdepth=0&adepth=8&hseed=20260227&hsamples=50000&aop=0.92&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
-[view-overlap]: https://complextrees.com/collinear-fractals-gpu/#n=5&k=37&l=1000&tol=1e-8&q=3&cx=0&cy=2&pz=2.414&dz=11.946666668061772&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&focus=dynamical&pl=mn&pd=&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff
+[view-overlap]: https://complextrees.com/collinear-fractals-gpu/#n=5&k=37&l=1000&tol=1e-8&q=3&cx=0&cy=2&pz=2.414&dz=11.946666668061772&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=1.207&pcy=1.207&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&capture=sets&focus=dynamical&pl=mn&pd=&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff

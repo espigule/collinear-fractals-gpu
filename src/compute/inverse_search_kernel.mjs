@@ -114,7 +114,7 @@ function searchCoordinates(context, s0, v0, kMax, LMax) {
 }
 
 /** Verdict/depth only: no orbit tree or certificate word is allocated. */
-export function inverseIterationTestFast(x, y, n, kMax = 37, LMax = 1000, tol = 1e-8) {
+export function inverseIterationTestFast(x, y, n, kMax = 37, LMax = 1000, tol = 1e-8, options = {}) {
   assertArity(n);
   validateSearchLimits(kMax, LMax);
   assertPositiveNumber(tol, 'tol');
@@ -122,7 +122,9 @@ export function inverseIterationTestFast(x, y, n, kMax = 37, LMax = 1000, tol = 
   const rho = Math.hypot(eff.x, eff.y);
   if (!Number.isFinite(rho)) return result('Undetermined', 0, 0, 'numerical-range');
   if (rho <= 1 || eff.y === 0) return result('Undetermined', 0, 0, 'outside-domain');
-  const context = createInverseSearchContext(eff.x, eff.y, 2 * n - 1, inLens(eff.x, eff.y, n), tol);
+  const isLens = inLens(eff.x, eff.y, n);
+  const context = createInverseSearchContext(eff.x, eff.y, 2 * n - 1, isLens, tol,
+    { useTrap: options.canonicalOnly !== true || isLens });
   return searchCoordinates(context, (4 * (eff.x / rho)) * eff.y, 2 * eff.y, kMax, LMax);
 }
 
@@ -140,7 +142,7 @@ export function inverseSearchKernel(job) {
   const detailed = job.details !== false;
   const search = detailed ? inverseIterationTestDetailed : inverseIterationTestFast;
   return {
-    ...search(x, y, n, kMax, LMax, tol),
+    ...search(x, y, n, kMax, LMax, tol, { canonicalOnly: job.canonicalOnly === true }),
     kernel: detailed ? 'reference-breadth-first' : 'float64-breadth-first',
     searchOrder: 'ascending-digits',
     // Digit ordering is part of reproducible finite-word and cap semantics.

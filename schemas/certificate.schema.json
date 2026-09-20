@@ -99,12 +99,57 @@
     "renderer": {
       "type": "string"
     },
+    "minimum_capture_depth": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Minimum inverse depth in the separate selected-point search. Null when no minimum is established."
+    },
+    "trap_policy": { "enum": ["canonical-only"] },
+    "finite_capture": {
+      "type": "object",
+      "required": ["capture_style", "cycle", "maximum_depth", "sample_type", "boundary_coverage_sampling", "minimum_depth_convention"],
+      "properties": {
+        "capture_style": { "enum": ["depth", "sets"] },
+        "cycle": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "maximum_depth": {
+          "type": "integer", "minimum": 0, "maximum": 100,
+          "description": "Requested maximum center-capture depth from k_max, independent of adaptive boundary escape depth. Active GPU preview limits are reported separately."
+        },
+        "sample_type": { "const": "pixel-center" },
+        "boundary_coverage_sampling": {
+          "type": "object",
+          "required": ["parameter", "original_attractor", "half_difference"],
+          "properties": {
+            "parameter": { "const": "whole-pixel" },
+            "original_attractor": { "const": "whole-pixel" },
+            "half_difference": { "const": "pixel-center" }
+          },
+          "additionalProperties": false,
+          "description": "Coverage sampling for each numerical view. Original-attractor whole-pixel coverage applies to Sharp boundary; advanced renderers are outside this capture-display scope."
+        },
+        "minimum_depth_convention": { "type": "string" },
+        "whole_attractor_initial_depth": { "const": 0 },
+        "fixed_first_digit_initial_depth": { "const": 1 },
+        "unknown_minimum": { "type": "null" },
+        "packed_unknown_minimum": { "const": 255 },
+        "witness_without_minimum": { "type": "string" },
+        "selected_point_record": { "type": "string" },
+        "scope": { "type": "string" }
+      },
+      "additionalProperties": true,
+      "description": "Capture display state and sampling convention. Minimum levels are computed at pixel centers. Parameter and original-attractor Sharp boundary coverage use whole pixels; the half-difference is point-sampled. The selected-point record remains separate."
+    },
     "visual_renderer": {
       "type": [
         "object",
         "null"
       ],
       "properties": {
+        "capture_style": { "enum": ["depth", "sets"] },
+        "capture_cycle": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "capture_depth_sampling": { "const": "pixel-center" },
+        "capture_maximum_depth": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "effective_capture_depth": { "type": "integer", "minimum": 0, "maximum": 100 },
         "renderer_mode": {
           "enum": [
             "boundary",
@@ -156,6 +201,10 @@
         "search_record_set": {
           "const": "M_n"
         },
+        "capture_style": { "enum": ["depth", "sets"] },
+        "capture_cycle": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "capture_depth_sampling": { "const": "pixel-center" },
+        "capture_maximum_depth": { "type": "integer", "minimum": 0, "maximum": 100 },
         "escape_depth": {
           "type": "integer",
           "minimum": 0,
@@ -165,13 +214,13 @@
           "type": "integer",
           "minimum": 1
         },
-        "mn": { "type": ["object", "null"] },
-        "mn0": { "type": ["object", "null"] },
-        "mn1": { "type": ["object", "null"] },
+        "mn": { "$ref": "#/$defs/point_capture_result" },
+        "mn0": { "$ref": "#/$defs/point_capture_result" },
+        "mn1": { "$ref": "#/$defs/point_capture_result" },
         "digit_results": {
           "type": "object",
           "propertyNames": { "pattern": "^-?[0-9]+$" },
-          "additionalProperties": { "type": "object" },
+          "additionalProperties": { "$ref": "#/$defs/point_capture_result" },
           "description": "Point-search results keyed by the selected integer first digit."
         },
         "raster_sampling": {
@@ -280,6 +329,19 @@
   },
   "additionalProperties": true,
   "description": "Floating-point finite-search record. Schema validity does not verify the mathematical result.",
+  "$defs": {
+    "point_capture_result": {
+      "type": ["object", "null"],
+      "properties": {
+        "minimumCaptureDepth": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Minimum inverse depth established after every shallower search completes. Null means the minimum is not established, even if a capture witness is retained."
+        }
+      },
+      "additionalProperties": true
+    }
+  },
   "allOf": [
     {
       "if": {

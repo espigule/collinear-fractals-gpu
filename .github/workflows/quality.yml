@@ -11,7 +11,8 @@ jobs:
   browser-and-reference:
     name: Core, schemas, staged site and Chromium
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Keep the complete desktop/mobile and software-GPU suites on slower runners.
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

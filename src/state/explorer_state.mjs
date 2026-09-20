@@ -18,6 +18,7 @@ export const DEFAULT_EXPLORER_STATE = Object.freeze({
   LMax: 1000,
   tol: 1e-8,
   modulo: 3,
+  captureStyle: 'depth',
   cx: 0.5,
   cy: 1.1,
   showCollinear: false,
@@ -86,6 +87,7 @@ const ENUM_FIELDS = [
   ['comparisonMode', 'mode', ['overlay', 'difference', 'collinear', 'escape']],
   ['rendererMode', 'renderer', ['boundary', 'prefix', 'histogram', 'survival']],
   ['palette', 'palette', ['research', 'print', 'contrast', 'custom']],
+  ['captureStyle', 'capture', ['depth', 'sets']],
   ['focusedPanel', 'focus', ['both', 'parameter', 'dynamical']]
 ];
 

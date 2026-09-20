@@ -30,6 +30,44 @@ export const PARAMETER_LAYER_COLORS = Object.freeze({
   mn: '#697b98', mn0: '#42a995', mn1: '#be79a0'
 });
 
+/** A byte-sized unknown minimum never turns a capture witness into a stratum. */
+export const UNKNOWN_CAPTURE_DEPTH = 255;
+export const CAPTURE_SHADING = Object.freeze({
+  minimumScale: 0.6,
+  scaleRange: 0.3,
+  singleBandScale: 0.75,
+  survivorWhite: 0.28
+});
+
+/**
+ * Hue identifies the selected set or first-level geometry. In capture mode,
+ * lightness identifies a minimum capture depth at the pixel center, a capture
+ * witness whose minimum remains unknown, or finite escape coverage. Center
+ * capture does not assert capture of the whole pixel footprint. A known witness
+ * keeps the base hue, so a search limit cannot turn it into an unresolved pixel.
+ *
+ * The palette deliberately retains 72% of the hue for finite survivors: the
+ * exterior approximation must remain legible for attractors without a trap.
+ * These constants and operations are mirrored by the WebGL palette shader.
+ */
+export function captureShade(base, code, minimumDepth = UNKNOWN_CAPTURE_DEPTH, {
+  captureStyle = 'depth', modulo = 3
+} = {}) {
+  if (captureStyle === 'sets') return base;
+  if (knownCaptureDepth(minimumDepth)) {
+    const q = Math.max(1, Math.min(12, Math.round(modulo) || 3));
+    const scale = q === 1 ? CAPTURE_SHADING.singleBandScale
+      : CAPTURE_SHADING.minimumScale + CAPTURE_SHADING.scaleRange * (minimumDepth % q) / (q - 1);
+    return Array.from(base, value => value * scale);
+  }
+  if (code === 3) return Array.from(base, value => value + (255 - value) * CAPTURE_SHADING.survivorWhite);
+  return base;
+}
+
+export function knownCaptureDepth(value) {
+  return Number.isInteger(value) && value >= 0 && value <= 100;
+}
+
 export function hexToRgb(hex) {
   let normalized = String(hex || '#000000').replace(/^#/, '');
   if (/^[\da-f]{3}$/i.test(normalized)) {

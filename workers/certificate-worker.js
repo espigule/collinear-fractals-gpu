@@ -13,6 +13,7 @@ self.addEventListener('message', event => {
       kMax: job.kMax ?? 37,
       LMax: job.LMax ?? 1000,
       tol: job.tol ?? 1e-8,
+      canonicalOnly: job.canonicalOnly === true,
       softwareVersion: job.softwareVersion || '0.2.0-alpha'
     });
     self.postMessage({ ok: true, id: job.id, result, certificate });
