@@ -524,6 +524,9 @@ test('immersive workspace has an accessible drawer, view switch and synchronized
 });
 
 test('scene chips, zoom and fit update the rendered view and shared state', async ({ page }) => {
+  // Several view changes and seven Share roundtrips share this fixture.
+  // Keep individual action and render deadlines while allowing slower CI CPUs.
+  test.setTimeout(75000);
   await open(page, '#n=4&cx=0&cy=2&dcx=0&dcy=0&dz=12&layers=1000000');
   await page.locator('#btn-view-dyn').click();
   await page.locator('#btn-layer-collinear').click();
