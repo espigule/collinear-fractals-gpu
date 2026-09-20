@@ -65,7 +65,7 @@ def validate_workflows() -> None:
     quality = yaml.load((ROOT / ".github/workflows/quality.yml").read_text(), Loader=UniqueYamlLoader)
     check("workflow_call" in quality.get("on", {}), "Quality workflow must be reusable")
     commands = [step.get("run", "") for job in quality["jobs"].values() for step in job.get("steps", [])]
-    for required in ["npm test", "npm run test:browser", "swift test"]:
+    for required in ["npm test", "npm run test:browser", "npm run test:gpu", "swift test"]:
         check(required in commands, f"Shared quality gate is missing {required}")
 
 
