@@ -33,10 +33,12 @@ $|c|>1$.
 
 For $0<|p|<1$, the browser uses $c=1/p$; for $|p|>1$, it uses $c=p$.
 For example, browser input $p=0.4+0.3i$ uses $c=1.6-1.2i$.
-Pass the latter value to a reference package to reproduce that search. Real
-parameters, zero, and points on the unit circle are outside the canonical
-search domain and produce `Undetermined` with `outside-domain` in the executable
-searches. This does not assert anything about real-axis connectedness.
+Pass the latter value to a reference package to reproduce that search. Zero
+and points on the unit circle have no expanding IFS parameter; their selected
+search returns `Undetermined` with `outside-domain`. The current browser
+handles the real $\mathcal M_n$ trace analytically, separately from the
+non-real canonical search. Historical language-package searches retain their
+documented real-axis exclusion.
 
 JavaScript and Python reject non-finite coordinates, nonintegral/invalid
 arities or limits, and nonpositive tolerance with an exception. Swift's
@@ -74,7 +76,10 @@ to $2c$; a depth-zero hit has an empty word.
 | Verdict | Stop reason | Meaning |
 |---|---|---|
 | `Interior` | `trap-hit` | Strict in-lens trap entry. |
+| `Interior` | `analytic-membership` | Membership in the open region $1<\lvert c\rvert<\sqrt n$, with no capture word. |
+| `Member` | `analytic-membership` | Membership on the real trace $1<\lvert c\rvert\leq n$, without a complex-interior claim. |
 | `Interior-offLens` | `trap-hit` | Strict entry using the separate off-lens rule. |
+| `Exterior` | `analytic-exterior` | A real expanding parameter with $\lvert c\rvert>n$. |
 | `Exterior` | `enclosure-escape` | The initial point is outside the computed enclosure. |
 | `Exterior` | `tree-exhausted` | Every retained branch was eliminated before any search limit. |
 | `Undetermined` | `node-cap`, `depth-cap` | The finite computation stopped without a decision. |
@@ -84,6 +89,44 @@ The `Interior-offLens` row applies to historical reference/replay behavior;
 the current browser disables that acceptance rule. `Undetermined` does not
 classify a parameter as a boundary point. Native search results use `stopReason`
 (JavaScript/Swift) or `stop_reason` (Python); JSON exports use `stop_reason`.
+
+## Analytic connectedness and the unit-circle seam
+
+The full connectedness locus has an analytic inner region
+$1<|c|<\sqrt n$. This is the interior inclusion of
+[Proposition 2.5 of the 2024 paper](https://arxiv.org/html/2411.00160v2).
+The real trace is exactly $1<|c|\leq n$: the real IFS fills its supporting
+interval through $|c|=n$, including the touching first-level endpoints, and
+has separated first-level intervals for $|c|>n$. The browser reports the
+trace as `Member`, since these real antenna points need not be interior
+points of the complex connectedness locus.
+
+These decisions do not provide a canonical trap word. Their
+`minimumCaptureDepth` is `null`; depth zero in an analytic search record
+means that no inverse step was needed, not capture at depth zero. The selected
+search preserves its canonical search inside the strict lens. Raster coverage
+can use the analytic region before building an enclosure while its independent
+center search retains any supported canonical minimum.
+
+For that analytic raster path, a constant-cost support-disk probe first tests
+whether the center already captures at depth zero or has no available trap.
+Either result avoids the enclosure sum. A center requiring a positive capture
+depth rebuilds the ordinary enclosure and uses the full ordered minimum
+search, with its original candidate budget.
+
+For an input disk centered at $p_0$ with radius $r$, put
+$a=|p_0|-r$ and $b=|p_0|+r$. If $a>0$ and
+$\max(b,1/a)<\sqrt n$, every supported point in the disk lies in the
+analytic region after the browser's direct or reciprocal normalization.
+The $\mathcal M_n$ raster can therefore cover a cell crossing $|p|=1$
+without iterating a poorly contracting inverse tree. The points exactly
+on the unit circle are still outside the expanding IFS domain. An exact
+zero-radius unit-circle sample is not promoted to membership.
+
+The annulus criterion applies to $\mathcal M_n$ only. It must not fill
+$\mathcal M_n^0$, $\mathcal M_n^1$, or an individual digit subset by
+association. A domain sample without an applicable criterion uses the neutral
+domain color; a numerical or work limit remains visibly unresolved.
 
 ## Current capture policy and historical replay
 
@@ -117,6 +160,36 @@ provenance and must not silently become a current accepted capture. The
 same distinction applies when loading an old preset: the current explorer
 recomputes it under the current policy.
 
+The current off-lens $\mathcal M_n$ raster nevertheless reuses the earlier
+explorer's complex-tree parallelogram to guide its bounded-orbit search.
+For the difference alphabet $m=2n-1$, the guide is
+
+$$
+P=\{a+b/c:a,b\in\mathbb R,\ |a|<m-1,\ |b|<2\kappa\},\qquad
+\kappa=\begin{cases}
+1,&n\leq7,\\
+1+\lfloor n-2-2\sqrt n\rfloor,&n>7.
+\end{cases}
+$$
+
+This matches the archived explorer's 100% complex-tree setting; its vertical
+half-width is twice that of the legacy reference acceptance rectangle above.
+The guide chooses an enclosure-admissible inverse digit whose child is closest
+to these normalized strips. The score is convex and piecewise linear, so
+only the two alphabet digits surrounding its continuous minimizer need
+comparison. The preferred digit is tried first, followed by every remaining
+admissible digit. Fixed first digits, enclosure tests, parameter-cell bounds,
+and depth/work limits still apply.
+
+Entry into $P$ is not an acceptance test. A branch must satisfy the ordinary
+bounded-orbit checks through the requested escape depth, and its outcome
+remains finite survival. The guide can change which finite survivor is found
+within a work budget; it cannot create `Interior-offLens` or a minimum-capture
+level. The canonical minimum search retains its independent ordering and
+budget. [Section 5 of the 2024 paper](https://arxiv.org/html/2411.00160v2)
+motivates these tree parallelograms, without providing a universal off-lens
+self-covering theorem for their use as global acceptance tests.
+
 ## Enclosure truncation and arithmetic
 
 For a truncation depth $M$, the geometric remainder is bounded by
@@ -136,6 +209,42 @@ executable browser/JavaScript/Python/Swift routines use floating-point numbers,
 not outward-rounded intervals. See [numerical interpretation](RESPONSIBLE_USE.md)
 for the evidentiary meaning of a result.
 
+Interactive membership contexts compute the powers of $1/c$ by a complex
+recurrence, avoiding a power and a trigonometric evaluation for every term.
+They retain the complete omitted tail and also use the directional estimate
+$|\sin(k\theta)|\leq k|\sin\theta|$. For the unscaled vertical series,
+this gives
+
+$$
+\sum_{k>M}|\mathrm{Im}(c^{-k})|
+\leq\min\left(
+\frac{\rho^{-M}}{\rho-1},
+\frac{|y|\rho^{-M-1}\bigl(M(\rho-1)+\rho\bigr)}{(\rho-1)^2}
+\right).
+$$
+
+The complete vertical support also satisfies
+$V_E\leq(m-1)|y|/(\rho-1)^2$. This bound becomes sharp as the parameter
+approaches the real axis and can be much smaller than an isotropic tail.
+For a parameter disk, use the upper bound $|y|+r$ and lower modulus
+$\rho-r$ in the same formula. Pruning intersects the vertical digit range
+with the horizontal range implied by the attractor's support disk, so a small
+imaginary part no longer destroys all digit selectivity. Floating-point
+padding is applied separately; archived replay retains its original enclosure
+routine. The interactive sum has the existing maximum of 2,000 terms.
+`tailCapHit` reports that the effective directional/norm tail still exceeds
+the requested tolerance at that cap; the directional estimate can meet the
+target even when the isotropic estimate does not.
+
+For a fixed real expanding parameter with $1<\rho\leq m$, the attractor is
+exactly the interval $[-H,H]$, where $H=(m-1)\rho/(\rho-1)$.
+The membership renderer can test a point or a dynamical pixel's intersection
+with that interval directly, including a prescribed first piece
+$t+c^{-1}[-H,H]$. This is analytic coverage with no canonical capture depth.
+A parameter cell centered on the real axis still contains non-real parameters
+and uses the varying-parameter bounds, rather than replacing that whole cell
+with an interval.
+
 ## Visual renderers and computational cost
 
 The default `boundary` renderer evaluates the original $E(c,n)$ by depth-first
@@ -151,8 +260,9 @@ includes its lens boundary; finite escape coverage remains available there.
 
 An exhausted inverse tree is escape. An admissible branch reaching the
 requested depth is finite survival, while a work or stack cap is unresolved.
-Outside the original-alphabet self-covering region, only enclosure pruning and
-finite survival contribute to the boundary image. First-level colors identify
+Outside the original-alphabet self-covering region, enclosure pruning and
+finite survival contribute to the boundary image; the fixed-real interval
+case above has its own analytic coverage test. First-level colors identify
 the outermost original digit. These outcomes describe floating-point visual
 coverage rather than an interval-certified boundary.
 
@@ -174,7 +284,9 @@ over the disk, and capture requires containment in the varying traps across
 the entire cell. This also handles the full $\mathcal M_n$ raster with
 $z(c)=2c$ and $m=2n-1$, while its selected point record continues to use the
 original reference search. Reciprocal-input cells are enclosed after
-inversion; a cell crossing the unit circle is unresolved. See the
+inversion. Cells crossing the unit circle use the analytic $\mathcal M_n$
+criterion above when applicable; otherwise they remain outside the supported
+parameter-cell search domain. See the
 [cell propagation and bounds](RENDERING_ARCHITECTURE.md#parameter-cells-and-fine-structure)
 for the radius formulas and numerical limitations.
 
@@ -405,10 +517,19 @@ from the selected connectedness record.
 
 Current browser records include `trap_policy: "canonical-only"`, and the
 trap geometry is `null` when no eligible canonical trap is available.
+Analytic decisions use `proof_status: "analytic-classification"` and an
+`analytic_evidence` object with the criterion, source, and
+`capture_minimum_assigned: false`. Their word is empty, trap and enclosure
+are `null`, and `minimum_capture_depth` is `null`. The export builder checks
+the analytic claim against the effective parameter instead of accepting a
+caller-supplied label alone.
 Rendering metadata records center capture sampling, maximum depth,
 arithmetic, packed unknown minimum, display style, and cycle independently
-of boundary coverage. The half-difference raster uses point samples;
-original sharp-boundary and parameter layers retain footprint/cell coverage.
+of boundary coverage. The half-difference raster uses point samples for
+non-real parameters. At real parameters it uses a full pixel footprint to
+retain the one-dimensional trace, with twice the displayed coordinate and
+twice its footprint radius passed to the difference-attractor search.
+Original sharp-boundary and parameter layers retain footprint/cell coverage.
 
 `parameter_view.layers` and `parameter_view.digits` retain the complete
 parameter selection. Its `mn`, `mn0`, `mn1`, and `digit_results` fields are
@@ -421,6 +542,13 @@ It is `null` when the parameter canvas has no visible dimensions, with
 preview/refinement raster. Thus a colored cell does not silently turn
 the separate point result into a capture. A `mode` value of `compare` alone
 cannot encode the whole selection; consumers should read the arrays.
+
+Analytic parameter-cell coverage records
+`membershipScope: "all-valid-parameters"`. When the cell crosses the unit
+circle, `coverage: "expanding-chart-domain-intersection"` and
+`excludedParameterLocus: "unit-circle"` distinguish the valid portion from
+the excluded seam. Fixed-real dynamical results distinguish
+`membershipScope: "point"` from `"pixel-intersection"`.
 
 `c` stores the effective parameter for replay in the language packages;
 `input_parameter` retains the original browser coordinates.

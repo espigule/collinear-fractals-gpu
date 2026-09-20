@@ -124,6 +124,39 @@ test('capture requires the complete pixel footprint to lie inside the strict tra
   assert.equal(widePixel.status, 'finite-survivor');
 });
 
+test('real interval pieces include closed endpoints without inventing planar capture', () => {
+  const c = context(-2, 0, 2);
+  assert.equal(c.realInterval, true);
+  const endpoint = classify(c, -2, 0, 16, { firstDigit: -1 });
+  assert.equal(endpoint.verdict, 'Member');
+  assert.equal(endpoint.stopReason, 'analytic-membership');
+  assert.equal(endpoint.depth, 1);
+  assert.equal(endpoint.firstDigit, -1);
+  assert.equal(endpoint.minimumCaptureDepth, null);
+  assert.equal(endpoint.membershipScope, 'point');
+  const footprint = classify(c, -2, .01, 16, { firstDigit: -1, pixelRadius: .02 });
+  assert.equal(footprint.verdict, 'Member');
+  assert.equal(footprint.membershipScope, 'pixel-intersection');
+  for (const imaginary of [Number.MIN_VALUE, 1e-20, .01]) {
+    assert.equal(classify(c, 0, imaginary, 16).verdict, 'Exterior');
+  }
+  assert.equal(classify(c, -2, 0, 16, { firstDigit: 1 }).verdict, 'Exterior');
+});
+
+test('real Cantor searches use horizontal support and retain bounded addresses', () => {
+  for (const x of [-3, 3]) {
+    const c = context(x, 0, 2);
+    assert.equal(c.realInterval, false);
+    // z = 1 + z/c gives this exact periodic address, including for c < 0.
+    const fixed = x / (x - 1);
+    const result = classify(c, fixed, 0, 16, { firstDigit: 1 });
+    assert.equal(result.status, 'finite-survivor');
+    assert.equal(result.work, 16);
+    assert.equal(result.minimumCaptureDepth, null);
+    assert.equal(classify(c, 0, 0, 16).verdict, 'Exterior');
+  }
+});
+
 test('bounded work and stack exhaustion are explicitly unresolved', () => {
   const work = classify(context(0, 2, 4), 0, 0, 16, { maxWork: 1 });
   assert.equal(work.status, 'capped');

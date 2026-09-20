@@ -168,12 +168,18 @@ test('a center capture does not claim that a lens-crossing cell is captured', ()
   assert.notEqual(result.status, 'captured');
   assert.equal(result.captureSample.usesTrap, true);
   assert.equal(result.captureSample.minimumCaptureDepth, 0);
-  for (const [x, y, radius] of [[.01, .01, .02], [.7, .7, .1]]) {
-    const invalid = classifyParameterView(x, y, 4, 37, 1000, 1e-8, 'mn',
-      { parameterRadius: radius });
-    assert.equal(invalid.stopReason, 'outside-domain');
-    assert.equal(invalid.captureSample, undefined);
-  }
+  const invalid = classifyParameterView(.01, .01, 4, 37, 1000, 1e-8, 'mn',
+    { parameterRadius: .02 });
+  assert.equal(invalid.stopReason, 'outside-domain');
+  assert.equal(invalid.captureSample, undefined);
+  const knownValidPart = classifyParameterView(.7, .7, 4, 37, 1000, 1e-8, 'mn',
+    { parameterRadius: .1 });
+  assert.equal(knownValidPart.stopReason, 'analytic-membership');
+  assert.equal(knownValidPart.membershipScope, 'all-valid-parameters');
+  assert.equal(knownValidPart.excludedParameterLocus, 'unit-circle');
+  assert.equal(knownValidPart.minimumCaptureDepth, null);
+  assert.equal(knownValidPart.captureSample.minimumCaptureDepth, 0,
+    'the sampled expanding center has its own depth-zero canonical capture');
 });
 
 test('capture depth follows kMax independently of boundary escape depth', () => {
@@ -230,7 +236,10 @@ test('modern parameter records use canonical capture while archived replay remai
   assert.equal(legacy.verdict, 'Interior-offLens');
   const detailed = inverseIterationTestDetailed(...args, { canonicalOnly: true });
   const fast = inverseIterationTestFast(...args, { canonicalOnly: true });
-  assert.equal(detailed.verdict, 'Undetermined');
+  assert.equal(detailed.verdict, 'Interior');
+  assert.equal(detailed.stopReason, 'analytic-membership');
+  assert.equal(detailed.analyticReason, 'mn-inner-annulus');
+  assert.equal(detailed.minimumCaptureDepth, null);
   assert.equal(fast.verdict, detailed.verdict);
   assert.equal(fast.depth, detailed.depth);
   const modern = classifyParameterView(...args, 'mn');

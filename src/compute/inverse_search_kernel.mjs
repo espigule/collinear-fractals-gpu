@@ -5,6 +5,7 @@ import {
 import {
   assertAlphabetSize, assertArity, assertFiniteNumber, assertPositiveNumber
 } from '../math/validation.mjs';
+import { analyticConnectednessResult } from '../math/connectedness_regions.mjs';
 
 // The synchronous scalar search has no callbacks or await points. Reusing two
 // queues across calls avoids per-pixel tree/word allocations in Canvas renders.
@@ -121,6 +122,10 @@ export function inverseIterationTestFast(x, y, n, kMax = 37, LMax = 1000, tol = 
   const eff = getEffectiveC(x, y);
   const rho = Math.hypot(eff.x, eff.y);
   if (!Number.isFinite(rho)) return result('Undetermined', 0, 0, 'numerical-range');
+  if (options.canonicalOnly === true && (eff.y === 0 || !inLens(eff.x, eff.y, n))) {
+    const analytic = analyticConnectednessResult(eff.x, eff.y, n);
+    if (analytic) return analytic;
+  }
   if (rho <= 1 || eff.y === 0) return result('Undetermined', 0, 0, 'outside-domain');
   const isLens = inLens(eff.x, eff.y, n);
   const context = createInverseSearchContext(eff.x, eff.y, 2 * n - 1, isLens, tol,

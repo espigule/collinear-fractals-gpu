@@ -218,6 +218,8 @@ canvas:focus-visible { outline-offset: -3px; }
 #stat-c { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; font-weight: 600; font-variant-numeric: tabular-nums; }
 .verdict-tag { display: inline-block; padding: 0.15rem 0.4rem; border: 1px solid transparent; border-radius: 0.3rem; font-size: 0.66rem; font-weight: 650; }
 .verdict-Interior { border-color: #a7dec8; background: var(--color-interior-bg); color: var(--color-interior); }
+.verdict-Member { border-color: #b4c8dd; background: #edf3f9; color: #365577; }
+.verdict-domain { border-color: #cbd5e1; background: #f1f5f9; color: #475569; }
 .verdict-Interior-offLens { border-color: #aec9f8; background: #e5edff; color: #254db0; }
 .verdict-Exterior { border-color: #f2bebe; background: var(--color-exterior-bg); color: var(--color-exterior); }
 .verdict-Undetermined { border-color: #e8cf8b; background: var(--color-undetermined-bg); color: var(--color-undetermined); }

@@ -34,7 +34,7 @@ const STOP_CODES = Object.freeze({
 
 export function rasterResultCode(result) {
   if (result.verdict === 'Exterior') return RASTER_CODES.EXTERIOR;
-  if (result.verdict === 'Interior') return RASTER_CODES.INTERIOR;
+  if (result.verdict === 'Interior' || result.verdict === 'Member') return RASTER_CODES.INTERIOR;
   if (result.verdict === 'Interior-offLens') return RASTER_CODES.OFF_LENS;
   if (result.verdict === 'Undetermined' && Object.hasOwn(STOP_CODES, result.stopReason)) {
     return STOP_CODES[result.stopReason];
@@ -127,6 +127,10 @@ export function prepareRasterJob(input) {
   if (job.kind === 'dynamical') {
     const context = (m, lens, useTrap) => {
       try {
+        if (job.cy === 0) {
+          const value = createAttractorMembershipContext(job.cx, job.cy, m, job.tol);
+          return value.error ? null : value;
+        }
         const value = createInverseSearchContext(job.cx, job.cy, m, lens, job.tol, { useTrap });
         return value.error ? null : value;
       } catch (error) {
@@ -244,7 +248,11 @@ export function renderRasterTile(prepared, tile) {
       } else {
         if (differenceContext) {
           const result = finite && Number.isFinite(2 * x) && Number.isFinite(2 * y)
-            ? inverseSearchPointFast(differenceContext, 2 * x, 2 * y, kMax, LMax) : RANGE_RESULT;
+            ? differenceContext.y === 0
+              ? classifyAttractorPoint(differenceContext, 2 * x, 2 * y, escapeDepth,
+                { ...boundaryOptions, pixelRadius: 2 * pixelRadius })
+              : inverseSearchPointFast(differenceContext, 2 * x, 2 * y, kMax, LMax)
+            : RANGE_RESULT;
           writeResult(data, offset, result);
           // The reference search is breadth-first; its strict-lens capture
           // depth is already minimal. Historical off-lens tests are separate.
@@ -254,7 +262,9 @@ export function renderRasterTile(prepared, tile) {
         } else writeResult(data, offset, EMPTY_RESULT);
         if (originalContext) {
           const result = !finite ? RANGE_RESULT : job.originalRenderer === 'survival'
-            ? inverseSearchPointFast(originalContext, x, y, kMax, LMax)
+            ? originalContext.y === 0
+              ? classifyAttractorPoint(originalContext, x, y, escapeDepth, boundaryOptions)
+              : inverseSearchPointFast(originalContext, x, y, kMax, LMax)
             : classifyAttractorPoint(originalContext, x, y, escapeDepth, boundaryOptions);
           writeResult(data, offset + 2, result);
           writePiece(pieces, offset / 2 + 1, result);

@@ -4,6 +4,17 @@
 
 ### Correctness
 
+- Use the known inner connectedness region `1 < |c| < sqrt(n)` and exact
+  real trace `1 < |c| <= n` for the full `M_n` layer. Keep analytic evidence
+  separate from canonical finite capture; real antenna membership uses
+  `Member` without claiming interior in the complex plane.
+- Resolve eligible `M_n` raster cells across the unit-circle coordinate seam
+  by the analytic region on both expanding charts. Preserve the exact circle
+  as outside the IFS domain and expose partial-domain coverage metadata.
+  Other parameter layers do not inherit the full-locus annulus criterion.
+- Handle fixed real attractors and first pieces by their exact interval when
+  `1 < |c| <= m`, without assigning a canonical capture depth. Varying-parameter
+  cells retain their full two-dimensional coverage bounds.
 - Separate minimum finite-capture depth at pixel centers from geometric
   coverage. Complete shallower inverse searches before assigning a minimum;
   a first depth-first survivor or longer witness no longer conceals earlier
@@ -46,6 +57,17 @@
 
 ### Browser and performance
 
+- Restore the earlier complex-tree parallelogram as an efficient guide for
+  off-lens `M_n` bounded-orbit coverage. A convex score chooses the preferred
+  digit from at most two candidates; every other admissible branch retains
+  its enclosure, arithmetic, depth and work checks. Guide entry alone never
+  becomes capture or membership.
+- Tighten near-real support and digit pruning with directional series tails
+  and both horizontal and vertical bounds. CPU enclosure powers use recurrence;
+  GPU previews use a constant-cost near-real support estimate when applicable.
+- Distinguish neutral domain exclusion from unresolved numerical/work limits,
+  including true unit-circle crossings versus float32 precision ambiguity.
+  Preserve supported center-capture layers independently of analytic coverage.
 - Expose finite-capture layers across all parameter aggregates, digit
   subsets, and numerical dynamical scenes. Minimum-depth shades cycle modulo
   `q` while keeping set/piece hues and black overlap contours. Distinguish
@@ -94,6 +116,9 @@
 
 ### Maintenance and documentation
 
+- Document analytic connectedness, real interval coverage, the unit-circle
+  domain seam, and the limited role of the restored complex-tree guide.
+  Add numerical and native-browser regression cases for these paths.
 - Add a reproducible production-rendered capture triptych for `M_3`,
   `F_(5,0)`, and `E(2i,5)`, with separate coverage/minimum-depth metadata.
   Retain the original piece gallery in flat set colors and document both

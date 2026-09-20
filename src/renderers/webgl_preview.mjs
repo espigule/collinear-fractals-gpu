@@ -516,6 +516,9 @@ export function createWebGLPreview({ onUnavailable } = {}) {
       if (!finite(job.cx) || !finite(job.cy)) throw new Error('The dynamical parameter must be finite.');
       const c = getEffectiveC(job.cx, job.cy);
       const rho = Math.hypot(c.x, c.y);
+      if (c.y === 0 && rho > 1 && finite(rho)) {
+        throw new Error('Real dynamical parameters use the CPU one-dimensional interval and pixel-footprint renderer.');
+      }
       if (!finite(rho) || rho - 1 < GPU_SEARCH_LIMITS.minModulusGap ||
           rho > GPU_SEARCH_LIMITS.maxModulus || Math.abs(c.y) / rho < GPU_SEARCH_LIMITS.minRelativeImaginary) {
         throw new Error('This dynamical parameter needs the CPU precision or domain handling.');
@@ -813,6 +816,14 @@ export function createWebGLPreview({ onUnavailable } = {}) {
         parameter_radius_world: p.parameterRadius,
         parameter_layer_ids: p.parameterLayerIds,
         parameter_cell_model: p.parameterRadius > 0 ? 'complex-taylor-disk' : null,
+        parameter_analytic_membership: p.kind === 3 ? null :
+          'strict-Mn-annulus-over-valid-expanding-and-reciprocal-charts',
+        analytic_membership_capture: 'unknown-unless-independent-center-capture-found',
+        parameter_angular_guard: p.kind === 3 ? null :
+          (p.parameterRadius > 0 ? 'local-Cartesian-error-checks' : 'canonical-point-angular-guard'),
+        parameter_support: p.kind === 3 ? null : 'series-and-first-moment-vertical-bounds',
+        off_lens_mn_branch_order: p.kind === 3 || p.parameterRadius === 0 ? null :
+          'complex-tree-parallelogram-minimax; ordering-only',
         boundary_work_scope: p.kind === 3 && p.firstLevelPieces ? 'per-first-level-piece' : 'per-selected-layer',
         capture_sample_type: 'pixel-center',
         capture_depth_convention: 'minimum center capture depth; 255 means unknown or unavailable',

@@ -68,6 +68,7 @@
       "enum": [
         "Interior",
         "Interior-offLens",
+        "Member",
         "Exterior",
         "Undetermined"
       ]
@@ -242,9 +243,42 @@
       "additionalProperties": true,
       "description": "Independent layer selections and auxiliary point-search results, separate from parameter-cell image coverage and the main connectedness record."
     },
+    "analytic_evidence": {
+      "type": "object",
+      "required": [
+        "reason",
+        "condition",
+        "source",
+        "basis",
+        "capture_minimum_assigned"
+      ],
+      "properties": {
+        "reason": {
+          "enum": [
+            "mn-real-interval",
+            "mn-real-exterior",
+            "mn-inner-annulus"
+          ]
+        },
+        "condition": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "basis": {
+          "type": "string"
+        },
+        "capture_minimum_assigned": {
+          "const": false
+        }
+      },
+      "additionalProperties": false
+    },
     "proof_status": {
       "enum": [
         "finite-search-certificate",
+        "analytic-classification",
         "theorem-certified",
         "illustrative",
         "exploratory",
@@ -261,6 +295,8 @@
         "outside-domain",
         "numerical-range",
         "enclosure-escape",
+        "analytic-membership",
+        "analytic-exterior",
         "trap-hit",
         "tree-exhausted",
         "node-cap",

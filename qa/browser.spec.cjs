@@ -88,7 +88,7 @@ async function expectInsideViewport(page, selector) {
 
 async function open(page, hash = '') {
   await page.goto(`/${hash}`);
-  await expect(page.locator('#stat-verdict')).toHaveText(/Interior|Exterior|Undetermined/);
+  await expect(page.locator('#stat-verdict')).toHaveText(/Interior|Member|Exterior|Undetermined|Outside domain/);
   await expect(page.locator('#parameter-canvas')).toHaveAttribute('data-render-state', /rendering|complete/);
 }
 
@@ -964,8 +964,13 @@ test('polar edits roundtrip through Cartesian controls and preserve exact real-a
   await expect(page.locator('#param-imag')).toHaveValue('0');
   const realAxis = await readRecord(page);
   expect(realAxis.input_parameter).toEqual({ re: 2, im: 0 });
-  expect(realAxis.verdict).toBe('Undetermined');
-  expect(realAxis.stop_reason).toBe('outside-domain');
+  expect(realAxis.verdict).toBe('Member');
+  expect(realAxis.stop_reason).toBe('analytic-membership');
+  expect(realAxis.analytic_evidence).toMatchObject({ reason: 'mn-real-interval', capture_minimum_assigned: false });
+  expect(realAxis.proof_status).toBe('analytic-classification');
+  expect(realAxis.minimum_capture_depth).toBeNull();
+  expect(realAxis.nodes_explored).toBe(0);
+  expect(realAxis.word).toEqual([]);
 
   await fillNumber(page, '#param-real', -1.25);
   await fillNumber(page, '#param-imag', 0.75);
@@ -983,6 +988,49 @@ test('polar edits roundtrip through Cartesian controls and preserve exact real-a
   await expect(page.locator('#param-imag')).toHaveValue('0.75');
   expect(Number(await page.locator('#param-modulus').inputValue())).toBeCloseTo(modulus, 12);
   expect(Number(await page.locator('#param-argument').inputValue())).toBeCloseTo(angle, 12);
+});
+
+test('real attractors keep their interval and gap geometry while excluded parameters have neutral feedback', async ({ page }) => {
+  await page.setViewportSize({ width: Math.min(page.viewportSize().width, 640), height: 520 });
+  const canvas = page.locator('#dynamical-canvas');
+  await page.goto('/#n=3&cx=4&cy=0&dcx=0&dcy=0&dz=8&focus=dynamical&mode=collinear&layers=0100000&backend=cpu&k=8&bdepth=8&badapt=0');
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  await expect(page.locator('#stat-verdict')).toHaveText('Exterior');
+  // E(4,3) contains 2 via the address [2,0,0,...]. Its first-level
+  // pieces lie in [-8/3,-4/3], [-2/3,2/3], [4/3,8/3], so 1 is exterior.
+  // The light coordinate axis alone is excluded by dynamicalPatch's threshold.
+  expect((await dynamicalPatch(page, { x: 2, y: 0 }, 8)).marked,
+    'The exact real attractor has a visible trace').toBeGreaterThan(0);
+  expect((await dynamicalPatch(page, { x: 1, y: 0 }, 8)).marked,
+    'A gap in the original real Cantor set remains empty').toBe(0);
+  await (await reveal(page, '#btn-layer-difference')).click();
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  // Half E(4,5) is the whole interval [-8/3,8/3]; it must fill that gap.
+  expect((await dynamicalPatch(page, { x: 1, y: 0 }, 8)).marked,
+    'The half-difference interval fills the original-attractor gap').toBeGreaterThan(0);
+
+  await page.goto('/#n=3&cx=0&cy=1&dcx=0&dcy=0&dz=8&focus=dynamical&mode=difference&layers=1000000&backend=cpu&k=8');
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete');
+  await expect(page.locator('#stat-verdict')).toHaveText('Outside domain');
+  await expect(page.locator('#stat-verdict')).toHaveClass(/verdict-domain/);
+  await expect(page.locator('#stat-verdict')).not.toHaveClass(/verdict-Undetermined/);
+  await expect(await reveal(page, '#stat-reason')).toContainText('Zero and the unit circle are excluded');
+  await expect(page.locator('#stat-nodes')).toHaveText('0');
+  await expect(page.locator('#stat-depth')).toHaveText('0');
+  expect((await dynamicalPatch(page, { x: 2, y: 0 }, 8)).marked,
+    'An excluded parameter does not retain a previous real trace').toBe(0);
+
+  await fillNumber(page, '#param-real', 2);
+  await fillNumber(page, '#param-imag', 0);
+  await page.locator('#btn-close-controls').click();
+  await expect(canvas).toHaveAttribute('data-render-state', 'complete', { timeout: 30000 });
+  await expect(page.locator('#stat-verdict')).toHaveText('Member');
+  await expect(page.locator('#stat-verdict')).toHaveClass(/verdict-Member/);
+  await expect(page.locator('#stat-verdict')).not.toHaveClass(/verdict-domain/);
+  await expect(page.locator('#stat-reason')).toHaveText('Real interval: 1 < |c| ≤ n');
+  await expect(page.locator('#stat-reason')).not.toContainText(/excluded|unsupported/i);
+  expect((await dynamicalPatch(page, { x: 1, y: 0 }, 8)).marked,
+    'The real interval returns after leaving the excluded unit circle').toBeGreaterThan(0);
 });
 
 for (const fixture of [

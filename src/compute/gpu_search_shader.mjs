@@ -139,8 +139,13 @@ Parameter prepareParameter(vec2 c, vec2 dc) {
     p.errorCode = 6;
     return p;
   }
-  if (rhoLower - 1.0 < MIN_GAP || p.rho + p.drho > MAX_MODULUS ||
-      abs(c.y) - dc.y < MIN_RELATIVE_Y * (p.rho + p.drho)) {
+  // Positive-radius parameter cells use Cartesian error disks and independent
+  // vertical/horizontal pruning. Their local error tests remain meaningful as
+  // Im(c) approaches zero, without the old blanket angular exclusion. Keep
+  // that conservative guard for the canonical point BFS and fixed dynamics.
+  bool angularGuard = (u_kind == 3 || u_parameterRadius == 0.0) &&
+    abs(c.y) - dc.y < MIN_RELATIVE_Y * (p.rho + p.drho);
+  if (rhoLower - 1.0 < MIN_GAP || p.rho + p.drho > MAX_MODULUS || angularGuard) {
     p.errorCode = 8;
     return p;
   }
@@ -163,6 +168,14 @@ Parameter parameterAtPixel(vec2 raw, vec2 dRaw) {
     return prepareParameter(raw, dRaw);
   }
   float dNorm = length(dRaw) + 8.0 * UNIT * rhoRaw;
+  if (u_parameterRadius > 0.0 &&
+      (rhoRaw <= u_parameterRadius || abs(rhoRaw - 1.0) <= u_parameterRadius)) {
+    // A geometric cell meeting the missing reciprocal/domain boundary is a
+    // domain result. Arithmetic uncertainty alone remains a precision guard.
+    Parameter bad = prepareParameter(vec2(0.0), vec2(0.0));
+    bad.errorCode = 5;
+    return bad;
+  }
   if (rhoRaw < 0.0078125 || rhoRaw > 128.0 || rhoRaw <= dNorm + u_parameterRadius ||
       abs(rhoRaw - 1.0) <= dNorm + u_parameterRadius) {
     Parameter bad = prepareParameter(vec2(0.0), vec2(0.0));
@@ -185,10 +198,46 @@ Parameter parameterAtPixel(vec2 raw, vec2 dRaw) {
   return p;
 }
 
+bool analyticMnCell(vec2 raw, vec2 dRaw) {
+  // The known annulus 1<|c|<sqrt(n) covers every valid expanding parameter
+  // represented by this disk, including both reciprocal charts. The unit
+  // circle itself remains outside the contracting IFS domain. A positive
+  // footprint may display its known valid part without searching the seam.
+  if (invalidPair(raw) || invalidPair(dRaw)) return false;
+  float rho = length(raw);
+  float error = length(dRaw) + 8.0 * UNIT * rho;
+  if (u_parameterRadius == 0.0 && abs(rho - 1.0) <= error) return false;
+  float lower = rho - error - u_parameterRadius;
+  float upper = rho + error + u_parameterRadius;
+  if (lower <= 0.0) return false;
+  float effectiveUpper = max(upper, 1.0 / lower) * (1.0 + 16.0 * UNIT);
+  if (effectiveUpper * effectiveUpper >= float(u_n) * (1.0 - 16.0 * UNIT)) return false;
+  if (u_parameterRadius == 0.0 && raw.y != 0.0) {
+    // Keep the requested in-lens point BFS/frontier contract. The theorem
+    // shortcut removes coverage work and off-lens/real-axis stalls, while
+    // selected in-lens point records retain their existing capture search.
+    vec2 effective = rho < 1.0 ? vec2(raw.x, -raw.y) / dot(raw, raw) : raw;
+    float lensValue = dot(effective, effective) + 2.0 * abs(effective.x);
+    if (lensValue < float(2 * u_n - 1) * (1.0 + 32.0 * UNIT)) return false;
+  }
+  return true;
+}
+
 // Enclosure for one unit of digit radius. No trigonometric functions are used:
 // GLSL does not specify sufficient sin/atan accuracy for an enclosure bound.
 vec2 baseEnclosure(Parameter p) {
   float rhoLower = p.rho - p.drho;
+  // |Im(c^-k)| <= k |Im(c)| |c|^(-k-1). Summing this positive
+  // majorant gives a sharp O(1) support bound as c approaches the real axis.
+  // It avoids a radial tail that otherwise stays large while the true
+  // vertical support tends to zero. Keep the c/error bounds outward.
+  float yUpper = abs(p.c.y) + p.dc.y;
+  float gapLower = rhoLower - 1.0;
+  float momentBound = yUpper / (gapLower * gapLower) * (1.0 + 32.0 * UNIT) + TINY_ERROR;
+  if (yUpper < 0.015625 * gapLower) {
+    float se = (yUpper / rhoLower + momentBound / rhoLower) * (1.0 + 8.0 * UNIT);
+    return vec2(se, momentBound);
+  }
   float qUpper = (1.0 + 8.0 * UNIT) / rhoLower;
   vec2 q = vec2(p.c.x, -p.c.y) / dot(p.c, p.c);
   float dq = length(p.dc) / (rhoLower * rhoLower)
@@ -211,8 +260,8 @@ vec2 baseEnclosure(Parameter p) {
     tailPower = tailPower * qUpper * (1.0 + 8.0 * UNIT) + TINY_ERROR;
   }
   float tail = tailPower / (rhoLower - 1.0) * (1.0 + 8.0 * UNIT) + TINY_ERROR;
-  float ve = (sum + sumError + tail) * (1.0 + 8.0 * UNIT);
-  float se = ((abs(p.c.y) + p.dc.y) / rhoLower + ve / rhoLower)
+  float ve = min(momentBound, (sum + sumError + tail) * (1.0 + 8.0 * UNIT));
+  float se = (yUpper / rhoLower + ve / rhoLower)
     * (1.0 + 8.0 * UNIT);
   return vec2(se, ve);
 }
@@ -228,9 +277,15 @@ vec2 originalTrap(Parameter p, int m, out bool enabled) {
   if (!enabled) return vec2(0.0);
   float rhoUpper = p.rho + p.drho;
   float yLower = max(0.0, abs(p.c.y) - p.dc.y);
+  if (yLower <= 0.0) {
+    enabled = false;
+    return vec2(0.0);
+  }
   vec2 trap = vec2(float(m) * yLower / rhoUpper,
     max(0.0, float(m) - 2.0 * (abs(p.c.x) + p.dc.x)) * yLower / (rhoUpper * rhoUpper));
-  return max(vec2(0.0), trap * (1.0 - 32.0 * UNIT) - vec2(TINY_ERROR));
+  trap = max(vec2(0.0), trap * (1.0 - 32.0 * UNIT) - vec2(TINY_ERROR));
+  enabled = all(greaterThan(trap, vec2(0.0)));
+  return trap;
 }
 
 vec4 initialNode(Parameter p, vec2 z, vec2 dz) {
@@ -366,7 +421,7 @@ bool insideOriginalCellTrap(Parameter p, vec4 point, float footprint, int m) {
   return canonical + guard < float(m) * yLower && abs(point.y) + radius + guard < vertical;
 }
 
-ivec2 originalDigitInterval(Parameter p, vec4 point, float footprint, int alphabet, vec2 enclosure) {
+ivec2 originalDigitInterval(Parameter p, vec4 point, float footprint, int alphabet, vec2 enclosure, float disk) {
   // Prune with the vertical enclosure before evaluating individual children.
   // This disk bound deliberately ignores Taylor cancellation and therefore
   // encloses every candidate in the full alphabet. One extra digit at either
@@ -380,13 +435,53 @@ ivec2 originalDigitInterval(Parameter p, vec4 point, float footprint, int alphab
   float rounding = 32.0 * UNIT * (1.0 + (p.rho + p.drho) * shiftedBound + futureRadius) + TINY_ERROR;
   float middle = base / p.c.y;
   float halfWidth = (enclosure.y + futureRadius + rounding) / abs(p.c.y);
-  if (invalidFloat(middle) || invalidFloat(halfWidth)) return ivec2(0, alphabet - 1);
-  float endpointError = 32.0 * UNIT * (1.0 + abs(middle) + halfWidth + digitRadius);
-  float low = 0.5 * (middle - halfWidth - endpointError + digitRadius);
-  float high = 0.5 * (middle + halfWidth + endpointError + digitRadius);
-  int first = int(clamp(ceil(low) - 1.0, 0.0, float(alphabet)));
-  int last = int(clamp(floor(high) + 1.0, -1.0, float(alphabet - 1)));
+  int first = 0;
+  int last = alphabet - 1;
+  if (!invalidFloat(middle) && !invalidFloat(halfWidth)) {
+    float endpointError = 32.0 * UNIT * (1.0 + abs(middle) + halfWidth + digitRadius);
+    float low = 0.5 * (middle - halfWidth - endpointError + digitRadius);
+    float high = 0.5 * (middle + halfWidth + endpointError + digitRadius);
+    first = int(clamp(ceil(low) - 1.0, 0.0, float(alphabet)));
+    last = int(clamp(floor(high) + 1.0, -1.0, float(alphabet - 1)));
+  }
+  if (p.c.x != 0.0) {
+    // Intersect with the independent real-coordinate consequence of the
+    // support disk. The vertical interval alone degenerates near the real
+    // axis, admitting almost every digit of a wide footprint at each step.
+    float realMiddle = (p.c.x * point.x - p.c.y * point.y) / p.c.x;
+    float realHalfWidth = (disk + futureRadius + rounding) / abs(p.c.x);
+    if (!invalidFloat(realMiddle) && !invalidFloat(realHalfWidth)) {
+      float endpointError = 32.0 * UNIT * (1.0 + abs(realMiddle) + realHalfWidth + digitRadius);
+      float low = 0.5 * (realMiddle - realHalfWidth - endpointError + digitRadius);
+      float high = 0.5 * (realMiddle + realHalfWidth + endpointError + digitRadius);
+      first = max(first, int(clamp(ceil(low) - 1.0, 0.0, float(alphabet))));
+      last = min(last, int(clamp(floor(high) + 1.0, -1.0, float(alphabet - 1))));
+    }
+  }
   return ivec2(first, last);
+}
+
+int preferredTreeDigit(Parameter p, vec2 point, int m, ivec2 interval, bool guided) {
+  if (!guided || interval.x > interval.y) return -1;
+  // The archived complex-tree parallelogram orders branches; it never accepts
+  // one. Minimize the child's normalized strip distance in O(1), then retain
+  // every other admissible digit under the ordinary enclosure/work checks.
+  float n = float(m + 1) * 0.5;
+  float kappa = n > 7.0 ? 1.0 + floor(n - 2.0 - 2.0 * sqrt(n)) : 1.0;
+  float weight = 2.0 * kappa / float(m - 1);
+  float a = 2.0 * p.c.x / dot(p.c, p.c);
+  float q = p.c.y * point.x + p.c.x * point.y;
+  float rStar = sign(p.c.x) * point.y * weight / (1.0 + abs(a) * weight);
+  float idealIndex = 0.5 * ((q - rStar) / p.c.y + float(m - 1));
+  if (invalidFloat(idealIndex)) return -1;
+  float bounded = clamp(idealIndex, float(interval.x), float(interval.y));
+  int left = int(floor(bounded));
+  int right = min(interval.y, left + 1);
+  float leftResidual = q - p.c.y * float(2 * left - (m - 1));
+  float rightResidual = q - p.c.y * float(2 * right - (m - 1));
+  float leftScore = max(abs(leftResidual), weight * abs(a * leftResidual - point.y));
+  float rightScore = max(abs(rightResidual), weight * abs(a * rightResidual - point.y));
+  return leftScore <= rightScore ? left : right;
 }
 
 // The c-cell is a Taylor disk, separate from binary32 arithmetic uncertainty:
@@ -419,6 +514,7 @@ ivec4 originalTraverse(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
   vec4 path[MAX_DEPTH + 1];
   int nextDigit[MAX_DEPTH + 1];
   int lastDigit[MAX_DEPTH + 1];
+  int preferredDigit[MAX_DEPTH + 1];
   float radii[MAX_DEPTH + 1];
   vec2 derivatives[MAX_DEPTH + 1];
   float remainders[MAX_DEPTH + 1];
@@ -426,9 +522,14 @@ ivec4 originalTraverse(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
   path[0] = vec4(z, length(dz) * (1.0 + 8.0 * UNIT), 0.0);
   radii[0] = rootRadius;
   int rootAlphabet = firstMode == 1 ? m - 1 : m;
-  ivec2 rootDigits = firstMode == 2 ? ivec2(0) : originalDigitInterval(p, path[0], rootRadius, rootAlphabet, enclosure);
+  ivec2 rootDigits = firstMode == 2 ? ivec2(0) : originalDigitInterval(p, path[0], rootRadius, rootAlphabet, enclosure, disk);
   nextDigit[0] = rootDigits.x;
   lastDigit[0] = rootDigits.y;
+  // Capture sweeps retain ascending depth-limited enumeration. Guidance only
+  // accelerates off-lens Mn pixel coverage, with all siblings still retained.
+  bool guided = !captureSweep && !useTrap && firstMode == 0 && markedScale == 2.0 &&
+    (u_kind == 0 || u_kind == 2);
+  preferredDigit[0] = preferredTreeDigit(p, z, m, rootDigits, guided);
   derivatives[0] = parameterRadius > 0.0 ? vec2(markedScale, 0.0) : vec2(0.0);
   remainders[0] = 0.0;
   derivativeErrors[0] = 0.0;
@@ -441,7 +542,11 @@ ivec4 originalTraverse(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
   for (int step = 0; step < 2 * MAX_BOUNDARY_WORK + MAX_DEPTH + 1; ++step) {
     int alphabet = level == 0 && firstMode == 1 ? m - 1 : m;
     if (level == 0 && firstMode == 2) alphabet = 1;
-    int digit = nextDigit[level];
+    int preferred = preferredDigit[level];
+    bool tryPreferred = preferred >= 0;
+    int digit = tryPreferred ? preferred : nextDigit[level];
+    // A used preferred index is encoded as -index-2; -1 means no preference.
+    if (!tryPreferred && digit == -preferred - 2) ++digit;
     if (digit > lastDigit[level]) {
       // An empty admissible interval already exhausts the next inverse level,
       // even when pruning avoids evaluating any individual child there.
@@ -452,7 +557,8 @@ ivec4 originalTraverse(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
     }
     if (work >= workLimit) return ivec4(7, deepest, -1, work);
     ++work;
-    nextDigit[level] = digit + 1;
+    if (tryPreferred) preferredDigit[level] = -preferred - 2;
+    else nextDigit[level] = digit + 1;
     float t = level == 0 && firstMode == 2 ? float(fixedDigit) : float(2 * digit - (alphabet - 1));
     vec4 childCartesian = originalInverseNode(p, path[level], t);
     vec4 child = initialNode(p, childCartesian.xy, vec2(childCartesian.z));
@@ -493,9 +599,10 @@ ivec4 originalTraverse(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
     if (level == 0) firstPiece = piece;
     level = depth;
     path[level] = childCartesian;
-    ivec2 childDigits = originalDigitInterval(p, childCartesian, radius, m, enclosure);
+    ivec2 childDigits = originalDigitInterval(p, childCartesian, radius, m, enclosure, disk);
     nextDigit[level] = childDigits.x;
     lastDigit[level] = childDigits.y;
+    preferredDigit[level] = preferredTreeDigit(p, childCartesian.xy, m, childDigits, guided);
     radii[level] = radius;
     derivatives[level] = derivative;
     derivativeErrors[level] = derivativeError;
@@ -511,15 +618,10 @@ ivec4 originalTraverse(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
 // finite-surviving footprint can contain a center captured at a shallow level.
 // Result = (coverage code, coverage depth, first piece, center minimum depth).
 // 255 means no verified center minimum, never a proof of no possible capture.
-ivec4 originalSearch(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
-                     vec2 trap, bool useTrap, int firstMode, int fixedDigit,
-                     float markedScale, bool minimumCapture) {
-  int limit = min(u_boundaryWork, MAX_BOUNDARY_WORK);
-  ivec4 coverage = originalTraverse(p, z, dz, m, enclosure, trap, useTrap,
-    firstMode, fixedDigit, markedScale, u_escapeDepth, limit, false,
-    u_kind == 3 ? u_pixelRadius : 0.0);
-  ivec4 retained = ivec4(coverage.xyz, 255);
-  if (!minimumCapture || !useTrap || p.errorCode != 0) return retained;
+int originalMinimumCapture(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
+                           vec2 trap, bool useTrap, int firstMode, int fixedDigit,
+                           float markedScale) {
+  if (!useTrap || p.errorCode != 0) return 255;
   // Arithmetic uncertainty is retained; geometric cell/footprint radii are not.
   Parameter center = p;
   center.cellRadius = 0.0;
@@ -527,14 +629,26 @@ ivec4 originalSearch(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
   int captureLimit = min(u_boundaryWork, MAX_BOUNDARY_WORK);
   for (int cutoff = 0; cutoff <= MAX_DEPTH; ++cutoff) {
     if (cutoff > u_captureDepth) break;
-    if (work >= captureLimit) return retained;
+    if (work >= captureLimit) return 255;
     ivec4 pass = originalTraverse(center, z, dz, m, enclosure, trap, useTrap,
       firstMode, fixedDigit, markedScale, cutoff, captureLimit - work, true, 0.0);
     work += pass.w;
-    if (pass.x == 1) return ivec4(coverage.xyz, pass.y);
-    if (pass.x != 3) return retained;
+    if (pass.x == 1) return pass.y;
+    if (pass.x != 3) return 255;
   }
-  return retained;
+  return 255;
+}
+
+ivec4 originalSearch(Parameter p, vec2 z, vec2 dz, int m, vec2 enclosure,
+                     vec2 trap, bool useTrap, int firstMode, int fixedDigit,
+                     float markedScale, bool minimumCapture) {
+  int limit = min(u_boundaryWork, MAX_BOUNDARY_WORK);
+  ivec4 coverage = originalTraverse(p, z, dz, m, enclosure, trap, useTrap,
+    firstMode, fixedDigit, markedScale, u_escapeDepth, limit, false,
+    u_kind == 3 ? u_pixelRadius : 0.0);
+  int minimum = minimumCapture ? originalMinimumCapture(p, z, dz, m, enclosure,
+    trap, useTrap, firstMode, fixedDigit, markedScale) : 255;
+  return ivec4(coverage.xyz, minimum);
 }
 
 vec4 encodeMask(uint mask) {
@@ -612,16 +726,24 @@ void main() {
       }
     }
   } else if ((u_kind >= 0 && u_kind <= 2) || u_kind == 4 || u_kind == 5) {
+    bool knownMn = (u_kind == 0 || u_kind == 2) && analyticMnCell(world, dWorld);
     Parameter p = parameterAtPixel(world, dWorld);
     if (p.errorCode != 0) {
       primary = ivec2(p.errorCode, 0);
       if (u_kind == 2) secondary = primary;
+      if (knownMn) primary = ivec2(1, 0);
     } else {
       vec2 base = baseEnclosure(p);
       if (u_kind == 0 || u_kind == 2) {
         bool isLens;
         vec2 trap = originalTrap(p, 2 * u_n - 1, isLens);
-        if (p.cellRadius > 0.0) {
+        if (knownMn) {
+          // Analytic membership is not a finite trap hit. Keep its color
+          // solid unless the independent center search establishes a minimum.
+          primary = ivec2(1, 0);
+          minimums.x = originalMinimumCapture(p, 2.0 * p.c, 2.0 * p.dc, 2 * u_n - 1,
+            float(2 * u_n - 2) * base * (1.0 + 8.0 * UNIT), trap, isLens, 0, 0, 2.0);
+        } else if (p.cellRadius > 0.0) {
           // Cell display uses the same bounded-orbit machinery as the digit
           // subsets. The separately exported marked-point record retains BFS.
           bool differenceLens;

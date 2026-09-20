@@ -736,6 +736,112 @@ test('WebGL2: all supported digit layers retain diagnostics within a bounded pre
   await testInfo.attach('all-digit-layer-preview-workload.json', { body: JSON.stringify(results, null, 2), contentType: 'application/json' });
 });
 
+test('WebGL2: analytic Mn coverage removes the unit seam without inventing finite capture', async ({ page }) => {
+  await openHarness(page);
+  const results = await page.evaluate(() => {
+    const { device, colors, prepareRasterJob, renderRasterTile } = window.gpuTest;
+    const base = { kind: 'parameter', width: 1, height: 1, spanX: 0.001,
+      n: 2, kMax: 12, LMax: 32, tol: 1e-8, escapeDepth: 16,
+      parameterMode: 'mn', parameterRadius: 0.01, center: { x: 0, y: 1 } };
+    const jobs = [
+      base,
+      { ...base, center: { x: 1.2, y: 0 } },
+      { ...base, center: { x: 1.2, y: 0.5 }, parameterRadius: 0 },
+      { ...base, center: { x: 0.8, y: -0.2 }, parameterRadius: 0 },
+      { ...base, parameterMode: 'mn0' },
+      { ...base, parameterMode: 'mn1' },
+      { ...base, parameterRadius: 0 },
+      { ...base, n: 3, center: { x: 2.5, y: 0.002 }, parameterRadius: 0 },
+      { ...base, n: 3, center: { x: 2.5, y: -0.002 }, parameterRadius: 0 },
+    ];
+    return jobs.map(job => {
+      if (!device.render(job, colors)) throw new Error(device.reason);
+      const cpu = renderRasterTile(prepareRasterJob(job), { x: 0, y: 0, width: 1, height: 1 });
+      return { gpu: [...device.readClassification().data],
+        minimum: [...device.readCaptureDepths().data], cpu: [...cpu.data] };
+    });
+  });
+  for (const result of results.slice(0, 4)) {
+    expect(result.gpu.slice(0, 2)).toEqual([1, 0]);
+    expect(result.minimum[0]).toBe(255);
+    expect(result.cpu[0]).toBe(1);
+  }
+  for (const result of results.slice(4, 6)) {
+    expect(result.gpu.slice(0, 2)).toEqual([5, 0]);
+    expect(result.minimum[0]).toBe(255);
+    expect(result.cpu[0]).toBe(5);
+  }
+  expect([5, 8]).toContain(results[6].gpu[0]); // exact unit point has no contracting chart
+  expect(results[6].minimum[0]).toBe(255);
+  // Independent majorant: 2*Im(c) exceeds 4*|Im(c)|/(|c|-1)^2.
+  // These conjugate points escape M3 at the root, with no digit search.
+  for (const result of results.slice(7)) {
+    expect(result.gpu.slice(0, 2)).toEqual([0, 0]);
+    expect(result.cpu.slice(0, 2)).toEqual([0, 0]);
+    expect(result.minimum[0]).toBe(255);
+  }
+});
+
+test('WebGL2: real dynamical parameters select the exact CPU interval renderer', async ({ page }) => {
+  await openHarness(page);
+  const results = await page.evaluate(() => {
+    const { device, colors, prepareRasterJob, renderRasterTile } = window.gpuTest;
+    return [2, -2, 0.5, -0.5].map(cx => {
+      // An even-height view has no pixel center on the real line. Whole-pixel
+      // interval intersection must retain its trace in both adjacent rows.
+      const job = { kind: 'dynamical', width: 2, height: 2, spanX: 0.2,
+        n: 4, cx, cy: 0, center: { x: 0, y: 0 }, kMax: 12, LMax: 32,
+        tol: 1e-8, escapeDepth: 12, originalRenderer: 'boundary',
+        showDifference: true, showOriginalSurvival: true, firstLevelPieces: false };
+      const gpu = device.render(job, colors);
+      const cpu = renderRasterTile(prepareRasterJob(job), { x: 0, y: 0, width: 2, height: 2 });
+      return { rendered: Boolean(gpu), reason: device.reason, data: [...cpu.data],
+        minimum: [...cpu.captureDepths] };
+    });
+  });
+  for (const result of results) {
+    expect(result.rendered).toBe(false);
+    expect(result.reason).toMatch(/CPU one-dimensional interval and pixel-footprint/);
+    for (let pixel = 0; pixel < 4; pixel++) {
+      expect(result.data[pixel * 4]).toBe(1);
+      expect(result.data[pixel * 4 + 2]).toBe(1);
+      expect(result.minimum.slice(pixel * 2, pixel * 2 + 2)).toEqual([255, 255]);
+    }
+  }
+});
+
+test('WebGL2: near-real parameter cells keep support pruning and unresolved minima honest', async ({ page }) => {
+  await openHarness(page);
+  const results = await page.evaluate(() => {
+    const { device, colors, prepareRasterJob, renderRasterTile } = window.gpuTest;
+    const results = [];
+    for (const y of [1e-4, 1e-6, 1e-8, -1e-8]) for (const x of [1.2, 1.8, 3.1]) {
+      const job = { kind: 'parameter', width: 1, height: 1, spanX: 0.002,
+        n: 3, kMax: 8, LMax: 32, tol: 1e-8, escapeDepth: 8,
+        parameterMode: 'compare', parameterRadius: 0.002, center: { x, y } };
+      if (!device.render(job, colors)) throw new Error(device.reason);
+      const cpu = renderRasterTile(prepareRasterJob(job), { x: 0, y: 0, width: 1, height: 1 });
+      results.push({ x, y, gpu: [...device.readClassification().data],
+        minimum: [...device.readCaptureDepths().data], cpu: [...cpu.data] });
+    }
+    return results;
+  });
+  for (const result of results) {
+    if (result.x === 1.2) expect(result.gpu[0]).toBe(1); // whole-cell Mn annulus
+    if (result.x === 1.2 && Math.abs(result.y) === 1e-8) expect(result.minimum[0]).toBe(255);
+    if (result.x === 3.1) {
+      // Every c in this disk has |c|>3. The independent disk supports of
+      // both E(c,5) and E(c,3) exclude their marked points already at depth0.
+      expect(result.gpu).toEqual([0, 0, 0, 0]);
+      expect(result.cpu).toEqual([0, 0, 0, 0]);
+    }
+    for (const channel of [0, 2]) {
+      if (result.gpu[channel] === 0) expect([1, 2]).not.toContain(result.cpu[channel]);
+      if ([1, 2].includes(result.gpu[channel])) expect(result.cpu[channel]).not.toBe(0);
+    }
+  }
+});
+
 test('WebGL2: precision and resource guards preserve CPU fallback and requested budgets', async ({ page }) => {
   await openHarness(page);
   const result = await page.evaluate(job => {

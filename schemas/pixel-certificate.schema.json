@@ -69,6 +69,7 @@
       "enum": [
         "Interior",
         "Interior-offLens",
+        "Member",
         "Exterior",
         "Undetermined"
       ]
@@ -92,6 +93,8 @@
         "outside-domain",
         "numerical-range",
         "enclosure-escape",
+        "analytic-membership",
+        "analytic-exterior",
         "trap-hit",
         "tree-exhausted",
         "node-cap",

@@ -1,4 +1,5 @@
 import { inv } from '../math/complex.mjs';
+import { analyticConnectednessResult } from '../math/connectedness_regions.mjs';
 import {
   assertAlphabetSize, assertArity, assertFiniteNumber, assertInteger, assertPositiveNumber
 } from '../math/validation.mjs';
@@ -114,6 +115,12 @@ export function inverseIterationTestDetailed(x, y, n, kMax = 37, LMax = 1000, to
   y = eff.y;
   const rho = Math.hypot(x, y);
   if (!Number.isFinite(rho)) return undetermined('numerical-range');
+  // Modern records use the exact real trace and the known inner annulus where
+  // no canonical capture search is available. Historical replay is unchanged.
+  if (options.canonicalOnly === true && (y === 0 || !inLens(x, y, n))) {
+    const analytic = analyticConnectednessResult(x, y, n);
+    if (analytic) return analytic;
+  }
   if (rho <= 1 || y === 0) return undetermined('outside-domain');
 
   const N = 2 * n - 1;
