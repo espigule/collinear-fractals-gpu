@@ -123,7 +123,10 @@
           "properties": {
             "parameter": { "const": "whole-pixel" },
             "original_attractor": { "const": "whole-pixel" },
-            "half_difference": { "const": "pixel-center" }
+            "half_difference": {
+              "enum": ["pixel-center", "whole-pixel"],
+              "description": "Whole-pixel coverage for real-parameter traces; pixel-center sampling otherwise."
+            }
           },
           "additionalProperties": false,
           "description": "Coverage sampling for each numerical view. Original-attractor whole-pixel coverage applies to Sharp boundary; advanced renderers are outside this capture-display scope."
