@@ -68,6 +68,7 @@
       "enum": [
         "Interior",
         "Interior-offLens",
+        "Member",
         "Exterior",
         "Undetermined"
       ]
@@ -122,7 +123,10 @@
           "properties": {
             "parameter": { "const": "whole-pixel" },
             "original_attractor": { "const": "whole-pixel" },
-            "half_difference": { "const": "pixel-center" }
+            "half_difference": {
+              "enum": ["pixel-center", "whole-pixel"],
+              "description": "Whole-pixel coverage for real-parameter traces; pixel-center sampling otherwise."
+            }
           },
           "additionalProperties": false,
           "description": "Coverage sampling for each numerical view. Original-attractor whole-pixel coverage applies to Sharp boundary; advanced renderers are outside this capture-display scope."
@@ -242,9 +246,42 @@
       "additionalProperties": true,
       "description": "Independent layer selections and auxiliary point-search results, separate from parameter-cell image coverage and the main connectedness record."
     },
+    "analytic_evidence": {
+      "type": "object",
+      "required": [
+        "reason",
+        "condition",
+        "source",
+        "basis",
+        "capture_minimum_assigned"
+      ],
+      "properties": {
+        "reason": {
+          "enum": [
+            "mn-real-interval",
+            "mn-real-exterior",
+            "mn-inner-annulus"
+          ]
+        },
+        "condition": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "basis": {
+          "type": "string"
+        },
+        "capture_minimum_assigned": {
+          "const": false
+        }
+      },
+      "additionalProperties": false
+    },
     "proof_status": {
       "enum": [
         "finite-search-certificate",
+        "analytic-classification",
         "theorem-certified",
         "illustrative",
         "exploratory",
@@ -261,6 +298,8 @@
         "outside-domain",
         "numerical-range",
         "enclosure-escape",
+        "analytic-membership",
+        "analytic-exterior",
         "trap-hit",
         "tree-exhausted",
         "node-cap",

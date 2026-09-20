@@ -1,0 +1,380 @@
+{
+  "source_root": ".",
+  "source_sha256": {
+    "src/compute/parameter_views.mjs": "313a0e14168db4a9047460992903c10f728834c81249469aa92c89255adc61d4",
+    "src/compute/attractor_membership.mjs": "b8ce254e7f71256f518bce6b88117f235df4073633c69d07e844aca68e48afc2",
+    "src/compute/inverse_search_kernel.mjs": "000513dead7e3757b5ad7383a03194e0ea67f8071e430b9cf905f1b6c91a941e",
+    "src/compute/inverse_search_reference.mjs": "d5d013b9855f55b16f849c53c730fe9072f2646aeec60acc8ceea3296622f1e8",
+    "src/compute/tree_guidance.mjs": "04bc401483db1cd8601fb06d19fe6cf8ec3751361739fd0ee5e7ab8af5368998",
+    "src/math/connectedness_regions.mjs": "0d5553455ed5562d66896b684094cddbcc74a9f421bf799e8bb74e0420ddcb99",
+    "src/math/complex.mjs": "5c507c04375c27d7a2a5c4241379f54726217f226b484b1b7dfca738f29f0650",
+    "src/math/validation.mjs": "19ed9444507f93799359ad1849ed8dfc28eac741be14a0fc4537622d0b4cedc9"
+  },
+  "baseline_source_root": "baseline source snapshot of d3ecf08d2e05ca78b840c20c7861cff51677e037",
+  "baseline_source_sha256": {
+    "src/compute/parameter_views.mjs": "82ed048557d2665153226e262eb04f0c3b4cef68343eaa44896c09fbe376603b",
+    "src/compute/attractor_membership.mjs": "9f220bc943f86a09751f5d0eb2f8f2b7ab47084182a95dbf424b59b6adf37401",
+    "src/compute/inverse_search_kernel.mjs": "035206d2bc634d0abf289606b09f1ce5e17166832af10c3fb6808a3871bf743d",
+    "src/compute/inverse_search_reference.mjs": "13fd3edcddfc95217ff84568abef9c7ebf867385ad559f814ee203496bfc9630",
+    "src/compute/tree_guidance.mjs": null,
+    "src/math/connectedness_regions.mjs": null,
+    "src/math/complex.mjs": "5c507c04375c27d7a2a5c4241379f54726217f226b484b1b7dfca738f29f0650",
+    "src/math/validation.mjs": "19ed9444507f93799359ad1849ed8dfc28eac741be14a0fc4537622d0b4cedc9"
+  },
+  "comparison_schedule": "alternating-per-scene",
+  "runtime": {
+    "node": "v24.19.0",
+    "platform": "linux",
+    "architecture": "x64"
+  },
+  "grid_width": 48,
+  "measured_runs": 5,
+  "warmup_runs": 3,
+  "escape_depth": 12,
+  "capture_depth": 37,
+  "candidate_limit_per_search": 20000,
+  "notes": [
+    "End-to-end binary64 parameter classification includes context construction and independent center capture.",
+    "Each pixel covers its complete circumscribed parameter disk; no scene is timed at point-only coverage.",
+    "Separate deterministic work and evidence counts distinguish speed changes from omitted numerical work.",
+    "Informational local CPU timings; not a GPU or browser performance guarantee.",
+    "Baseline and updated classifiers alternate first position on successive measured runs. Timings can still vary with the host load and JIT/garbage collection."
+  ],
+  "results": [
+    {
+      "name": "unit-circle-real",
+      "n": 3,
+      "center": [
+        1,
+        0
+      ],
+      "span": 0.2,
+      "samples": 2304,
+      "parameter_cell_radius": 0.0029462782549439484,
+      "coverage_candidate_maps": 0,
+      "center_capture_candidate_maps": 0,
+      "coverage_outcomes": {
+        "analytic-membership": 2304
+      },
+      "center_capture_outcomes": {
+        "minimum-found": 2304
+      },
+      "minimum_depth_counts": {
+        "0": 2304
+      },
+      "median_milliseconds": 5.425,
+      "minimum_milliseconds": 3.929,
+      "maximum_milliseconds": 5.761,
+      "baseline": {
+        "coverage_candidate_maps": 848580,
+        "center_capture_candidate_maps": 0,
+        "coverage_outcomes": {
+          "trap-hit": 1438,
+          "outside-domain": 78,
+          "depth-cap": 788
+        },
+        "center_capture_outcomes": {
+          "minimum-found": 2226,
+          "outside-domain": 78
+        },
+        "minimum_depth_counts": {
+          "0": 2226
+        },
+        "median_milliseconds": 123.925,
+        "minimum_milliseconds": 120.274,
+        "maximum_milliseconds": 132.471
+      },
+      "speedup": 22.843
+    },
+    {
+      "name": "real-axis",
+      "n": 3,
+      "center": [
+        1.5,
+        0
+      ],
+      "span": 0.1,
+      "samples": 2304,
+      "parameter_cell_radius": 0.0014731391274719742,
+      "coverage_candidate_maps": 0,
+      "center_capture_candidate_maps": 0,
+      "coverage_outcomes": {
+        "analytic-membership": 2304
+      },
+      "center_capture_outcomes": {
+        "trap-unavailable": 2304
+      },
+      "minimum_depth_counts": {},
+      "median_milliseconds": 4.632,
+      "minimum_milliseconds": 3.997,
+      "maximum_milliseconds": 6.27,
+      "baseline": {
+        "coverage_candidate_maps": 378616,
+        "center_capture_candidate_maps": 0,
+        "coverage_outcomes": {
+          "depth-cap": 2304
+        },
+        "center_capture_outcomes": {
+          "trap-unavailable": 2304
+        },
+        "minimum_depth_counts": {},
+        "median_milliseconds": 46.423,
+        "minimum_milliseconds": 44.193,
+        "maximum_milliseconds": 50.162
+      },
+      "speedup": 10.022
+    },
+    {
+      "name": "unit-circle-imaginary",
+      "n": 3,
+      "center": [
+        0,
+        1
+      ],
+      "span": 0.1,
+      "samples": 2304,
+      "parameter_cell_radius": 0.0014731391274719742,
+      "coverage_candidate_maps": 0,
+      "center_capture_candidate_maps": 0,
+      "coverage_outcomes": {
+        "analytic-membership": 2304
+      },
+      "center_capture_outcomes": {
+        "minimum-found": 2304
+      },
+      "minimum_depth_counts": {
+        "0": 2304
+      },
+      "median_milliseconds": 5.166,
+      "minimum_milliseconds": 3.988,
+      "maximum_milliseconds": 9.17,
+      "baseline": {
+        "coverage_candidate_maps": 0,
+        "center_capture_candidate_maps": 0,
+        "coverage_outcomes": {
+          "trap-hit": 2228,
+          "outside-domain": 76
+        },
+        "center_capture_outcomes": {
+          "minimum-found": 2228,
+          "outside-domain": 76
+        },
+        "minimum_depth_counts": {
+          "0": 2228
+        },
+        "median_milliseconds": 85.321,
+        "minimum_milliseconds": 76.923,
+        "maximum_milliseconds": 87.834
+      },
+      "speedup": 16.516
+    },
+    {
+      "name": "near-real-unit-circle",
+      "n": 3,
+      "center": [
+        1.001,
+        0.0001
+      ],
+      "span": 0.0001,
+      "samples": 2304,
+      "parameter_cell_radius": 1.473139127471974e-06,
+      "coverage_candidate_maps": 0,
+      "center_capture_candidate_maps": 0,
+      "coverage_outcomes": {
+        "analytic-membership": 2304
+      },
+      "center_capture_outcomes": {
+        "minimum-found": 2304
+      },
+      "minimum_depth_counts": {
+        "0": 2304
+      },
+      "median_milliseconds": 3.735,
+      "minimum_milliseconds": 3.469,
+      "maximum_milliseconds": 5.181,
+      "baseline": {
+        "coverage_candidate_maps": 0,
+        "center_capture_candidate_maps": 0,
+        "coverage_outcomes": {
+          "trap-hit": 2304
+        },
+        "center_capture_outcomes": {
+          "minimum-found": 2304
+        },
+        "minimum_depth_counts": {
+          "0": 2304
+        },
+        "median_milliseconds": 106.401,
+        "minimum_milliseconds": 99.952,
+        "maximum_milliseconds": 113.225
+      },
+      "speedup": 28.488
+    },
+    {
+      "name": "off-lens-complex-tree",
+      "n": 3,
+      "center": [
+        1.419643377607,
+        0.606290729207
+      ],
+      "span": 0.08,
+      "samples": 2304,
+      "parameter_cell_radius": 0.0011785113019775794,
+      "coverage_candidate_maps": 0,
+      "center_capture_candidate_maps": 154,
+      "coverage_outcomes": {
+        "analytic-membership": 2304
+      },
+      "center_capture_outcomes": {
+        "minimum-found": 9,
+        "trap-unavailable": 2295
+      },
+      "minimum_depth_counts": {
+        "2": 9
+      },
+      "median_milliseconds": 5.021,
+      "minimum_milliseconds": 4.421,
+      "maximum_milliseconds": 5.125,
+      "baseline": {
+        "coverage_candidate_maps": 70450,
+        "center_capture_candidate_maps": 154,
+        "coverage_outcomes": {
+          "depth-cap": 2304
+        },
+        "center_capture_outcomes": {
+          "minimum-found": 9,
+          "trap-unavailable": 2295
+        },
+        "minimum_depth_counts": {
+          "2": 9
+        },
+        "median_milliseconds": 18.468,
+        "minimum_milliseconds": 17.739,
+        "maximum_milliseconds": 23.344
+      },
+      "speedup": 3.678
+    },
+    {
+      "name": "off-lens-boundary",
+      "n": 4,
+      "center": [
+        2,
+        0.5
+      ],
+      "span": 0.2,
+      "samples": 2304,
+      "parameter_cell_radius": 0.0029462782549439484,
+      "coverage_candidate_maps": 33878,
+      "center_capture_candidate_maps": 0,
+      "coverage_outcomes": {
+        "analytic-membership": 374,
+        "depth-cap": 1929,
+        "tree-exhausted": 1
+      },
+      "center_capture_outcomes": {
+        "trap-unavailable": 2304
+      },
+      "minimum_depth_counts": {},
+      "median_milliseconds": 25.271,
+      "minimum_milliseconds": 18.151,
+      "maximum_milliseconds": 26.966,
+      "baseline": {
+        "coverage_candidate_maps": 68042,
+        "center_capture_candidate_maps": 0,
+        "coverage_outcomes": {
+          "depth-cap": 2303,
+          "tree-exhausted": 1
+        },
+        "center_capture_outcomes": {
+          "trap-unavailable": 2304
+        },
+        "minimum_depth_counts": {},
+        "median_milliseconds": 31.184,
+        "minimum_milliseconds": 16.307,
+        "maximum_milliseconds": 33.631
+      },
+      "speedup": 1.234
+    },
+    {
+      "name": "overview",
+      "n": 4,
+      "center": [
+        1.5,
+        1.5
+      ],
+      "span": 3,
+      "samples": 2304,
+      "parameter_cell_radius": 0.04419417382415922,
+      "coverage_candidate_maps": 4949,
+      "center_capture_candidate_maps": 1993,
+      "coverage_outcomes": {
+        "outside-domain": 1,
+        "depth-cap": 325,
+        "analytic-membership": 708,
+        "enclosure-escape": 1174,
+        "tree-exhausted": 89,
+        "trap-hit": 7
+      },
+      "center_capture_outcomes": {
+        "outside-domain": 1,
+        "trap-unavailable": 1454,
+        "minimum-found": 745,
+        "enclosure-escape": 87,
+        "tree-exhausted": 17
+      },
+      "minimum_depth_counts": {
+        "0": 425,
+        "1": 235,
+        "2": 57,
+        "3": 20,
+        "4": 3,
+        "5": 2,
+        "6": 2,
+        "8": 1
+      },
+      "median_milliseconds": 15.641,
+      "minimum_milliseconds": 14.558,
+      "maximum_milliseconds": 25.026,
+      "baseline": {
+        "coverage_candidate_maps": 30016,
+        "center_capture_candidate_maps": 2026,
+        "coverage_outcomes": {
+          "outside-domain": 38,
+          "depth-cap": 711,
+          "enclosure-escape": 1174,
+          "tree-exhausted": 89,
+          "trap-hit": 292
+        },
+        "center_capture_outcomes": {
+          "outside-domain": 38,
+          "trap-unavailable": 1454,
+          "minimum-found": 708,
+          "enclosure-escape": 87,
+          "tree-exhausted": 17
+        },
+        "minimum_depth_counts": {
+          "0": 388,
+          "1": 235,
+          "2": 57,
+          "3": 20,
+          "4": 3,
+          "5": 2,
+          "6": 2,
+          "8": 1
+        },
+        "median_milliseconds": 24.625,
+        "minimum_milliseconds": 23.371,
+        "maximum_milliseconds": 30.267
+      },
+      "speedup": 1.574
+    }
+  ],
+  "recorded_on": "2026-09-20",
+  "baseline_revision": "d3ecf08d2e05ca78b840c20c7861cff51677e037",
+  "benchmark_script": "tools/bench/domain_render_bench.mjs",
+  "benchmark_script_sha256": "3c884a299494fb9973c5b2c4bb2f916aded28b8cb8c7b391b97d6107b4d06a6a",
+  "reproduction_commands": [
+    "git worktree add --detach /tmp/collinear-domain-baseline-d3ecf08 d3ecf08d2e05ca78b840c20c7861cff51677e037",
+    "node tools/bench/domain_render_bench.mjs --baseline-root=/tmp/collinear-domain-baseline-d3ecf08 --width=48 --runs=5 --warmup=3"
+  ]
+}

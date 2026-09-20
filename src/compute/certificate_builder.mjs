@@ -1,10 +1,11 @@
 import { differenceAlphabetIndex } from '../math/alphabets.mjs';
 import { assertComplex, assertInteger, assertPositiveNumber } from '../math/validation.mjs';
+import { analyticConnectednessResult } from '../math/connectedness_regions.mjs';
 import {
   computeEnclosureGeneral, getEffectiveC, getTrapHalfWidths, inLens, validateSearchLimits
 } from './inverse_search_reference.mjs';
 
-const VERDICTS = new Set(['Interior', 'Interior-offLens', 'Exterior', 'Undetermined']);
+const VERDICTS = new Set(['Interior', 'Interior-offLens', 'Member', 'Exterior', 'Undetermined']);
 
 export function buildCertificatePayload(result, options) {
   const N = differenceAlphabetIndex(options.n);
@@ -35,10 +36,20 @@ export function buildCertificatePayload(result, options) {
   }
   const isLens = c ? inLens(c.re, c.im, options.n) : false;
   const canonicalOnly = options.canonicalOnly === true;
-  if (canonicalOnly && isInterior && (!isLens || result.verdict === 'Interior-offLens')) {
+  const analytic = result.evidenceType === 'analytic';
+  if (analytic) {
+    const checked = c ? analyticConnectednessResult(c.re, c.im, options.n) : null;
+    if (!checked || checked.verdict !== result.verdict || checked.stopReason !== result.stopReason ||
+        checked.analyticReason !== result.analyticReason || result.depth !== 0 || word.length !== 0) {
+      throw new RangeError('analytic records must match the supported connectedness criterion');
+    }
+  } else if (result.verdict === 'Member') {
+    throw new RangeError('a membership record requires its analytic criterion');
+  }
+  if (canonicalOnly && isInterior && !analytic && (!isLens || result.verdict === 'Interior-offLens')) {
     throw new RangeError('canonical-only records require capture inside the strict canonical lens');
   }
-  const enc = c ? computeEnclosureGeneral(c.re, c.im, N, tol) : { err: true };
+  const enc = c && !analytic ? computeEnclosureGeneral(c.re, c.im, N, tol) : { err: true };
   const trap = enc.err || (canonicalOnly && !isLens)
     ? null : getTrapHalfWidths(c.re, c.im, N, isLens);
   const reciprocalInput = Math.hypot(options.c.re, options.c.im) > 0 &&
@@ -64,16 +75,30 @@ export function buildCertificatePayload(result, options) {
     trap_region: canonicalOnly && !trap ? null : result.trapRegion ?? null,
     enclosure: enc.err ? null : enc,
     trap,
+    ...(analytic ? {
+      analytic_evidence: {
+        reason: result.analyticReason,
+        condition: result.analyticReason === 'mn-inner-annulus' ? '1 < |c| < sqrt(n)'
+          : result.analyticReason === 'mn-real-interval' ? 'Im(c) = 0 and 1 < |c| <= n'
+          : 'Im(c) = 0 and |c| > n',
+        source: 'https://doi.org/10.3390/fractalfract8120725',
+        basis: result.analyticReason === 'mn-inner-annulus' ? 'Proposition 2.5(i)'
+          : 'Real interval IFS and the real bound in Proposition 2.4',
+        capture_minimum_assigned: false
+      }
+    } : {}),
     ...(canonicalOnly ? {
       trap_policy: 'canonical-only',
       minimum_capture_depth: result.stopReason === 'trap-hit' && isLens ? result.depth : null
     } : {}),
     renderer: 'canvas-cpu',
     arithmetic: 'binary64',
-    proof_status: result.verdict === 'Undetermined'
+    proof_status: analytic ? 'analytic-classification' : result.verdict === 'Undetermined'
       ? 'bounded-search-undetermined'
       : result.verdict === 'Interior-offLens' ? 'exploratory' : 'finite-search-certificate',
-    limitations: canonicalOnly
+    limitations: analytic
+      ? 'Analytic classification of the entered binary64 parameter using the stated connectedness criterion. Real-interval membership does not assert interior in the complex plane. No inverse word, trap hit, or minimum capture depth is assigned.'
+      : canonicalOnly
       ? 'Floating-point finite-search record; inequalities are not verified with interval arithmetic. Capture uses the canonical self-covering trap only inside its strict lens. The theorem-level proof remains in the cited papers/thesis.'
       : 'Floating-point finite-search record; inequalities are not verified with interval arithmetic. Off-lens trap hits remain exploratory. The theorem-level proof remains in the cited papers/thesis.'
   };

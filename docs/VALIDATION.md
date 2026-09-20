@@ -52,13 +52,17 @@ The regression suite targets meaningful failure modes:
 - finite-value, domain, arity, and search-limit validation;
 - parity-preserving digit intervals for both alphabet parities;
 - enclosure truncation, complete tails at the cap, and overflow handling;
-- all four verdicts and explicit termination reasons;
+- all current and historical verdicts, including analytic `Member`, and explicit termination reasons;
 - depth-zero searches and conservative frontier-cap handling;
 - reference/fast-kernel consistency and executable package comparisons;
 - separate geometric coverage and pixel-center minimum-capture fields,
   including finite-survivor siblings preceding shorter capture witnesses;
 - strict canonical-only capture in current browser searches, with historical
   off-lens replay explicitly distinguished;
+- analytic inner-annulus and real-trace connectedness, separately from
+  minimum capture, and domain-aware unit-circle raster coverage;
+- directional enclosure tails, near-real horizontal digit pruning, and
+  complete sibling handling under complex-tree branch guidance;
 - deterministic sampling and bounded renderer workloads;
 - share-state parsing, backend preference, canonical `mn0`/`mn1` modes, `rn` compatibility, and legacy-link precedence;
 - tiled raster agreement at full-frame pixel centers and correct full/half attractor scales;
@@ -173,6 +177,10 @@ against the final commit. Acceptance checks should cover:
 - unchanged binary64 selected $\mathcal M_n$ records when visual depth,
   renderer, or backend changes.
 
+The later 20 September domain correction supersedes the blanket unit-circle
+crossing expectation above for analytically covered $\mathcal M_n$ cells.
+The remaining layer, geometry and capture requirements still apply.
+
 The pure codec and legacy-import tests can be run separately with
 `node --test qa/state-regression-tests.mjs qa/legacy-state-regression-tests.mjs`.
 They validate state behavior; they do not substitute for native shader,
@@ -219,6 +227,17 @@ Automation complements a visual review of the final Pages artifact:
     capture in its edge strips. Toggle first-level pieces: the whole-set
     capture field must not shift by one. In $\mathcal M_n^0$, confirm the
     strict original-lens region remains depth zero.
+12. Pan through the unit circle with $\mathcal M_n$ selected, then inspect
+    the same viewport with an individual digit layer. The full locus can use
+    its analytic inner region; a domain crossing in the digit layer is neutral.
+    Select a point exactly on the circle and check the domain explanation.
+13. Select real expanding parameters inside, at the endpoints, and beyond
+    the $\mathcal M_n$ trace. Check `Member` versus `Exterior`, the absence
+    of a fabricated capture word, and JSON analytic provenance. Inspect a
+    fixed real attractor and its first-piece contours through CPU completion.
+14. Inspect off-lens detail with GPU preview and completed CPU refinement.
+    The complex-tree guide must retain finite-survival coloring and cannot
+    turn a guide entry into a finite-capture band.
 
 Record the revision, runtime/browser versions, commands and exit statuses,
 material observations, and remaining limitations. Keep generated screenshots,
@@ -267,3 +286,55 @@ These checks establish the behavior of the implemented floating-point
 searches and UI. They do not prove interval correctness or physical GPU
 performance. Record actual commands and counts for the final commit rather
 than carrying earlier results forward.
+
+## Domain and tree-guidance correction — 20 September 2026
+
+This extension removes unnecessary inverse-tree work in known connectedness
+regions, makes near-real pruning useful, and restores the earlier complex-tree
+geometry as branch ordering. Its acceptance scope is:
+
+- strict inner-annulus decisions use the full $\mathcal M_n$ theorem only;
+  real-trace decisions include $c=\pm n$ and reject expanding real parameters
+  beyond those endpoints;
+- reciprocal input preserves the same effective-parameter decision; zero and
+  exact unit-circle points remain outside the expanding IFS domain;
+- analytically covered unit-circle-crossing cells disclose that the circle is
+  excluded, while an unsupported digit-layer crossing uses the neutral domain
+  code; GPU rounding ambiguity remains a precision outcome;
+- analytic search records carry their analytic reason, no capture word, and
+  no minimum-capture depth; in-lens selected searches and independent raster
+  minima retain their canonical behavior;
+- fixed real $E(c,m)$ interval decisions distinguish point membership from
+  pixel intersection, respect compulsory first digits, and do not replace
+  varying-parameter cells with real intervals;
+- half-difference real traces double the geometric footprint along with the
+  displayed coordinate, including positive, negative and reciprocal parameters;
+  real Cantor cases retain bounded inverse search;
+- directional tails bound independent partial sums plus their omitted tails,
+  near-real and negative-real cases remain finite, and new horizontal pruning
+  does not exclude an independently admissible digit;
+- the preferred complex-tree digit minimizes its score over the admissible
+  parity alphabet, every sibling is visited at most once, and unguided/guided
+  uncapped searches agree on escape versus finite survival;
+- guide entry never yields `Interior-offLens` or a minimum, including the
+  existing $m=3$, $c=3+3i$, $z=1/4+i/20$ false-trap fixture;
+- actual production GPU shaders compile and preserve the same distinctions,
+  independent worker output transfers correctly, and exported records satisfy
+  their schema.
+
+Run the focused numerical cases with
+`node --test qa/domain-regression-tests.mjs`. Independent oracles include real
+interval/first-piece formulas, a real Cantor periodic point, trigonometric
+support sums, and direct complex evaluation of every admissible digit when
+checking the guide's minimizer. The existing finite-capture regressions remain
+part of the complete gate.
+
+Performance comparisons must retain the same parameters, raster cells, depth,
+capture settings, and work limits. Report enclosure preparation and search
+work separately where possible. Branch ordering can reduce candidate work
+over a grid while increasing it at individual samples; a workload-specific
+measurement is not a universal speed guarantee.
+`node tools/bench/domain_render_bench.mjs` measures context construction,
+coverage, and center capture together, with separate deterministic work and
+outcome counts. Its optional `--baseline-root` comparison alternates the two
+checkouts per scene to reduce timing-order bias.

@@ -123,15 +123,19 @@ test('reciprocal parameters, domain exclusions, and numerical range retain their
   assert.deepEqual(image({ center: { x: 0.5, y: -0.5 } }), image({ center: { x: 1, y: 1 } }));
   const dynamics = { kind: 'dynamical', width: 7, height: 5, spanX: 6, center: { x: 0, y: 0 } };
   assert.deepEqual(image({ ...dynamics, cx: 0.5, cy: -0.5 }), image({ ...dynamics, cx: 1, cy: 1 }));
-  for (const [x, y] of [[0, 0], [2, 0], [0, 1]]) {
+  for (const [x, y] of [[0, 0], [0, 1]]) {
     assert.deepEqual([...image({ center: { x, y } })], [5, 0, 5, 0]);
     assert.ok(image({ ...dynamics, cx: x, cy: y }).every(value => value === 0), 'unsupported dynamics remains clear');
   }
+  assert.deepEqual([...image({ center: { x: 2, y: 0 } })], [1, 0, 1, 0],
+    'real parameters have interval membership rather than a domain error');
+  assert.ok(image({ ...dynamics, cx: 2, cy: 0 }).some(value => value !== 0),
+    'the real dynamical trace remains visible');
   assert.deepEqual([...image({ center: { x: Number.MIN_VALUE, y: Number.MIN_VALUE } })], [6, 0, 6, 0]);
   assert.ok(image({ ...dynamics, cx: Number.MIN_VALUE, cy: Number.MIN_VALUE }).every(value => value === 0));
   assert.deepEqual(image({ ...dynamics, originalRenderer: 'boundary', cx: 0.5, cy: -0.5 }),
     image({ ...dynamics, originalRenderer: 'boundary', cx: 1, cy: 1 }));
-  for (const [cx, cy] of [[0, 0], [2, 0], [0, 1], [Number.MIN_VALUE, Number.MIN_VALUE]]) {
+  for (const [cx, cy] of [[0, 0], [0, 1], [Number.MIN_VALUE, Number.MIN_VALUE]]) {
     assert.ok(image({ ...dynamics, originalRenderer: 'boundary', cx, cy }).every(value => value === 0),
       'invalid boundary contexts remain clear without manufacturing finite survival');
   }

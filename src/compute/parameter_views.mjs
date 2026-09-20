@@ -1,7 +1,7 @@
 import { inverseIterationTestFast } from './inverse_search_kernel.mjs';
 import { getEffectiveC, inLens, validateSearchLimits } from './inverse_search_reference.mjs';
 import { createAttractorMembershipContext, classifyAttractorPoint, classifyAttractorParameterCell,
-  classifyAttractorCapture } from './attractor_membership.mjs';
+  classifyAttractorCapture, createAttractorCaptureProbeContext } from './attractor_membership.mjs';
 import { assertArity, assertFiniteNumber, assertInteger, assertPositiveNumber } from '../math/validation.mjs';
 
 export const PARAMETER_VIEW_MODES = Object.freeze(['mn', 'mn0', 'mn1', 'compare']);
@@ -64,14 +64,25 @@ function parameterGeometry(x, y, n, tol, limits) {
   // input disk: |1/c-1/c0| <= r/(|c0| (|c0|-r)). Cells crossing the unit circle
   // have no single expanding chart and remain outside-domain, never exterior.
   const inputRho = Math.hypot(x, y);
+  const inputRadius = radius;
+  const inputLower = inputRho * (1 - 8 * Number.EPSILON) - inputRadius;
+  const inputUpper = inputRho * (1 + 8 * Number.EPSILON) + inputRadius;
+  // This bound covers both expanding charts, including a raster disk crossing
+  // the unit circle. The circle itself remains outside the defined domain.
+  const annulusUpper = Math.max(inputUpper, 1 / inputLower) * (1 + 16 * Number.EPSILON);
+  const mnAnnulusCoverage = inputRadius > 0 && inputLower > 0
+    && annulusUpper < Math.sqrt(n) * (1 - 8 * Number.EPSILON);
   if (radius > 0 && inputRho < 1) {
     if (inputRho <= radius || inputRho + radius >= 1) domainBoundary = true;
     else radius = radius / inputRho / (inputRho - radius) * (1 + 32 * Number.EPSILON);
   }
   if (radius > 0 && rho * (1 - 8 * Number.EPSILON) - radius <= 1) domainBoundary = true;
-  let originalContext = null, differenceContext = null;
+  let originalContext = null, differenceContext = null, differenceProbe = null;
   return {
-    effective, radius, domainBoundary,
+    effective, radius, domainBoundary, mnAnnulusCoverage,
+    captureProbe() {
+      return differenceProbe ??= createAttractorCaptureProbeContext(effective.x, effective.y, 2 * n - 1, tol);
+    },
     context(set) {
       if (set === 'mn') {
         return differenceContext ??= createAttractorMembershipContext(effective.x, effective.y, 2 * n - 1, tol);
@@ -91,15 +102,27 @@ function parameterGeometry(x, y, n, tol, limits) {
 }
 
 function classifyMembership(geometry, n, set, limits, digit = null) {
+  const analyticAnnulus = set === 'mn' && geometry.mnAnnulusCoverage;
   const invalid = geometry.invalidResult();
-  if (invalid) return { value: invalid, usesTrap: false };
-  const context = geometry.context(set);
+  if (invalid && !analyticAnnulus) return { value: invalid, usesTrap: false };
+  let context = analyticAnnulus ? geometry.captureProbe() : geometry.context(set);
   const firstStep = digit !== null
     ? ((digit + n - 1) % 2 === 0 ? 'original' : 'complement')
     : PARAMETER_VIEW_DEFINITIONS[set].firstStep ?? 'original';
   const searchOptions = { firstStep, firstDigit: digit, maxWork: limits.boundaryWork,
-    firstLevelPieces: false, minimumCapture: false };
-  let value = limits.parameterRadius > 0
+    firstLevelPieces: false, minimumCapture: false, treeGuidance: set === 'mn' };
+  let value = analyticAnnulus ? {
+    verdict: 'Interior', depth: 0, nodesExplored: 0, work: 0,
+    stopReason: 'analytic-membership', status: 'analytic-member',
+    analyticReason: 'mn-inner-annulus', evidenceType: 'analytic',
+    minimumCaptureDepth: null, captureDepthSemantics: 'not-captured',
+    captureSearchStopReason: 'analytic-classification',
+    firstDigit: null, firstLevelIndex: null, sampleType: 'parameter-cell',
+    parameterRadius: geometry.radius,
+    coverage: geometry.domainBoundary ? 'expanding-chart-domain-intersection' : 'parameter-taylor-disk',
+    membershipScope: 'all-valid-parameters',
+    ...(geometry.domainBoundary ? { excludedParameterLocus: 'unit-circle' } : {})
+  } : limits.parameterRadius > 0
     ? classifyAttractorParameterCell(context, limits.escapeDepth, {
       ...searchOptions, parameterRadius: geometry.radius, markedPointScale: set === 'mn' ? 2 : 1
     })
@@ -108,7 +131,12 @@ function classifyMembership(geometry, n, set, limits, digit = null) {
   {
     const scale = set === 'mn' ? 2 : 1;
     const zx = scale * geometry.effective.x, zy = scale * geometry.effective.y;
-    const centerCapture = classifyAttractorCapture(context, zx, zy, limits.captureDepth, searchOptions);
+    let centerCapture = classifyAttractorCapture(context, zx, zy,
+      analyticAnnulus ? 0 : limits.captureDepth, searchOptions);
+    if (analyticAnnulus && centerCapture.stopReason === 'depth-cap' && limits.captureDepth > 0) {
+      context = geometry.context(set);
+      centerCapture = classifyAttractorCapture(context, zx, zy, limits.captureDepth, searchOptions);
+    }
     if (limits.parameterRadius === 0 && limits.minimumCapture && centerCapture.minimumCaptureDepth !== null) {
       value = centerCapture;
     }
@@ -169,6 +197,13 @@ function normalizeSelection(n, mode, options) {
 }
 
 function comparisonCategory(mn, mn0) {
+  if (mn.stopReason === 'analytic-membership' || mn0.stopReason === 'analytic-membership') {
+    const category = value => value.verdict === 'Exterior' ? 'exterior'
+      : value.stopReason === 'trap-hit' ? 'capture'
+        : value.stopReason === 'analytic-membership' ? 'member'
+          : value.displayReason === 'finite-survival' ? 'survival' : 'unresolved';
+    return `mn-${category(mn)}-mn0-${category(mn0)}`;
+  }
   const mnTrap = mn.stopReason === 'trap-hit';
   const mn0Survives = mn0.displayReason === 'finite-survival';
   const mn0Captured = mn0.stopReason === 'trap-hit';

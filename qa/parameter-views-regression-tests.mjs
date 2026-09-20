@@ -145,9 +145,13 @@ test('M0 differs from Mn and comparison retains independent records', () => {
 test('all views normalize parameter and marked point consistently and preserve domain errors', () => {
   for (const mode of PARAMETER_VIEW_MODES) {
     assert.deepEqual(classify(0.5, -0.5, 3, mode), classify(1, 1, 3, mode));
-    for (const [x, y] of [[0, 0], [2, 0], [0, 1]]) {
+    for (const [x, y] of [[0, 0], [1, 0], [0, 1]]) {
       assert.equal(classify(x, y, 3, mode).stopReason, 'outside-domain');
     }
+    const real = classify(2, 0, 3, mode);
+    assert.equal(real.verdict, 'Member', 'the real interval is supported without a planar interior claim');
+    assert.equal(real.stopReason, 'analytic-membership');
+    assert.equal(real.minimumCaptureDepth, null);
     assert.equal(classify(Number.MIN_VALUE, Number.MIN_VALUE, 3, mode).stopReason, 'numerical-range');
   }
 });

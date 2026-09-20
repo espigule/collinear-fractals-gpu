@@ -98,6 +98,18 @@ the solid hue. In **Controls → Colors & finite capture**, change $q$ or
 choose **Set colors** for a flat view. These display choices do not turn
 finite survival into membership.
 
+The full $\mathcal M_n$ layer also uses its known connectedness region
+$1<|c|<\sqrt n$ and its exact real trace $1<|c|\leq n$. These analytic
+decisions avoid inverse-tree work near the unit circle and on the real axis.
+They retain the set hue without inventing a finite-capture depth; an
+independent canonical search supplies a depth when available. Pixels meeting
+the unit circle can use the analytic region on their expanding and reciprocal
+sides. The unit circle itself has no expanding parameter and remains outside
+the IFS domain. Unsupported domain samples have a neutral color; yellow
+continues to mark unfinished or numerically unresolved work.
+[Analytic criteria and domain handling](docs/IMPLEMENTATION_NOTES.md#analytic-connectedness-and-the-unit-circle-seam)
+explain the exact scope.
+
 ![Computed capture layers of M3, the digit subset F(5,0), and E(2i,5), with shade cycling by minimum inverse depth while pale regions retain finite escape coverage.](docs/figures/finite-capture-layers.svg)
 
 The capture field is sampled at pixel centers, independently of geometric
@@ -192,7 +204,9 @@ For a one-step capture word, use `n = 3`, `c = 0.7 + 1.4i` and inspect `[2]`.
 the unit disk as the reciprocal coordinate, using $c=1/p$. Outside the unit
 disk it uses $c=p$. The language packages take the expanding parameter $c$
 directly. Non-real $c$ with $|c|>1$ is the domain of this canonical search;
-real-axis and unit-circle inputs are not classified by it. See
+the current browser additionally classifies the real $\mathcal M_n$ trace
+analytically. Zero and unit-circle inputs have no expanding IFS parameter.
+Historical language-package searches retain their documented domain. See
 [the input and output contract](docs/IMPLEMENTATION_NOTES.md#input-domain-and-coordinates).
 
 ## What is included
@@ -280,21 +294,29 @@ countable restricted-polynomial root set $\mathcal R_n$ in the finite-capture pa
 
 | Verdict | Meaning of the numerical search result |
 |---|---|
-| `Interior` | Strict trap entry for an in-lens parameter. |
-| `Exterior` | Initial enclosure escape or exhaustion of the enclosure-admissible inverse tree. |
+| `Interior` | Strict canonical trap entry, or analytic membership in the open region $1<\lvert c\rvert<\sqrt n$. The stop reason distinguishes them. |
+| `Member` | Analytic membership on the real trace $1<\lvert c\rvert\leq n$; this does not assert interior in the complex plane. |
+| `Exterior` | Analytic exclusion on the real axis, initial enclosure escape, or exhaustion of the enclosure-admissible inverse tree. |
 | `Undetermined` | A depth/width limit, unsupported input domain, or numerical-range limit prevented a conclusion. |
 
 `Undetermined` does not assert boundary membership, connectedness, or
 disconnectedness. Outside the applicable strict lens, the current browser
-uses enclosure escape and finite survival, with no trap acceptance. These
+first uses applicable analytic $\mathcal M_n$ criteria, then enclosure escape
+and finite survival. Canonical capture remains separate from those decisions. These
 labels describe floating-point computation, including enclosure comparisons.
 
 Historical reference packages and archived records retain the
 `Interior-offLens` label for replay. The former off-lens rectangle is not a
 general self-covering trap: it can accept points that are already excluded
 after one inverse step. Current browser searches opt into `canonicalOnly`
-and do not use that rule. [Implementation notes](docs/IMPLEMENTATION_NOTES.md#current-capture-policy-and-historical-replay)
+and do not use that rectangle as a membership test. [Implementation notes](docs/IMPLEMENTATION_NOTES.md#current-capture-policy-and-historical-replay)
 record an explicit counterexample and the compatibility boundary.
+
+For off-lens $\mathcal M_n$ images, the earlier explorer's complex-tree
+parallelogram now guides which admissible branch is explored first. Its
+geometry prioritizes promising bounded-orbit branches while every remaining
+branch keeps the same pruning and resource checks. A guide hit alone supplies
+neither membership nor a finite-capture level.
 
 The defaults are `k_max = 37`, `L_max = 1000`, and `tol = 1e-8`.
 `L_max` caps the retained nodes **at one depth**, not the total nodes explored.

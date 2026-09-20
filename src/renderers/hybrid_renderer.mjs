@@ -320,16 +320,16 @@ export function createHybridRenderer({ onStatus = () => {} } = {}) {
         capture_sample_type: 'pixel-center',
         capture_depth_convention: 'minimum inverse steps at the pixel center after every shallower search completes; a forced first digit counts as one step',
         capture_depth_unknown: UNKNOWN_CAPTURE_DEPTH,
-        capture_coverage_relation: 'capture minima sample pixel centers independently of coverage; parameter and original Sharp boundary views cover whole pixels, while half-difference coverage samples pixel centers',
+        capture_coverage_relation: 'capture minima sample pixel centers independently of coverage; parameter and original Sharp boundary views cover whole pixels; half-difference uses point samples except for real-parameter traces, which cover whole pixels',
         capture_work_scope: 'per-original-union-or-selected-layer; separate from pixel coverage',
-        difference_sample_type: 'point',
-        original_sample_type: job.kind === 'dynamical' && (job.originalRenderer ?? 'boundary') === 'boundary' ? 'pixel-footprint' : 'point',
+        difference_sample_type: job.kind === 'dynamical' && job.cy === 0 ? 'pixel-footprint' : 'point',
+        original_sample_type: job.kind === 'dynamical' && ((job.originalRenderer ?? 'boundary') === 'boundary' || job.cy === 0) ? 'pixel-footprint' : 'point',
         parameter_sample_type: job.kind === 'parameter' && job.parameterRadius !== 0 ? 'parameter-cell' : 'point',
         parameter_radius_world: job.kind === 'parameter' ? (job.parameterRadius ?? Math.SQRT1_2 * job.spanX / job.width) : 0,
         parameter_layers: job.kind === 'parameter' ? parameterLayerKeys(job) : [],
         first_piece_boundaries: job.kind === 'dynamical' && job.showOriginalSurvival &&
           job.firstLevelPieces && (job.originalRenderer ?? 'boundary') === 'boundary',
-        pixel_radius_world: job.kind === 'dynamical' && (job.originalRenderer ?? 'boundary') === 'boundary'
+        pixel_radius_world: job.kind === 'dynamical' && ((job.originalRenderer ?? 'boundary') === 'boundary' || job.cy === 0)
           ? Math.SQRT1_2 * job.spanX / job.width : 0 }
     };
     runs.set(job.kind, run);

@@ -106,8 +106,11 @@ minimum at one center for capture of the full pixel.
 The three shade bands encode depth modulo 3 while retaining the set/piece
 hue. In particular, “0 mod 3” can mean depth 0, 3, 6, 9, or 12; it does not
 identify the base layer by color alone. A witness with an unconfirmed minimum
-keeps the solid hue, and finite escape coverage without a center capture is
-pale. The exact counts of every minimum depth and coverage code are in the
+or analytic membership without a canonical minimum keeps the solid hue;
+finite escape coverage without a center capture is pale. In the
+$\mathcal M_3$ panel, analytic inner-annulus coverage remains independent
+of its canonical center-capture field. The exact counts of every minimum
+depth and coverage code are in the
 JSON metadata. Black contours remain independent of shading and trace each
 first-level piece, including edges within another piece.
 

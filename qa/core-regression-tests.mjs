@@ -373,7 +373,10 @@ test('certificate worker preserves canonical-only policy in both search and payl
     const canonical = dispatch({ ...job, id: 22, canonicalOnly: true });
     assert.equal(canonical.ok, true);
     assert.equal(canonical.id, 22);
-    assert.equal(canonical.result.verdict, 'Undetermined');
+    assert.equal(canonical.result.verdict, 'Interior');
+    assert.equal(canonical.result.stopReason, 'analytic-membership');
+    assert.equal(canonical.certificate.analytic_evidence.reason, 'mn-inner-annulus');
+    assert.equal(canonical.certificate.proof_status, 'analytic-classification');
     assert.equal(canonical.certificate.verdict, canonical.result.verdict);
     assert.equal(canonical.certificate.trap, null);
     assert.equal(canonical.certificate.trap_region, null);
@@ -385,4 +388,30 @@ test('certificate worker preserves canonical-only policy in both search and payl
     assert.notEqual(interior.certificate.trap, null);
     assert.equal(interior.certificate.minimum_capture_depth, interior.result.depth);
   });
+});
+
+test('modern real records use the interval criterion without a fictitious capture word', async () => {
+  await workerHarness('../workers/certificate-worker.js', dispatch => {
+    for (const [x, verdict] of [[1.5, 'Member'], [3, 'Member'], [-3, 'Member'],
+      [.5, 'Member'], [3.01, 'Exterior'], [-3.01, 'Exterior']]) {
+      const response = dispatch({ id: 24, x, y: 0, n: 3, kMax: 0, LMax: 1, canonicalOnly: true });
+      assert.equal(response.ok, true);
+      assert.equal(response.result.verdict, verdict);
+      assert.equal(response.certificate.verdict, verdict);
+      assert.equal(response.certificate.proof_status, 'analytic-classification');
+      assert.deepEqual(response.certificate.word, []);
+      assert.equal(response.certificate.enclosure, null);
+      assert.equal(response.certificate.trap, null);
+      assert.equal(response.certificate.minimum_capture_depth, null);
+    }
+    for (const x of [-1, 0, 1]) {
+      const response = dispatch({ id: 25, x, y: 0, n: 3, kMax: 0, canonicalOnly: true });
+      assert.equal(response.ok, true);
+      assert.equal(response.result.stopReason, 'outside-domain');
+      assert.equal(response.certificate.analytic_evidence, undefined);
+    }
+  });
+  const options = { n: 3, c: { re: 3.01, im: 0 }, kMax: 0, canonicalOnly: true };
+  const correct = inverseIterationTestDetailed(3.01, 0, 3, 0, 1, 1e-8, { canonicalOnly: true });
+  assert.throws(() => buildCertificatePayload({ ...correct, verdict: 'Member' }, options), /analytic/);
 });

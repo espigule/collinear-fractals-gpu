@@ -1,4 +1,6 @@
-import { computeEnclosureGeneral, getEffectiveC } from './inverse_search_reference.mjs';
+import { chooseTailDepth, getEffectiveC } from './inverse_search_reference.mjs';
+import { inv } from '../math/complex.mjs';
+import { createComplexTreeGuidance, preferredComplexTreeDigit } from './tree_guidance.mjs';
 import {
   assertAlphabetSize, assertFiniteNumber, assertInteger, assertPositiveNumber
 } from '../math/validation.mjs';
@@ -20,6 +22,37 @@ const derivativeYs = new Float64Array(SIZE);
 const remainders = new Float64Array(SIZE);
 const nextDigits = new Float64Array(SIZE);
 const lastDigits = new Float64Array(SIZE);
+const preferredDigits = new Float64Array(SIZE);
+const preferredPending = new Uint8Array(SIZE);
+
+/** Padded support computation used by interactive searches, not archived replay. */
+function computeInteractiveEnclosure(x, y, m, rho, tol) {
+  if (y === 0) return { se: 0, ve: 0, err: false, truncationDepth: 0,
+    tail: 0, tailCertifiedToTol: true, tailCapHit: false, method: 'real-support' };
+  const { M, capped } = chooseTailDepth(rho, tol);
+  const inverse = inv({ re: x, im: y });
+  let re = 1, im = 0, sum = 0;
+  // A complex-power recurrence avoids a power and a trigonometric evaluation
+  // per term. The context's padding below covers recurrence/summation error.
+  for (let k = 1; k <= M; k++) {
+    const nextRe = re * inverse.re - im * inverse.im;
+    im = re * inverse.im + im * inverse.re;
+    re = nextRe;
+    sum += Math.abs(im);
+  }
+  const normTail = Math.pow(rho, -M) / (rho - 1);
+  // |sin(k theta)| <= k |sin theta| supplies a much sharper vertical tail
+  // near the real axis. It is also valid when the requested tail depth caps.
+  const yTail = Math.abs(y) * Math.pow(rho, -M - 1)
+    * (M * (rho - 1) + rho) / (rho - 1) ** 2;
+  const tail = Math.min(normTail, yTail);
+  const verticalBound = Math.abs(y) / (rho - 1) ** 2;
+  const ve = (m - 1) * Math.min(sum + tail, verticalBound) * (1 + 32 * EPS);
+  const se = (m - 1) * Math.abs(y) / rho + ve / rho;
+  return { se, ve, err: false, truncationDepth: M, tail,
+    tailCertifiedToTol: tail <= tol, tailCapHit: capped && tail > tol,
+    method: 'complex-power-with-directional-tail' };
+}
 
 /**
  * Fixed-parameter geometry for E(c,m) = A_m + c^-1 E(c,m).
@@ -32,6 +65,19 @@ const lastDigits = new Float64Array(SIZE);
  * These are binary64 numerical searches, not interval-arithmetic certificates.
  */
 export function createAttractorMembershipContext(x, y, m, tol = 1e-8) {
+  return createMembershipContext(x, y, m, tol, false);
+}
+
+/**
+ * O(1) support for a zero-depth center-capture probe. A caller needing positive
+ * levels must rebuild the ordinary context so minimum-search work stays the
+ * same. The disk is an outward support bound; trap inequalities are unchanged.
+ */
+export function createAttractorCaptureProbeContext(x, y, m, tol = 1e-8) {
+  return createMembershipContext(x, y, m, tol, true);
+}
+
+function createMembershipContext(x, y, m, tol, captureProbe) {
   assertAlphabetSize(m);
   assertPositiveNumber(tol, 'tol');
   const effective = getEffectiveC(x, y);
@@ -40,14 +86,18 @@ export function createAttractorMembershipContext(x, y, m, tol = 1e-8) {
   const rho = Math.hypot(x, y);
   const invalid = (error) => ({ x, y, m, rho, useTrap: false, error });
   if (!Number.isFinite(rho)) return invalid('numerical-range');
-  if (rho <= 1 || y === 0) return invalid('outside-domain');
+  if (rho <= 1) return invalid('outside-domain');
   // A downward modulus allowance keeps the disk support bound outward.
   const rhoLower = Math.max(Math.abs(x), Math.abs(y), rho * (1 - 8 * EPS));
   const rhoUpper = rho * (1 + 8 * EPS);
   if (rhoLower <= 1 || !Number.isFinite(rhoUpper)) return invalid('numerical-range');
   const diskRadius = ((m - 1) + (m - 1) / (rhoLower - 1)) * (1 + 32 * EPS);
   if (!Number.isFinite(diskRadius)) return invalid('numerical-range');
-  const enclosure = computeEnclosureGeneral(x, y, m, tol);
+  const enclosure = captureProbe ? {
+    se: diskRadius, ve: diskRadius, err: false, truncationDepth: 0,
+    tail: rhoLower / (rhoLower - 1), tailCertifiedToTol: false,
+    tailCapHit: false, method: 'norm-disk-capture-probe'
+  } : computeInteractiveEnclosure(x, y, m, rhoLower, tol);
   if (enclosure.err) return invalid(enclosure.reason);
   // Covers summation/projection roundoff in addition to the positive analytic
   // tail already included by computeEnclosureGeneral. This is an engineering
@@ -64,6 +114,7 @@ export function createAttractorMembershipContext(x, y, m, tol = 1e-8) {
   return {
     x, y, m, rho, rhoUpper, se, ve, S: useTrap ? S : 0, V: useTrap ? V : 0,
     useTrap, diskRadius, relativeX: x / rho, relativeY: y / rho,
+    realInterval: y === 0 && rho <= m,
     enclosure, arithmetic: 'binary64'
   };
 }
@@ -163,7 +214,7 @@ function classifyWithOptionalMinimum(context, zx, zy, depth, options, parameterR
 function classifyMembership(context, zx, zy, depth, {
   firstStep = 'original', maxWork = ATTRACTOR_MEMBERSHIP_LIMITS.defaultWork,
   firstLevelPieces = true, pixelRadius = 0, firstDigit: requestedFirstDigit = null,
-  markedPointScale = 1
+  markedPointScale = 1, treeGuidance = false
 } = {}, parameterRadius = 0, captureOnly = false) {
   if (!context || typeof context !== 'object') throw new TypeError('context is required');
   assertInteger(depth, 'depth');
@@ -176,6 +227,7 @@ function classifyMembership(context, zx, zy, depth, {
   if (requestedFirstDigit !== null) {
     assertInteger(requestedFirstDigit, 'firstDigit', -context.m + 1, context.m - 1);
   }
+  if (typeof treeGuidance !== 'boolean') throw new TypeError('treeGuidance must be boolean');
   let nodesExplored = 0;
   let work = 0;
   let firstDigit = null;
@@ -202,6 +254,11 @@ function classifyMembership(context, zx, zy, depth, {
     return result('Undetermined', 'numerical-range', 'numerical-range', 0);
   }
   const { x, y, m, rho, rhoUpper, S, V, relativeX, relativeY, useTrap } = context;
+  if (y === 0 && !isParameterCell && Math.abs(zy) > pixelRadius) {
+    return result('Exterior', 'enclosure-escape', 'escaped', 0);
+  }
+  const guidance = treeGuidance && !captureOnly && !useTrap
+    ? createComplexTreeGuidance(x, y, m) : null;
   const maxDigit = m - 1;
   const operationFactor = 16 * EPS * (Math.abs(x) + Math.abs(y));
   const parameterRhoUpper = rhoUpper + parameterRadius;
@@ -214,7 +271,9 @@ function classifyMembership(context, zx, zy, depth, {
   const enclosurePad = isParameterCell
     ? maxDigit * parameterRadius / (parameterRhoLower - 1) ** 2 * (1 + 64 * EPS) : 0;
   const se = context.se + enclosurePad;
-  const ve = context.ve + enclosurePad;
+  const ve = isParameterCell ? Math.min(context.ve + enclosurePad,
+    maxDigit * (Math.abs(y) + parameterRadius) / (parameterRhoLower - 1) ** 2
+      * (1 + 64 * EPS) + TINY) : context.ve;
   const diskRadius = isParameterCell
     ? Math.min(context.diskRadius + enclosurePad,
       maxDigit * parameterRhoLower / (parameterRhoLower - 1) * (1 + 64 * EPS))
@@ -233,16 +292,26 @@ function classifyMembership(context, zx, zy, depth, {
   const cellS = m * (minimumY / rho) * (1 - 64 * EPS);
   const cellV = (m - 2 * (Math.abs(x) + parameterRadius))
     * (minimumY / parameterRhoUpper) / parameterRhoUpper * (1 - 64 * EPS);
-  const precisionScale = Math.max(se, ve);
+  const precisionScale = y === 0 ? diskRadius : Math.max(se, ve);
+  const realRadius = context.realInterval ? (m - 1) * rho / (rho - 1) : 0;
   let maxReached = 0;
 
-  // Return -1 outside, 0 unresolved/in enclosure, 1 strict trap capture.
+  // Return -1 outside, 0 unresolved, 1 strict trap capture, 2 real-interval
+  // membership/footprint intersection. The last is not a planar interior claim
+  // and never supplies a finite-capture minimum. Varying-parameter cells keep
+  // their separate Taylor coverage search, even when their center is real.
   function inspect(u, v, error, radius, canCapture) {
     const s = relativeY * u + relativeX * v;
     const projectionError = error + 16 * EPS
       * (Math.abs(relativeY * u) + Math.abs(relativeX * v)) + TINY;
     if (Math.abs(v) > ve + radius + error || Math.abs(s) > se + radius + projectionError
       || Math.hypot(u, v) > diskRadius + radius + error) return -1;
+    if (!captureOnly && canCapture && !isParameterCell && context.realInterval) {
+      const realHit = pixelRadius === 0
+        ? zy === 0 && v === 0 && Math.abs(u) + error <= realRadius
+        : Math.hypot(Math.max(0, Math.abs(u) - realRadius), v) + error <= radius;
+      if (realHit) return 2;
+    }
     if (canCapture && isParameterCell && cellTrap) {
       // |y(c)u(c)+x(c)v(c)| is bounded in the center's normalized direction;
       // the final term allows the canonical direction itself to vary with c.
@@ -256,9 +325,12 @@ function classifyMembership(context, zx, zy, depth, {
     return 0;
   }
 
-  // Keep only digits whose child's vertical coordinate can meet the enlarged
-  // enclosure. Clamp before integer conversion, including near-real parameters.
+  // Intersect vertical support with the disk's horizontal support. The second
+  // constraint keeps the digit interval useful when y is tiny or exactly zero.
+  // Clamp before integer conversion, including near-real parameters.
   function prepareDigits(level) {
+    preferredDigits[level] = NaN;
+    preferredPending[level] = 0;
     const limit = level === 0 && firstStep === 'complement' && requestedFirstDigit === null
       ? m - 2 : maxDigit;
     const u = xs[level], v = ys[level];
@@ -276,9 +348,25 @@ function classifyMembership(context, zx, zy, depth, {
     const qError = 8 * EPS * (Math.abs(y * u) + Math.abs(x * v)) + TINY;
     const bound = ve + nextRadius + maxError + qError;
     if (!Number.isFinite(q) || !Number.isFinite(bound)) return false;
-    const t1 = (q - bound) / y, t2 = (q + bound) / y;
-    if (Number.isNaN(t1) || Number.isNaN(t2)) return false;
-    let low = Math.min(t1, t2), high = Math.max(t1, t2);
+    let low = -limit, high = limit;
+    if (y !== 0) {
+      const t1 = (q - bound) / y, t2 = (q + bound) / y;
+      if (Number.isNaN(t1) || Number.isNaN(t2)) return false;
+      low = Math.max(low, Math.min(t1, t2));
+      high = Math.min(high, Math.max(t1, t2));
+    } else if (Math.abs(q) > bound) {
+      nextDigits[level] = 1; lastDigits[level] = 0;
+      return true;
+    }
+    if (x !== 0) {
+      const p = x * u - y * v;
+      const pError = 8 * EPS * (Math.abs(x * u) + Math.abs(y * v)) + TINY;
+      const horizontal = diskRadius + nextRadius + maxError + pError;
+      const t1 = (p - horizontal) / x, t2 = (p + horizontal) / x;
+      if (!Number.isFinite(p) || Number.isNaN(t1) || Number.isNaN(t2)) return false;
+      low = Math.max(low, Math.min(t1, t2));
+      high = Math.min(high, Math.max(t1, t2));
+    }
     // Outward endpoint allowance also covers division roundoff.
     if (Number.isFinite(low)) low -= 16 * EPS * (Math.abs(low) + 1);
     if (Number.isFinite(high)) high += 16 * EPS * (Math.abs(high) + 1);
@@ -292,6 +380,14 @@ function classifyMembership(context, zx, zy, depth, {
       lastDigits[level] = requestedFirstDigit >= a && requestedFirstDigit <= b
         ? requestedFirstDigit : requestedFirstDigit - 1;
     }
+    if (guidance && nextDigits[level] + 2 <= lastDigits[level]) {
+      const preferred = preferredComplexTreeDigit(guidance, u, v,
+        nextDigits[level], lastDigits[level]);
+      if (preferred !== null) {
+        preferredDigits[level] = preferred;
+        preferredPending[level] = 1;
+      }
+    }
     return true;
   }
 
@@ -302,8 +398,32 @@ function classifyMembership(context, zx, zy, depth, {
   const root = inspect(zx, zy, 0, radii[0],
     requestedFirstDigit === null && firstStep === 'original' && !firstLevelPieces);
   if (root < 0) return result('Exterior', 'enclosure-escape', 'escaped', 0);
+  const realMember = (resultDepth) => ({
+    ...result('Member', 'analytic-membership', 'member', resultDepth, true),
+    analyticReason: 'real-attractor-interval',
+    membershipScope: pixelRadius > 0 ? 'pixel-intersection' : 'point'
+  });
+  if (root === 2) return realMember(0);
   if (root > 0) return result('Interior', 'trap-hit', 'captured', 0, true);
   if (depth === 0) return result('Undetermined', 'depth-cap', 'finite-survivor', 0, true);
+  if (!captureOnly && !isParameterCell && context.realInterval) {
+    // Closed first-level intervals recognize touching endpoints before any
+    // inverse arithmetic. A forced/complementary digit still counts once.
+    const firstLimit = firstStep === 'complement' && requestedFirstDigit === null
+      ? m - 2 : maxDigit;
+    const halfPiece = (m - 1) / (rho - 1);
+    const horizontalRadius = pixelRadius > 0
+      ? pixelRadius * Math.sqrt(Math.max(0, 1 - (zy / pixelRadius) ** 2)) : 0;
+    const low = Math.max(-firstLimit, Math.ceil(zx - halfPiece - horizontalRadius));
+    const candidate = requestedFirstDigit ?? (-firstLimit + 2 * Math.ceil((low + firstLimit) / 2));
+    const distance = Math.hypot(Math.max(0, Math.abs(zx - candidate) - halfPiece), zy);
+    if (candidate > firstLimit || distance > pixelRadius) {
+      return result('Exterior', 'enclosure-escape', 'escaped', 1);
+    }
+    firstDigit = candidate;
+    nodesExplored++;
+    return realMember(1);
+  }
   for (let searchDepth = captureOnly ? 1 : depth; searchDepth <= depth; searchDepth++) {
     if (!prepareDigits(0)) return result('Undetermined', 'numerical-range', 'numerical-range', 0);
     let survived = false;
@@ -316,8 +436,16 @@ function classifyMembership(context, zx, zy, depth, {
         continue;
       }
       if (work >= maxWork) return result('Undetermined', 'work-cap', 'capped', maxReached);
-      const t = nextDigits[level];
-      nextDigits[level] += 2;
+      let t;
+      if (preferredPending[level]) {
+        t = preferredDigits[level];
+        preferredPending[level] = 0;
+        if (t === nextDigits[level]) nextDigits[level] += 2;
+      } else {
+        t = nextDigits[level];
+        nextDigits[level] += 2;
+        if (nextDigits[level] === preferredDigits[level]) nextDigits[level] += 2;
+      }
       work++;
       const u = xs[level], v = ys[level];
       const shifted = u - t;
@@ -349,6 +477,7 @@ function classifyMembership(context, zx, zy, depth, {
       if (decision < 0) continue;
       nodesExplored++;
       if (level === 0) firstDigit = t;
+      if (decision === 2) return realMember(childLevel);
       if (decision > 0) return result('Interior', 'trap-hit', 'captured', childLevel, true);
       if (error > 0.25 * (precisionScale + radius)) {
         return result('Undetermined', 'precision-limit', 'numerical-range', childLevel);

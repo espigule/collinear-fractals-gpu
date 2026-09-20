@@ -1,6 +1,6 @@
 # Rendering architecture
 
-**Source review:** 19 September 2026. This document describes the hybrid
+**Source review:** 20 September 2026. This document describes the hybrid
 renderer in the working source; deployed behavior is identified separately
 by the site's `deployment.json` and the validation result for that commit.
 
@@ -42,6 +42,8 @@ binary64 detailed reference search with the requested limits.
 | [`webgl_preview.mjs`](../src/renderers/webgl_preview.mjs) | Checks context capabilities, shader precision, view precision, and dimensions; draws classification and palette passes; releases and rebuilds resources across context loss. |
 | [`gpu_search_shader.mjs`](../src/compute/gpu_search_shader.mjs) | Bounded float32 inverse search with explicit depth, frontier, work, domain, and precision outcomes. |
 | [`attractor_membership.mjs`](../src/compute/attractor_membership.mjs) | Shared binary64 membership context, depth-first capture/escape coverage, a level-ordered minimum-capture search, fixed or complementary first digits, parameter-cell propagation, and adaptive depth calculation. |
+| [`connectedness_regions.mjs`](../src/math/connectedness_regions.mjs) | Analytic inner-annulus and exact real-trace decisions for the full $\mathcal M_n$ locus, without assigning a trap word. |
+| [`tree_guidance.mjs`](../src/compute/tree_guidance.mjs) | Selects an admissible first branch using the earlier complex-tree parallelogram; it supplies ordering, never membership or capture acceptance. |
 | [`parameter_views.mjs`](../src/compute/parameter_views.mjs) | Keeps the full connectedness search, aggregate marked-point layers, and individually selected first-digit subsets separate. |
 | [`raster_jobs.mjs`](../src/compute/raster_jobs.mjs) | Validates numerical raster jobs and evaluates pixel cells with the binary64 kernels. Uses full-frame coordinates independently of tile boundaries and records independent first-piece coverage for composition. |
 | [`raster_worker_pool.mjs`](../src/compute/raster_worker_pool.mjs), [`raster-worker.mjs`](../workers/raster-worker.mjs) | Schedules bounded tiles, transfers classification bytes, validates replies, and rejects stale or malformed work. |
@@ -80,8 +82,54 @@ A strict trap hit gives numerical capture; an exhausted admissible tree gives
 escape. Finding an admissible branch at the requested depth gives finite
 survival. Reaching a work, stack, precision, or domain limit leaves the pixel
 unresolved. Outside the original-alphabet lens there is no trap acceptance:
-the displayed shape comes from enclosure-pruned finite survival and escape.
+the displayed shape comes from enclosure-pruned finite survival and escape,
+with separate analytic coverage for the fixed-real interval case below.
 Neither depth survival nor capped work becomes a membership proof.
+
+### Analytic regions and near-real support
+
+The $\mathcal M_n$ layer uses $1<|c|<\sqrt n$ before its geometric
+inverse search. For an input cell, the modulus bound includes both the direct
+and reciprocal sides of $|p|=1$. If all supported parameters belong to the
+analytic region, the cell receives occupied coverage without enumerating an
+inverse tree. A crossing cell records that the unit-circle points themselves
+are excluded; an exact zero-radius unit-circle sample remains outside-domain.
+The [input-domain notes](IMPLEMENTATION_NOTES.md#analytic-connectedness-and-the-unit-circle-seam)
+give the criterion and mathematical source.
+
+The exact real trace $1<|c|\leq n$ is reported as `Member`, not as complex
+interior. For a fixed real dynamical parameter with $1<|c|\leq m$,
+$E(c,m)$ is a real interval; CPU coverage tests that interval and its first
+pieces directly. A varying-parameter cell still follows its two-dimensional
+Taylor bounds. Fixed real dynamical views can use CPU fallback when the GPU's
+non-real arithmetic guards exclude them.
+
+The analytic decisions carry no minimum-capture depth. Occupied coverage
+uses the set or piece hue; the separate center search still supplies a
+canonical minimum when eligible. The annulus shortcut does not apply to
+$\mathcal M_n^0$, $\mathcal M_n^1$, or individual $F_{n,t}$ layers.
+For an analytically covered CPU cell, an inexpensive support-disk probe handles
+depth-zero capture and trap-unavailable centers without an enclosure sum.
+When a positive minimum is needed, the ordinary enclosure and ordered search
+are used with the original work budget.
+
+Near the real axis, the support bound
+$|\mathrm{Im}\,z|\leq(m-1)|\mathrm{Im}\,c|/(|c|-1)^2$
+and its version over a parameter disk substantially tighten enclosure
+pruning. The CPU computes enclosure powers by recurrence with a directional
+tail allowance. Both CPU and GPU intersect the vertical digit interval with
+the horizontal interval from the attractor's support disk. All comparisons
+retain their numerical padding. These changes reduce irrelevant branches
+without silently dropping admissible ones.
+
+Outside the canonical lens, the $\mathcal M_n$ coverage search also tries
+the digit preferred by the historical complex-tree parallelogram first.
+Its convex strip-distance score requires checking at most two neighboring
+alphabet digits. Every remaining admissible sibling stays in the search;
+enclosure, footprint, parameter variation, depth and work checks are unchanged.
+The [guide geometry](IMPLEMENTATION_NOTES.md#current-capture-policy-and-historical-replay)
+is distinct from a self-covering acceptance test. It can accelerate finding
+a bounded-depth survivor, while minimum capture keeps its independent search.
 
 ### Parameter cells and fine structure
 
@@ -127,8 +175,9 @@ unresolved.
 Inside the reciprocal-input disk, an input cell of radius $r$ centered at
 $p_0$ is covered after inversion by a disk centered at $1/p_0$ of radius
 $r/(|p_0|(|p_0|-r))$. Cells crossing the unit circle do not share one valid
-expanding enclosure and remain unresolved. The same applies to unsupported
-domain or numerical ranges. Binary64 padding and the shader's float32
+expanding enclosure. They use the analytic $\mathcal M_n$ region above when
+applicable; other layers return the neutral domain outcome. Numerical
+uncertainty remains separate from this geometric domain exclusion. Binary64 padding and the shader's float32
 uncertainty guards are numerical engineering bounds, not outward-rounded
 interval certificates.
 
@@ -230,12 +279,13 @@ strict lens. Higher levels remain meaningful for fixed-digit fields,
 $\mathcal M_n$, and dynamical points. They are not fabricated for these
 two uniform aggregate regions.
 
-The difference-attractor point raster already uses a breadth-first search,
-so a canonical trap hit has the required minimum ordering. Current browser
+For non-real parameters, the difference-attractor point raster uses a
+breadth-first search, so a canonical trap hit has the required minimum ordering. Current browser
 selected-point searches and difference rendering permit capture only in the
 strict difference-alphabet lens. The historical off-lens rectangle can
-produce false positives and is retained only for explicitly historical
-reference/replay behavior; see the [policy and counterexample](IMPLEMENTATION_NOTES.md#current-capture-policy-and-historical-replay).
+produce false positives and its acceptance rule is retained only for explicitly
+historical reference/replay behavior. Reusing tree geometry for branch ordering
+does not relax this policy; see the [policy and counterexample](IMPLEMENTATION_NOTES.md#current-capture-policy-and-historical-replay).
 
 For CPU tiles, `captureDepths` stores two bytes per pixel for the primary and
 secondary fields; `layerCaptureDepths` stores one byte per selected parameter
@@ -309,7 +359,7 @@ The following constants are implemented limits, not benchmark results:
 | Capture/escape candidate work | At most 4,096 digit evaluations independently for each selected parameter layer or first-level piece. |
 | Minimum-capture search | At most `min(kMax,64)` inverse steps and 4,096 candidate evaluations across all iterative-deepening passes, independently of the corresponding coverage budget. Required lower user limits remain effective. |
 | Simultaneous parameter layers | Up to 66: three aggregates plus all 63 digits at the GPU arity limit $n=32$. Larger unsupported selections use CPU rendering. |
-| Parameter-plane enclosure series | 48 terms plus a tail allowance. Fixed dynamical enclosures are prepared in binary64 using the requested tolerance. |
+| Parameter-plane enclosure series | Up to 48 terms plus a complete tail allowance, intersected with the directional support bound. Near the real axis, a constant-cost directional bound can replace the sum. Fixed dynamical enclosures are prepared in binary64 using the requested tolerance. |
 | Raster size | At most 120,000 pixels; neither dimension exceeds 768 or the device's smaller limit. |
 | Total preview search samples | At most 480,000 across the active search passes. The raster pixel budget decreases with both the number of selected layers or pieces and alphabet size, including the halo area. |
 | Piece-boundary neighborhood | One raster-pixel halo; occupied and unresolved masks retain all pieces up to the GPU arity limit. |
@@ -319,7 +369,12 @@ The preview rejects a view when one displayed pixel is too small relative to
 float32 coordinate uncertainty. Numerical guards also cover near-unit,
 near-real, large-modulus, and unrepresentable parameters. A fixed dynamical
 parameter can cause the entire preview to use CPU fallback; a parameter
-raster can instead show unresolved pixels in guarded regions.
+raster can instead show unresolved pixels in guarded regions. An analytic
+$\mathcal M_n$ cell decision can bypass an unnecessary inverse search in the
+known region, while the separate center capture still respects those guards.
+True domain exclusion uses code 5 and the neutral domain color. Float32
+ambiguity uses code 8; it is not relabeled as unsupported domain merely to
+remove a visible warning color.
 
 The shader retains admitted branches until a resource limit is reached.
 It uses expanded enclosures, contracted trap tests, and propagated error
@@ -328,13 +383,25 @@ guards, not a validated interval-arithmetic certificate. GPU and CPU images
 can differ near boundaries or when their effective work budgets differ.
 
 Before evaluating children in the capture/escape search, the shader bounds
-the vertically admissible digit interval and preserves the alphabet's parity.
+the vertically and horizontally admissible digit intervals and preserves the alphabet's parity.
 The bound includes parameter-cell variation, the current orbit footprint,
 and float32 uncertainty, with one extra alphabet digit at each end of the
 interval. Work counts evaluated candidates after this pruning, including the
 safety-margin digits. A required fixed first digit is still evaluated before
 the tail search. The GPU's wider interval can retain more candidates than the
 CPU interval, so equal work limits need not reach the same depth or outcome.
+
+The shader's constant-cost near-real support path is used when the upper
+imaginary-coordinate bound is less than $(\rho_{\mathrm{lower}}-1)/64$.
+Elsewhere it takes the smaller of that valid directional bound and the padded
+48-term enclosure. Positive-radius parameter cells use local Cartesian,
+strip and disk error checks instead of the point search's blanket
+relative-imaginary threshold. The point angular guard and fixed-dynamical
+fallback remain, and collapsed trap widths disable capture before a minimum
+search can spend work. The minimum modulus gap, depth and work ceilings
+still apply. Historical tree guidance reorders off-lens
+$\mathcal M_n$ coverage branches only; capture sweeps and the selected
+reference search retain their existing order.
 
 The preview reports requested and effective limits, actual raster dimensions,
 arithmetic, context information, and coordinate guard values. Hybrid status
@@ -356,6 +423,11 @@ refinement retains full output resolution. This sample budget
 is separate from the digit-evaluation work cap of each search.
 Piece metadata names the occupied/uncertain attachments, bit encoding, and
 `raster_halo`, so diagnostic readback can reconstruct the same outlines.
+`parameter_analytic_membership`, `analytic_membership_capture`,
+`parameter_angular_guard`, `parameter_support`, and
+`off_lens_mn_branch_order` describe the analytic cell shortcut, independent
+minimum, local or point precision policy, support estimates, and ordering-only
+tree guide.
 The GPU's propagated float32 uncertainty is distinct from the geometric
 parameter radius and from the Taylor remainder. A shader fixture can request
 zero parameter radius to compare selected-point behavior explicitly.
@@ -366,8 +438,8 @@ Capture metadata records `capture_sample_type: "pixel-center"`,
 `capture_style`, `capture_modulo`, `requested.capture_depth`,
 `effective.capture_depth`, and `effective.capture_work`.
 Independent piece masks do not repeat the whole-attractor minimum search.
-The existing breadth-first half-difference search already supplies ordered
-capture and adds no separate minimum-search pass. Parameter diagnostics and
+The existing non-real breadth-first half-difference search already supplies
+ordered capture and adds no separate minimum-search pass. Parameter diagnostics and
 each selected parameter layer account for their own center searches in both
 display styles. `readLayers().captureDepths` exposes the sampled field
 separately from coverage bytes for GPU/CPU QA.
@@ -381,6 +453,14 @@ digit, and a larger alphabet. Its capture limit is 37 and escape depth is
 describe the recorded grid and search settings; timings are local CPU
 measurements, not browser-frame or physical-GPU guarantees.
 
+For end-to-end parameter classification near the unit circle, real axis and
+off-lens tree examples, run `node tools/bench/domain_render_bench.mjs`.
+Unlike the capture-only benchmark above, this includes context construction
+and both coverage and center-capture work. `--baseline-root` selects an
+unchanged checkout for alternating per-scene comparisons; `--width`, `--runs`
+and `--warmup` control the sample grid and repetitions. Separate candidate,
+outcome and minimum-depth counts expose the numerical work behind each timing.
+
 ## Attractor coordinates and numerical records
 
 All rendering paths use the existing convention
@@ -389,6 +469,13 @@ iterations and boundary rendering depict the full original $E(c,n)$.
 The advanced survival diagnostic starts from the displayed original coordinate
 and uses enclosure pruning without trap acceptance. The difference layer shows
 $\tfrac12E(c,2n-1)$ and tests twice the displayed point.
+
+For real parameters, half-difference and advanced survival raster paths use
+geometric pixel footprints so their one-dimensional traces remain visible
+between sample centers. The half-difference doubles both the displayed
+coordinate and its footprint radius before testing $E(c,2n-1)$. Fixed-real
+interval coverage supplies no canonical minimum; real Cantor cases retain
+bounded inverse search. Non-real half-difference rendering keeps point samples.
 
 GPU selection does not change those coordinates or turn marked-point finite survival
 into membership. It also does not change the selected $\mathcal M_n$ search's

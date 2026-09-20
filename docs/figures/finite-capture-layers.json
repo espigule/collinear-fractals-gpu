@@ -1,24 +1,26 @@
 {
   "schema_version": "1.0.0",
   "artifact": "docs/figures/finite-capture-layers.svg",
-  "artifact_sha256": "8c84ac2b2a6be57ba1b7c05fb39a20f84ab4af26ff2c99731a1e3e1521bbf6af",
+  "artifact_sha256": "34a67267fe5857e8ac98c33752dabde8864f86236dc943911095030d4eb9bf2a",
   "title": "Finite capture in parameter and dynamical planes",
   "generator": "tools/docs/generate_attractor_examples.mjs",
   "regenerate": "node tools/docs/generate_attractor_examples.mjs",
   "verify": "node tools/docs/generate_attractor_examples.mjs --check",
-  "generator_sha256": "7f9f1134a39e26ca9cd7cf8d9f1c898912e638c419342a02191ec2e03180c45f",
+  "generator_sha256": "4caddf48fcbeb7f019b0fee9f42bfa6d0f5054b9946d68aa765a36e86db30524",
   "source_modules_sha256": {
     "src/math/alphabets.mjs": "2c8c131eafb353a2dab4b26214494b87defa95b3d38a3321fb2977797b49ccad",
     "src/math/attractor_bounds.mjs": "c50be5f717be0324254a2032b3121a3bd5e3a9be6fb079119d8444fbe646652d",
     "src/math/complex.mjs": "5c507c04375c27d7a2a5c4241379f54726217f226b484b1b7dfca738f29f0650",
     "src/math/validation.mjs": "19ed9444507f93799359ad1849ed8dfc28eac741be14a0fc4537622d0b4cedc9",
-    "src/compute/attractor_membership.mjs": "9f220bc943f86a09751f5d0eb2f8f2b7ab47084182a95dbf424b59b6adf37401",
-    "src/compute/inverse_search_kernel.mjs": "035206d2bc634d0abf289606b09f1ce5e17166832af10c3fb6808a3871bf743d",
-    "src/compute/inverse_search_reference.mjs": "13fd3edcddfc95217ff84568abef9c7ebf867385ad559f814ee203496bfc9630",
-    "src/compute/parameter_views.mjs": "82ed048557d2665153226e262eb04f0c3b4cef68343eaa44896c09fbe376603b",
-    "src/compute/raster_jobs.mjs": "ddf4e25bf3278f5ef6b088f60235a8de49d7076aa2af1e253cdf59bdd9a73f73",
+    "src/math/connectedness_regions.mjs": "0d5553455ed5562d66896b684094cddbcc74a9f421bf799e8bb74e0420ddcb99",
+    "src/compute/attractor_membership.mjs": "b8ce254e7f71256f518bce6b88117f235df4073633c69d07e844aca68e48afc2",
+    "src/compute/inverse_search_kernel.mjs": "000513dead7e3757b5ad7383a03194e0ea67f8071e430b9cf905f1b6c91a941e",
+    "src/compute/inverse_search_reference.mjs": "d5d013b9855f55b16f849c53c730fe9072f2646aeec60acc8ceea3296622f1e8",
+    "src/compute/parameter_views.mjs": "313a0e14168db4a9047460992903c10f728834c81249469aa92c89255adc61d4",
+    "src/compute/raster_jobs.mjs": "200ee6fcb1c294a1a070287efd6f554275de034b531b3fc8a6546bb6e3f8d18a",
+    "src/compute/tree_guidance.mjs": "04bc401483db1cd8601fb06d19fe6cf8ec3751361739fd0ee5e7ab8af5368998",
     "src/renderers/palettes.mjs": "6d873520c67f255083e90f75033ffdd0b5c07af92d3d4ee4bc1a28a9edee5cc8",
-    "src/renderers/hybrid_renderer.mjs": "cfd22cf8b55c7bace48477ca1dd18d1e136b1181dd80e3532eaca47259ac69c8",
+    "src/renderers/hybrid_renderer.mjs": "1ffed5107e7344c860159380e23c75241749dc712ebc938ac8d9d77f6a59aa03",
     "src/state/explorer_state.mjs": "2ec120e4694226caaa5bda535827053f2679104f0d5b9fba377b6bec3f31201e"
   },
   "svg_size": {
@@ -112,8 +114,8 @@
       },
       "coverage_code_counts": {
         "0": 159182,
-        "1": 73475,
-        "3": 59503
+        "1": 104780,
+        "3": 28198
       },
       "escape_depth": 12,
       "boundary_work": 20000,
@@ -125,7 +127,7 @@
         "no historical off-lens acceptance",
         "unrestricted base capture level zero retained"
       ],
-      "raster_sha256": "ebde0aa722ea3f9e9a8ac60a20a03d969037b7a44d30666499754fa9298ef540",
+      "raster_sha256": "70b122a1410ad5499e10062318d5a89a3338b33fce0dcac0031bf9457550a4f5",
       "interactive_url": "https://complextrees.com/collinear-fractals-gpu/#n=3&k=12&l=1000&tol=1e-8&q=3&cx=0.9&cy=1.6&pz=1.8&dz=8&bdepth=12&adepth=7&hseed=20260227&hsamples=50000&aop=1&sop=0.45&pcx=0.9&pcy=1.6&dcx=0&dcy=0&backend=auto&pm=mn&mode=collinear&renderer=boundary&palette=research&capture=depth&focus=parameter&pl=mn&pd=&pieces=1&badapt=1&layers=0100000&ci=%23059669&co=%232563eb&cu=%23fbbf24&ce=%23ffffff",
       "interactive_note": "Same view and shading; capture depth limit12, boundary depth starts at12 and adapts with zoom/resolution. The figure uses fixed-depth binary64 CPU rendering.",
       "proof_status": "visual-approximation",

@@ -26,6 +26,9 @@ the separate boundaries of overlapping first-level pieces.
 The later [finite-capture correction](#finite-capture-fields--19-september-2026)
 also separates minimum capture time from geometric coverage and removes
 historical off-lens trap acceptance from current browser searches.
+The [20 September domain and tree update](#analytic-regions-and-complex-tree-guidance--20-september-2026)
+adds analytic connectedness near the unit circle and on the real axis, then
+restores the older complex-tree geometry for efficient branch ordering.
 
 ## Review basis and publication state
 
@@ -121,7 +124,7 @@ checks support the interface claims; publication status is separate.
 | First visit | A window-filling plot workspace opens in **Split** view at $n=4$, $c=(3+i\sqrt{11})/2$. The original $E(c,4)$ is visible with first-level piece colors; difference, trap, enclosure, tree, and path overlays start off. | Visitors first see the fractal and its parameter. An `Undetermined` selected search remains a legitimate outcome for this example. |
 | Immediate navigation | Compact toolbar, quick arity controls, single-plane focus, fullscreen, per-plane zoom/fit, and $E$/half-difference/overlay scene controls. Detailed settings move into a drawer. | More room for geometry, with parameter and dynamical coordinates still distinguished. |
 | Automatic fit | The dynamical Fit action uses Cartesian bounds for the full original attractor, with an explicit geometric tail and extra numerical padding. Unsupported or excessive ranges produce a visible fallback notice. | The camera fits the stated $E(c,n)$ coordinates and avoids presenting an unavailable automatic fit as successful. |
-| Parameter comparisons | $\mathcal M_n$, the legacy-style marked-point set $R_n=\{c:|c|>1,\ c\in E(c,n)\}$, and a comparison view are available. | The original comparison vocabulary returns with explicit definitions, rather than treating every colored pixel as a membership result. |
+| Parameter comparisons | $\mathcal M_n$, the legacy-style marked-point set $R_n=\{c:\lvert c\rvert>1,\ c\in E(c,n)\}$, and a comparison view are available. | The original comparison vocabulary returns with explicit definitions, rather than treating every colored pixel as a membership result. |
 | $R_n$ result semantics | Its inverse search starts at $c$ in alphabet $A_n$, uses enclosure pruning, and has no trap. Teal means survival through the chosen finite depth; amber covers unfinished searches. The actual stop reason is retained. | Neither survival nor a node cap proves membership. The display does not claim to enumerate the restricted-polynomial roots denoted $\mathcal R_n$ in the current paper. |
 | Parameter entry | Synchronized Cartesian and polar numeric fields; the existing reciprocal-input convention and effective-parameter disclosure remain. | Polar exploration returns without the legacy setter's silent minimum-modulus adjustment. |
 | Search provenance | The detailed selected record remains the $\mathcal M_n$ computation. When relevant, exported `parameter_view` metadata includes a separately labeled $R_n$ result. Scene, viewports, renderer metadata, and deployment identity accompany the export. | A comparison preview cannot silently replace the meaning of the main search record. |
@@ -497,3 +500,32 @@ coverage outcomes, and source hashes are recorded separately. The
 give the historical off-lens counterexample and replay boundary; the
 [validation guide](VALIDATION.md#minimum-capture-correction--19-september-2026)
 specifies the checks for this revision. Earlier QA counts remain historical.
+
+## Analytic regions and complex-tree guidance — 20 September 2026
+
+The finite-capture correction left unnecessary yellow regions and expensive
+searches near the unit circle and real axis. It also removed the legacy
+off-lens acceptance rule without recovering the useful search geometry behind
+the earlier explorer's complex-tree parallelogram. These need different
+solutions: analytic connectedness where it is known, tighter support bounds
+near a degenerate coordinate direction, and efficient branch ordering where
+only a bounded-orbit image is justified.
+
+| Area | Earlier behavior | Maintained behavior | Interpretation |
+|---|---|---|---|
+| Inner connectedness region | Inverse search could do substantial work near $\lvert c\rvert=1$. | Use $1<\lvert c\rvert<\sqrt n$ for the full $\mathcal M_n$ layer; an eligible raster cell can cover both expanding-coordinate charts. | Unit-circle points themselves remain outside the IFS domain. The criterion does not fill the restricted subsets. |
+| Real trace | Canonical non-real coordinates left real selected searches unresolved. | Use the exact $1<\lvert c\rvert\leq n$ trace, including endpoints, with the verdict `Member`. | Real antenna membership does not imply interior in the complex plane or provide a trap word. |
+| Near-real support | A broad geometric tail and vertical-only digit interval retained unnecessary branches. | Use directional support/tail bounds and intersect horizontal and vertical digit ranges. Fixed-real interval attractors have direct CPU coverage. | Pruning retains admissible branches and the numerical error allowances. |
+| Domain color | GPU unit-circle crossings could appear as a precision warning. | Distinguish true domain exclusion from floating-point ambiguity. | Neutral domain coloring is separate from unresolved numerical/work outcomes. |
+| Off-lens complex trees | Legacy parallelogram entry could act as heuristic acceptance; the first corrected engine omitted it. | Use the archived complex-tree geometry to choose the preferred admissible inverse digit, then retain all remaining siblings. | Entry is guidance for bounded-depth survival, not an unproved global self-covering test. |
+| Finite-capture color | All occupied regions were explained through capture or finite survival. | Retain independent canonical minima while analytic members without a minimum keep the set hue. | Neither analytic acceptance nor a tree-guide hit invents a capture stratum. |
+
+The guide's convex score needs at most two candidate comparisons per inverse
+node, rather than a sort or a scan of the entire alphabet. Every ordinary
+enclosure, parameter-cell, numerical and work-limit check remains effective.
+The selected reference search and center-minimum search retain their original
+ordering. The [implementation notes](IMPLEMENTATION_NOTES.md#current-capture-policy-and-historical-replay)
+give the geometry and acceptance boundary; the
+[validation guide](VALIDATION.md#domain-and-tree-guidance-correction--20-september-2026)
+covers the new paths. Workload-specific speed measurements do not establish a
+universal improvement on every parameter or device.

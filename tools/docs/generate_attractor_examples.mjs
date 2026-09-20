@@ -491,9 +491,9 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.
 assert.ok(Buffer.byteLength(svg) < 500000, 'Keep the embedded README gallery under 500 kB');
 const sourceModules = [
   'src/math/alphabets.mjs', 'src/math/attractor_bounds.mjs', 'src/math/complex.mjs',
-  'src/math/validation.mjs', 'src/compute/attractor_membership.mjs',
+  'src/math/validation.mjs', 'src/math/connectedness_regions.mjs', 'src/compute/attractor_membership.mjs',
   'src/compute/inverse_search_kernel.mjs', 'src/compute/inverse_search_reference.mjs',
-  'src/compute/parameter_views.mjs', 'src/compute/raster_jobs.mjs',
+  'src/compute/parameter_views.mjs', 'src/compute/raster_jobs.mjs', 'src/compute/tree_guidance.mjs',
   'src/renderers/palettes.mjs', 'src/renderers/hybrid_renderer.mjs',
   'src/state/explorer_state.mjs'
 ];

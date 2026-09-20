@@ -431,7 +431,7 @@ function updateBoundaryMetadata(info = renderingInfo.dynamical) {
   if (note) {
     note.hidden = !state.showCollinear || state.rendererMode !== 'boundary';
     note.textContent = unavailable
-      ? `Boundary unavailable · ${unavailable === 'outside-domain' ? 'outside the expanding nonreal domain' : 'numerical range exceeded'}`
+      ? `Boundary unavailable · ${unavailable === 'outside-domain' ? 'zero or unit-circle parameter' : 'numerical range exceeded'}`
       : `Escape depth ${depth}${state.adaptiveBoundary ? ' · adapts to zoom' : ''}${selfCovering ? ` · capture limit ${captureDepth}` : ''}${state.captureStyle === 'depth' && selfCovering ? ` · mod ${state.modulo}` : ''}`;
   }
 }
@@ -882,20 +882,23 @@ const ABOUT_TABS = {
     <p>Finite-capture layers reveal the minimum number of inverse steps needed
     to reach the trap at each pixel center, repeating modulo <code>q</code>.
     Whole-attractor capture includes depth zero; an individual first-digit
-    subset includes its prescribed step. Solid color marks a capture whose
-    minimum remains unconfirmed, and pale color marks finite escape coverage.
+    subset includes its prescribed step. Solid color marks known membership without an assigned capture level;
+    pale color marks finite escape coverage.
     The maximum search depth <code>k_max</code> also bounds this capture search,
     independently of the adaptive boundary depth. At <code>k_max = 0</code> only
     initial trap capture is tested. Parameter and Sharp boundary coverage account
-    for whole pixels; the half-difference uses point samples. Set colors in
+    for whole pixels; the half-difference uses point samples, with pixel coverage
+    for one-dimensional real-parameter traces. Set colors in
     Controls switches off depth shading without changing the computed sets.</p>
     <p>Automatic rendering starts with a bounded WebGL 2 GPU preview, then
     refines the image in double precision using background workers. CPU rendering
     takes over when acceleration is unavailable or the view needs more precision.
     The selected search record always uses the full chosen <code>k_max</code> and
-    <code>L_max</code>, independently of the preview. Current searches use only
-    the canonical self-covering trap; outside its valid region they use escape
-    and finite survival. GPU-only images are explicitly
+    <code>L_max</code>, independently of the preview. Capture levels use the canonical self-covering trap. Known inner-annulus
+    and real-interval membership avoid unnecessary searches. Outside the lens,
+    the classical complex-tree parallelogram guides inverse branches, and
+    ordinary escape checks verify their bounded continuation. Parallelogram
+    entry alone supplies no membership or capture level. GPU-only images are explicitly
     marked as previews; neither renderer supplies an interval certificate.</p>
     <p><strong>Mₙ⁰</strong> tests <code>c ∈ E(c,n)</code>.
     <strong>Mₙ¹</strong> tests <code>c ∈ A_(n−1) + E(c,n)/c</code>:
@@ -908,7 +911,9 @@ const ABOUT_TABS = {
     Later digits always belong to <code>A_n</code>. Overlapping colors blend.</p>
     <p>Parameter images account for variation in <code>c</code> across each pixel.
     Finite escape coverage is an outer approximation at the displayed resolution.
-    Amber marks unresolved computation. The main result bar and exported inverse
+    Amber marks unresolved computation; gray marks excluded domain points.
+    On the real axis, Member denotes the interval 1 &lt; |c| ≤ n without
+    claiming interior in the complex plane. The main result bar and exported inverse
     word describe Mₙ.</p>
   `,
   framework: `
@@ -1016,7 +1021,7 @@ const TOUR_STEPS = [
   },
   {
     title: 'Search limits',
-    body: 'Maximum depth k_max bounds both the selected-point search and minimum capture at pixel centers. Boundary depth separately controls escape coverage and grows with zoom. Dark bands repeat minimum capture levels modulo q; pale regions show finite escape coverage. Parameter sets and Sharp boundary cover whole pixels; the half-difference uses point samples. Colors & finite capture changes the shading while preserving the computed sets.'
+    body: 'Maximum depth k_max bounds both the selected-point search and minimum capture at pixel centers. Boundary depth separately controls escape coverage and grows with zoom. Dark bands repeat minimum capture levels modulo q; pale regions show finite escape coverage. Parameter sets and Sharp boundary cover whole pixels; the half-difference uses point samples except for real-parameter traces. Colors & finite capture changes the shading while preserving the computed sets.'
   },
   {
     title: 'Reproducibility',
@@ -1236,7 +1241,9 @@ function markRendering(canvas, status) {
     updateRenderingInfo(kind, { ...info, phase: 'complete' });
   }
   const readout = document.getElementById(canvas === canvasParam ? 'parameter-render-status' : 'dynamical-render-status');
-  const statusText = status === 'complete' ? (info?.active_backend === 'webgl2' ? 'GPU preview' : 'Ready') : 'Refining…';
+  const statusText = status === 'complete' ? (info?.renderer === 'outside-domain' ? 'Outside domain'
+    : info?.renderer === 'numerical-range' ? 'Numerical limit'
+    : info?.active_backend === 'webgl2' ? 'GPU preview' : 'Ready') : 'Refining…';
   if (readout && readout.textContent !== statusText) readout.textContent = statusText;
   canvas.setAttribute('aria-busy', status === 'rendering' ? 'true' : 'false');
   updateExportAvailability();
@@ -1278,7 +1285,8 @@ function startMainThreadRaster(kind, metadata) {
     capture_sample_type: 'pixel-center',
     capture_depth_convention: 'minimum inverse steps at the pixel center after every shallower search completes; a forced first digit counts as one step',
     capture_depth_unknown: 255,
-    capture_coverage_relation: 'Pixel-center capture strata are separate from whole-pixel parameter and original-attractor boundary coverage; the half-difference is point-sampled',
+    capture_coverage_relation: 'Pixel-center capture strata are separate from whole-pixel parameter and original-attractor boundary coverage; the half-difference is point-sampled except for whole-pixel real-parameter traces',
+    difference_sample_type: fullJob.cy === 0 ? 'pixel-footprint' : 'point',
     requested_limits: { depth: fullJob.kMax, frontier: fullJob.LMax,
       escape_depth: fullJob.escapeDepth, capture_depth: fullJob.captureDepth,
       boundary_work: fullJob.boundaryWork, capture_work: fullJob.boundaryWork,
@@ -1474,6 +1482,16 @@ function triggerDynRender({ skipHybrid = false, metadata = null } = {}) {
       ctxDyn.fillStyle = getExteriorColorString();
       ctxDyn.fillRect(0, 0, canvasDyn.width, canvasDyn.height);
       drawDynamicalGuidesAndOverlays();
+      ctxDyn.save();
+      ctxDyn.fillStyle = '#64748b';
+      ctxDyn.textAlign = 'center';
+      ctxDyn.font = `${Math.max(12, 14 * (window.devicePixelRatio || 1))}px system-ui, sans-serif`;
+      const message = geometry.error === 'outside-domain'
+        ? Math.hypot(state.cx, state.cy) === 0 ? 'The attractor is undefined at c = 0.'
+          : 'The attractor is undefined on the unit circle.'
+        : 'This parameter exceeds the available numerical range.';
+      ctxDyn.fillText(message, canvasDyn.width / 2, canvasDyn.height * 0.42, canvasDyn.width - 32);
+      ctxDyn.restore();
       dynRenderRequestId = null;
       markRendering(canvasDyn, 'complete');
     });
@@ -1504,7 +1522,7 @@ function drawOriginalAttractorOverlay() {
   const eff = getEffectiveC(state.cx, state.cy);
   const c = { re: eff.x, im: eff.y };
   const rho = Math.hypot(c.re, c.im);
-  if (!Number.isFinite(rho) || rho <= 1 || c.im === 0) return;
+  if (!Number.isFinite(rho) || rho <= 1) return;
 
   const cacheKey = JSON.stringify([state.cx, state.cy, state.n, state.rendererMode, state.attractorDepth,
     state.histogramSeed, state.histogramSamples, state.firstLevelPieces, state.originalAttractorOpacity,
@@ -1753,7 +1771,8 @@ function finiteCaptureMetadata() {
     maximum_depth: Math.min(state.kMax, 100),
     sample_type: 'pixel-center',
     boundary_coverage_sampling: {
-      parameter: 'whole-pixel', original_attractor: 'whole-pixel', half_difference: 'pixel-center'
+      parameter: 'whole-pixel', original_attractor: 'whole-pixel',
+      half_difference: state.cy === 0 ? 'whole-pixel' : 'pixel-center'
     },
     minimum_depth_convention: 'Minimum inverse steps to the canonical trap at the pixel center, after every shallower search completes',
     whole_attractor_initial_depth: 0,
@@ -1875,8 +1894,9 @@ function updateStatusBar(test) {
   elStatLens.textContent = isLens ? 'Yes' : 'No';
   elStatLens.style.color = isLens ? 'var(--color-interior)' : '#dc2626';
   
-  elStatVerdict.className = `verdict-tag verdict-${test.verdict}`;
-  elStatVerdict.textContent = test.verdict;
+  const outsideDomain = test.stopReason === 'outside-domain';
+  elStatVerdict.className = `verdict-tag verdict-${outsideDomain ? 'domain' : test.verdict}`;
+  elStatVerdict.textContent = outsideDomain ? 'Outside domain' : test.verdict;
   elStatNodes.textContent = (test.nodesExplored ?? 0).toLocaleString();
   elStatDepth.textContent = test.depth;
   const viewDetail = document.getElementById('stat-view-detail');
@@ -1902,7 +1922,10 @@ function updateStatusBar(test) {
     }
   }
   const reasons = {
-    'outside-domain': 'Real axis / unit circle unsupported',
+    'outside-domain': 'Zero and the unit circle are excluded',
+    'analytic-membership': test.analyticReason === 'mn-real-interval'
+      ? 'Real interval: 1 < |c| ≤ n' : 'Known interior annulus: 1 < |c| < √n',
+    'analytic-exterior': 'Beyond the real interval: |c| > n',
     'numerical-range': 'Numerical range exceeded',
     'enclosure-escape': 'Marked point outside enclosure',
     'trap-hit': 'Trap reached',
@@ -1921,7 +1944,7 @@ function updateStatusBar(test) {
   // Status is also refreshed asynchronously during rendering. Controls are
   // synchronized by state-changing actions so an unfinished edit survives here.
 
-  if (isInteriorVerdict(test.verdict) && test.word) {
+  if (isInteriorVerdict(test.verdict) && test.stopReason === 'trap-hit' && test.word) {
     elStatWord.textContent = `[${test.word.join(', ')}]`;
     elStatWord.style.color = test.verdict === 'Interior-offLens' ? '#2563eb' : 'var(--color-interior)';
   } else if (test.verdict === 'Exterior' && test.word && test.word.length > 0) {
@@ -2035,7 +2058,8 @@ function updateLegendColors() {
   dynamicalNote.hidden = !dynamicalBases.length || state.showEscapeStrata;
   const dynamicalSampling = [
     ...(state.showCollinear && state.rendererMode === 'boundary' ? ['E(c,n) boundary coverage uses whole pixels.'] : []),
-    ...(state.showDifference ? ['The half-difference uses point samples.'] : [])
+    ...(state.showDifference ? [state.cy === 0 ? 'The real half-difference trace uses whole-pixel coverage.'
+      : 'The half-difference uses point samples.'] : [])
   ].join(' ');
   dynamicalNote.textContent = state.captureStyle === 'depth'
     ? `Minimum capture at pixel centers, with requested depth limit ${state.kMax}. ${dynamicalSampling} Whole-attractor capture starts at depth 0, independently of piece hues and contours.`

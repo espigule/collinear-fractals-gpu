@@ -76,7 +76,7 @@
               <div class="field"><label for="param-modulus">|<span class="math">c</span>|</label><input type="number" id="param-modulus" value="1.2083045973594573" min="0" max="1000000" step="any" inputmode="decimal" aria-describedby="parameter-domain"></div>
               <div class="field"><label for="param-argument">arg(<span class="math">c</span>) · degrees</label><input type="number" id="param-argument" value="65.55604521958347" min="-180" max="180" step="any" inputmode="decimal" aria-describedby="parameter-domain"></div>
             </div>
-            <p class="control-help" id="parameter-domain">Direct mode: |<span class="math">c</span>| &gt; 1, Im(<span class="math">c</span>) ≠ 0. For 0 &lt; |<span class="math">c</span>| &lt; 1, calculations use 1/<span class="math">c</span>.</p>
+            <p class="control-help" id="parameter-domain">Direct mode: |<span class="math">c</span>| &gt; 1, including real parameters. For 0 &lt; |<span class="math">c</span>| &lt; 1, calculations use 1/<span class="math">c</span>. Zero and |<span class="math">c</span>| = 1 are excluded.</p>
             <p class="effective-parameter" id="stat-effective" hidden></p>
           </fieldset>
 
@@ -294,7 +294,7 @@
             <div class="capture-legend" id="parameter-capture-legend">
               <span class="capture-level-title">Minimum capture level, mod 3</span>
               <div class="capture-level-swatches" aria-label="Minimum capture level colors"></div>
-              <div class="legend-item"><span class="legend-color capture-witness-color" aria-hidden="true"></span><span>Capture found · minimum unconfirmed</span></div>
+              <div class="legend-item"><span class="legend-color capture-witness-color" aria-hidden="true"></span><span>Known membership · no assigned capture level</span></div>
               <div class="legend-item"><span class="legend-color capture-survivor-color" aria-hidden="true"></span><span>Finite escape coverage</span></div>
             </div>
           <div class="legend-item"><span class="legend-color" id="legend-offlens-color" aria-hidden="true"></span><span>Off-lens trap hit</span></div>
@@ -337,7 +337,7 @@
             <div class="capture-legend" id="dynamical-capture-legend">
               <span class="capture-level-title">Minimum capture level, mod 3</span>
               <div class="capture-level-swatches" aria-label="Minimum capture level colors"></div>
-              <div class="legend-item"><span class="legend-color capture-witness-color" aria-hidden="true"></span><span>Capture found · minimum unconfirmed</span></div>
+              <div class="legend-item"><span class="legend-color capture-witness-color" aria-hidden="true"></span><span>Known membership · no assigned capture level</span></div>
               <div class="legend-item"><span class="legend-color capture-survivor-color" aria-hidden="true"></span><span>Finite escape coverage</span></div>
               <div class="legend-item"><span class="legend-color capture-unresolved-color" aria-hidden="true"></span><span>Unresolved search / precision limit</span></div>
             </div>
